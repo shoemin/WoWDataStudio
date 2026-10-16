@@ -1,0 +1,178 @@
+<UserControl x:Class="WoWDataStudio.Views.ModelViewerControls"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:h="clr-namespace:WoWDataStudio.Helpers">
+    <!-- The controls of the 3D viewer under the view: animation, display options, character creation, textures, geosets, statistics (docked viewer and pop-out side panel). DataContext = ModelViewerViewModel. -->
+    <UserControl.Resources>
+        <h:BoolToCollapsedConverter x:Key="BoolVis" />
+        <Style x:Key="Label" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextMuted}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+        </Style>
+        <Style x:Key="IconButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+        </Style>
+    </UserControl.Resources>
+    <StackPanel Visibility="{Binding HasModel, Converter={StaticResource BoolVis}}" Margin="0,8,0,0">
+        <!-- animation -->
+        <DockPanel Margin="0,0,0,4">
+            <Button DockPanel.Dock="Left" Style="{StaticResource IconButton}" Command="{Binding TogglePlayCommand}" ToolTip="{Binding PlayTip}" Width="36">
+                <TextBlock Text="{Binding PlayGlyph}" FontFamily="Segoe MDL2 Assets" FontSize="14" />
+            </Button>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="8,0,0,0" ToolTip="Playback speed">
+                <TextBlock Text="Speed" Style="{StaticResource Label}" />
+                <Slider Width="90" Minimum="0.1" Maximum="3" Value="{Binding Speed}" SmallChange="0.1" LargeChange="0.25" VerticalAlignment="Center" IsMoveToPointEnabled="True" />
+                <TextBlock Text="{Binding SpeedText}" Width="38" Margin="6,0,0,0" VerticalAlignment="Center" />
+            </StackPanel>
+            <ComboBox ItemsSource="{Binding Sequences}" SelectedItem="{Binding SelectedSequence}" MaxDropDownHeight="420"
+                      ToolTip="Animations (sequences), named from AnimationData.dbc. A number in brackets is a variant of the same animation." />
+        </DockPanel>
+        <DockPanel Margin="0,0,0,8">
+            <TextBlock DockPanel.Dock="Right" Text="{Binding TimeText}" Width="92" TextAlignment="Right" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}" />
+            <Slider x:Name="Timeline" Minimum="0" Maximum="{Binding DurationMs}" Value="{Binding TimeMs}" VerticalAlignment="Center" IsMoveToPointEnabled="True"
+                    ToolTip="Timeline: drag to scrub (pauses the animation)." PreviewMouseDown="Timeline_PreviewMouseDown" />
+        </DockPanel>
+    
+        <TextBlock Text="{Binding AnimationInfo}" Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,2" />
+        <TextBlock Text="{Binding EventsInfo}" Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8" />
+
+        <!-- display options -->
+        <WrapPanel Margin="0,0,0,4">
+            <ToggleButton Style="{StaticResource Chip}" Content="Grid" IsChecked="{Binding ShowGrid}" ToolTip="Grid on the ground (red line = the model's front, green = its left)." />
+            <ToggleButton Style="{StaticResource Chip}" Content="Ground" IsChecked="{Binding ShowGround}" ToolTip="A light ground plane at height 0." />
+            <ToggleButton Style="{StaticResource Chip}" Content="Wireframe" IsChecked="{Binding Wireframe}" ToolTip="Draw the triangle edges over the model." />
+            <ToggleButton Style="{StaticResource Chip}" Content="Bones" IsChecked="{Binding ShowBones}" ToolTip="The skeleton (key bones in red), moving with the animation." />
+            <ToggleButton Style="{StaticResource Chip}" Content="Bounding box" IsChecked="{Binding ShowBounds}" ToolTip="The model's bounding box from its header." />
+            <ToggleButton Style="{StaticResource Chip}" Content="Attachment points" IsChecked="{Binding ShowAttachments}" ToolTip="Where the game attaches weapons, shields, helmets, spell effects and the name plate (cyan), moving with the animation." />
+            <ToggleButton Style="{StaticResource Chip}" Content="Loop" IsChecked="{Binding Loop}" ToolTip="On: the animation repeats. Off: it plays once and stops on its last frame (press Play to start again)." />
+        </WrapPanel>
+        <WrapPanel Margin="0,0,0,6">
+            <TextBlock Text="Background" Style="{StaticResource Label}" />
+            <ComboBox ItemsSource="{Binding Backgrounds}" SelectedItem="{Binding SelectedBackground}" Width="140" Margin="0,0,4,4" />
+            <TextBox Text="{Binding BackgroundHex, UpdateSourceTrigger=PropertyChanged}" Width="74" Margin="0,0,10,4" ToolTip="Any background colour as #RRGGBB." />
+            <TextBlock Text="View" Style="{StaticResource Label}" />
+            <ComboBox ItemsSource="{Binding Lods}" SelectedItem="{Binding SelectedLod}" Width="270" Margin="0,0,10,4"
+                      ToolTip="The model's four views (skin profiles). In 1.12 they all have the same triangles but split the mesh into parts for 256, 75, 53 or 21 bones per draw; the game picks the largest its graphics card supports. 1 is what modern cards use." />
+            <Button Style="{StaticResource IconButton}" Command="{Binding SaveImageCommand}" ToolTip="Save the 3D view as a PNG image." Margin="0,0,0,4">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE722;" FontFamily="Segoe MDL2 Assets" Margin="0,2,6,0" />
+                    <TextBlock Text="Save image..." />
+                </StackPanel>
+            </Button>
+        </WrapPanel>
+    
+        <!-- character creation pickers -->
+        <Border Visibility="{Binding IsCharacter, Converter={StaticResource BoolVis}}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,4,0,4">
+            <StackPanel>
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Random look" Command="{Binding RandomLookCommand}" Padding="8,3" ToolTip="Pick every option at random." />
+                    <TextBlock Text="CHARACTER CREATION" Style="{StaticResource H3}" FontSize="11" Margin="0,0,0,6" />
+                </DockPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="14" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="Skin colour" Style="{StaticResource Label}" />
+                    <ComboBox Grid.Column="1" ItemsSource="{Binding SkinColors}" SelectedItem="{Binding SkinColor}" Margin="0,0,0,4" ToolTip="CharSections skin (section 0) colour." />
+                    <TextBlock Grid.Column="3" Text="Face" Style="{StaticResource Label}" />
+                    <ComboBox Grid.Column="4" ItemsSource="{Binding Faces}" SelectedItem="{Binding Face}" Margin="0,0,0,4" ToolTip="CharSections face (section 1) for this skin colour." />
+                    <TextBlock Grid.Row="1" Text="Hair style" Style="{StaticResource Label}" />
+                    <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding HairStyles}" SelectedItem="{Binding HairStyle}" Margin="0,0,0,4" ToolTip="Hair style: its geoset (CharHairGeosets) and scalp textures." />
+                    <TextBlock Grid.Row="1" Grid.Column="3" Text="Hair colour" Style="{StaticResource Label}" />
+                    <ComboBox Grid.Row="1" Grid.Column="4" ItemsSource="{Binding HairColors}" SelectedItem="{Binding HairColor}" Margin="0,0,0,4" ToolTip="Hair colour (CharSections section 3)." />
+                    <TextBlock Grid.Row="2" Text="Facial hair" Style="{StaticResource Label}" />
+                    <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{Binding FacialHairs}" SelectedItem="{Binding FacialHair}" Margin="0,0,0,0" ToolTip="Facial hair: geosets (CharacterFacialHairStyles) and textures (section 2)." />
+                </Grid>
+            </StackPanel>
+        </Border>
+        <TextBlock Text="{Binding LookNote}" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,4" />
+    
+        <!-- textures of the model -->
+        <Expander Margin="0,4,0,0" IsExpanded="True">
+            <Expander.Header>
+                <TextBlock FontWeight="SemiBold" Text="Textures shown on the model (click one to open it below)" />
+            </Expander.Header>
+            <ItemsControl ItemsSource="{Binding ModelTextures}" Margin="4,4,0,0">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <DockPanel Margin="0,1" ToolTip="{Binding Tip}">
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding Slot}" Foreground="{StaticResource TextMuted}" FontSize="12" Margin="8,0,0,0" />
+                            <TextBlock>
+                                <Hyperlink Command="{Binding DataContext.OpenTextureCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                           IsEnabled="{Binding CanOpen}">
+                                    <Run Text="{Binding FileName, Mode=OneWay}" />
+                                </Hyperlink>
+                            </TextBlock>
+                        </DockPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Expander>
+    
+        <!-- geosets -->
+        <Expander Margin="0,6,0,0">
+            <Expander.Header>
+                <TextBlock FontWeight="SemiBold" Text="{Binding GeosetHeader}" />
+            </Expander.Header>
+            <StackPanel Margin="4,4,0,0">
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                    <Button Content="Default" Command="{Binding DefaultGeosetsCommand}" Padding="8,2" Margin="0,0,6,0" ToolTip="The geosets the game shows for this look (no items worn)." />
+                    <Button Content="Show all" Command="{Binding ShowAllGeosetsCommand}" Padding="8,2" />
+                </StackPanel>
+                <ItemsControl ItemsSource="{Binding Geosets}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Columns="2" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <CheckBox Content="{Binding Label}" IsChecked="{Binding IsVisible}" Margin="0,1" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Expander>
+    
+        <!-- skeleton (0.10.0) -->
+        <Expander Margin="0,6,0,0">
+            <Expander.Header>
+                <TextBlock FontWeight="SemiBold" Text="Skeleton, attachment points and events" />
+            </Expander.Header>
+            <TextBlock Text="{Binding SkeletonInfo}" TextWrapping="Wrap" Margin="4,4,0,0" FontSize="12" />
+        </Expander>
+
+        <!-- stats -->
+        <Expander Margin="0,6,0,0" IsExpanded="True">
+            <Expander.Header>
+                <TextBlock FontWeight="SemiBold" Text="Model statistics" />
+            </Expander.Header>
+            <ItemsControl ItemsSource="{Binding Stats}" Margin="4,4,0,0">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <UniformGrid Columns="2" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Margin="0,1,10,1">
+                            <Run Text="{Binding Label, Mode=OneWay}" Foreground="{StaticResource TextMuted}" /><Run Text=": " Foreground="{StaticResource TextMuted}" /><Run Text="{Binding Value, Mode=OneWay}" FontWeight="SemiBold" />
+                        </TextBlock>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Expander>
+    </StackPanel>
+</UserControl>

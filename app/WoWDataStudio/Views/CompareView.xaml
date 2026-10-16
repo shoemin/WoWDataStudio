@@ -1,0 +1,136 @@
+<UserControl x:Class="WoWDataStudio.Views.CompareView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:WoWDataStudio.Controls"
+             xmlns:h="clr-namespace:WoWDataStudio.Helpers"
+             xmlns:vm="clr-namespace:WoWDataStudio.ViewModels"
+             Focusable="True">
+    <UserControl.Resources>
+        <h:EnumEqualsConverter x:Key="EnumEq" />
+        <h:EnumToVisibilityConverter x:Key="EnumVis" />
+        <Style x:Key="SideLabelOriginal" TargetType="Border" BasedOn="{StaticResource Badge}">
+            <Setter Property="Background" Value="#FFE4E8EE" />
+        </Style>
+        <Style x:Key="SideLabelEdit" TargetType="Border" BasedOn="{StaticResource Badge}">
+            <Setter Property="Background" Value="#FFFFE7CC" />
+        </Style>
+    </UserControl.Resources>
+    <DockPanel>
+        <!-- toolbar -->
+        <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+            <StackPanel Orientation="Horizontal" Margin="0,0,18,6">
+                <TextBlock Text="View:" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{StaticResource TextMuted}" />
+                <RadioButton Style="{StaticResource Segment}" GroupName="cmpmode" Content="Side by side" x:Name="ModeSide"
+                             ToolTip="Both images next to each other. Zoom and pan move both together."
+                             IsChecked="{Binding Mode, Converter={StaticResource EnumEq}, ConverterParameter={x:Static vm:CompareMode.SideBySide}}" />
+                <RadioButton Style="{StaticResource Segment}" GroupName="cmpmode" Content="Slider"
+                             ToolTip="One image: the original on the left of the divider, your edit on the right. Drag the round handle."
+                             IsChecked="{Binding Mode, Converter={StaticResource EnumEq}, ConverterParameter={x:Static vm:CompareMode.Wipe}}" />
+                <RadioButton Style="{StaticResource Segment}" GroupName="cmpmode" Content="Toggle"
+                             ToolTip="Switch between the original and your edit in the same place (button, automatic, or hold the Space bar)."
+                             IsChecked="{Binding Mode, Converter={StaticResource EnumEq}, ConverterParameter={x:Static vm:CompareMode.Flicker}}" />
+                <RadioButton Style="{StaticResource Segment}" GroupName="cmpmode" Content="Difference"
+                             ToolTip="A heat map: grey = unchanged, yellow to red = changed (red = big change)."
+                             IsChecked="{Binding Mode, Converter={StaticResource EnumEq}, ConverterParameter={x:Static vm:CompareMode.Difference}}" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0,0,18,6">
+                <TextBlock Text="Transparency:" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{StaticResource TextMuted}" />
+                <ComboBox SelectedIndex="{Binding AlphaView, Converter={x:Static h:AlphaViewIndex.Instance}}" Width="230"
+                          ToolTip="How transparent pixels are shown.">
+                    <ComboBoxItem Content="Show it (checkerboard behind)" />
+                    <ComboBoxItem Content="Ignore it (colour only)" />
+                    <ComboBoxItem Content="Show the alpha channel only (white = opaque)" />
+                </ComboBox>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0,0,18,6">
+                <TextBlock Text="Mip level:" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{StaticResource TextMuted}" />
+                <ComboBox ItemsSource="{Binding Levels}" SelectedItem="{Binding MipLevel}" Width="60"
+                          ToolTip="Textures store smaller copies (mip levels) that the game shows at a distance. 0 is the full-size image." />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                <Button Content="Fit" Click="Fit_Click" Margin="0,0,4,0" ToolTip="Fit the image into the view (or double-click the image)." />
+                <Button Content="100%" Click="Actual_Click" Margin="0,0,8,0" ToolTip="One image pixel per screen pixel." />
+                <TextBlock Text="{Binding View.ZoomText}" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}" />
+                <TextBlock Text="  ·  wheel = zoom, drag = move" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}" />
+            </StackPanel>
+        </WrapPanel>
+        <TextBlock DockPanel.Dock="Bottom" Text="{Binding LevelInfo}" Foreground="{StaticResource TextMuted}" Margin="0,6,0,0" />
+
+        <Grid>
+            <!-- side by side -->
+            <Grid Visibility="{Binding Mode, Converter={StaticResource EnumVis}, ConverterParameter=SideBySide}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition />
+                    <ColumnDefinition Width="10" />
+                    <ColumnDefinition />
+                </Grid.ColumnDefinitions>
+                <DockPanel Grid.Column="0">
+                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                        <Border Style="{StaticResource SideLabelOriginal}"><TextBlock Text="{Binding Left.Label}" FontWeight="SemiBold" /></Border>
+                        <TextBlock Text="{Binding Left.Description}" Style="{StaticResource Muted}" Margin="2,3,0,0" />
+                    </StackPanel>
+                    <c:ZoomPanViewer x:Name="SideLeft" Source="{Binding LeftImage}" View="{Binding View}" Checkerboard="{Binding Checkerboard}" CornerRadius="4" />
+                </DockPanel>
+                <DockPanel Grid.Column="2">
+                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                        <Border Style="{StaticResource SideLabelEdit}"><TextBlock Text="{Binding Right.Label}" FontWeight="SemiBold" Foreground="#FF8A4300" /></Border>
+                        <TextBlock Text="{Binding Right.Description}" Style="{StaticResource Muted}" Margin="2,3,0,0" />
+                    </StackPanel>
+                    <c:ZoomPanViewer Source="{Binding RightImage}" View="{Binding View}" Checkerboard="{Binding Checkerboard}" CornerRadius="4" />
+                </DockPanel>
+            </Grid>
+
+            <!-- slider / wipe -->
+            <DockPanel Visibility="{Binding Mode, Converter={StaticResource EnumVis}, ConverterParameter=Wipe}">
+                <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
+                    <Border Style="{StaticResource SideLabelOriginal}" HorizontalAlignment="Left"><TextBlock Text="&#x25C0; Original (from game)" FontWeight="SemiBold" /></Border>
+                    <TextBlock Text="drag the round handle" HorizontalAlignment="Center" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" />
+                    <Border Style="{StaticResource SideLabelEdit}" HorizontalAlignment="Right"><TextBlock Text="Your edit &#x25B6;" FontWeight="SemiBold" Foreground="#FF8A4300" /></Border>
+                </Grid>
+                <c:ZoomPanViewer x:Name="WipeViewer" Source="{Binding LeftImage}" SecondSource="{Binding RightImage}" WipeEnabled="True"
+                                 WipeFraction="{Binding WipeFraction}" View="{Binding View}" Checkerboard="{Binding Checkerboard}" CornerRadius="4" />
+            </DockPanel>
+
+            <!-- toggle / flicker -->
+            <DockPanel Visibility="{Binding Mode, Converter={StaticResource EnumVis}, ConverterParameter=Flicker}">
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6" LastChildFill="False">
+                    <Border DockPanel.Dock="Left" Padding="10,3">
+                        <Border.Style>
+                            <Style TargetType="Border" BasedOn="{StaticResource Badge}">
+                                <Setter Property="Background" Value="#FFFFE7CC" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding FlickerShowsOriginal}" Value="True">
+                                        <Setter Property="Background" Value="#FFE4E8EE" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <TextBlock Text="{Binding FlickerLabel, StringFormat=Now showing: {0}}" FontWeight="SemiBold" FontSize="14" />
+                    </Border>
+                    <Button DockPanel.Dock="Right" Content="{Binding FlickerButtonText}" Command="{Binding ToggleFlickerCommand}" Style="{StaticResource PrimaryButton}"
+                            ToolTip="Switch between the original and your edit." />
+                    <CheckBox DockPanel.Dock="Right" Content="Switch automatically" IsChecked="{Binding AutoFlicker}" VerticalAlignment="Center" Margin="0,0,14,0" />
+                    <TextBlock DockPanel.Dock="Right" Text="Tip: hold the Space bar to see the original." VerticalAlignment="Center" Margin="0,0,14,0" Foreground="{StaticResource TextMuted}" />
+                </DockPanel>
+                <c:ZoomPanViewer x:Name="FlickerViewer" Source="{Binding FlickerImage}" View="{Binding View}" Checkerboard="{Binding Checkerboard}" CornerRadius="4" />
+            </DockPanel>
+
+            <!-- difference -->
+            <DockPanel Visibility="{Binding Mode, Converter={StaticResource EnumVis}, ConverterParameter=Difference}">
+                <Border DockPanel.Dock="Top" Background="{StaticResource WarnSoft}" CornerRadius="4" Padding="10,6" Margin="0,0,0,6">
+                    <StackPanel>
+                        <TextBlock Text="{Binding DiffHeadline}" FontWeight="SemiBold" FontSize="15" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding DiffSummary}" TextWrapping="Wrap" Foreground="{StaticResource TextMuted}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                            <Rectangle Width="14" Height="10" Fill="#FF6E6E6E" Margin="0,0,4,0" /><TextBlock Text="unchanged   " />
+                            <Rectangle Width="14" Height="10" Fill="#FFFFE600" Margin="0,0,4,0" /><TextBlock Text="small change   " />
+                            <Rectangle Width="14" Height="10" Fill="#FFFF0000" Margin="0,0,4,0" /><TextBlock Text="big change   " />
+                            <Rectangle Width="14" Height="10" Fill="#FF288CFF" Margin="0,0,4,0" /><TextBlock Text="only the alpha changed" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+                <c:ZoomPanViewer x:Name="DiffViewer" Source="{Binding DiffImage}" View="{Binding View}" Checkerboard="False" CornerRadius="4" />
+            </DockPanel>
+        </Grid>
+    </DockPanel>
+</UserControl>

@@ -1,0 +1,37 @@
+<Window x:Class="WoWDataStudio.Views.ServerImportWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:v="clr-namespace:WoWDataStudio.Views"
+        xmlns:s="clr-namespace:WoWDataStudio.Services"
+        s:Manual.Topic="server-data"
+        Style="{StaticResource AppWindow}"
+        Title="Import into a server table" Width="1100" Height="760" MinWidth="700" MinHeight="460" WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="18">
+        <TextBlock DockPanel.Dock="Top" x:Name="TitleText" Style="{StaticResource H1}" FontSize="20" TextWrapping="Wrap" />
+        <TextBlock DockPanel.Dock="Top" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,8"
+                   Text="Nothing is changed yet. Check what the file would change, then click Apply import. You can undo it afterwards (Ctrl+Z); nothing reaches the server until you save to your workspace and apply." />
+        <CheckBox DockPanel.Dock="Top" x:Name="RemoveBox" Content="Remove the rows the file does not have (the file is the whole list)" Margin="0,0,0,8" Checked="Option_Changed" Unchecked="Option_Changed" />
+        <TextBlock DockPanel.Dock="Top" x:Name="SummaryText" FontWeight="SemiBold" FontSize="14" Margin="0,4,0,6" TextWrapping="Wrap" />
+        <Border DockPanel.Dock="Top" x:Name="ErrorBox" Background="{StaticResource BadSoft}" CornerRadius="5" Padding="10,6" Margin="0,0,0,6" Visibility="Collapsed">
+            <StackPanel>
+                <TextBlock Text="Errors (fix them in the file; the import cannot be applied until then):" FontWeight="SemiBold" Foreground="{StaticResource Bad}" />
+                <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto">
+                    <TextBlock x:Name="ErrorText" TextWrapping="Wrap" Foreground="{StaticResource Bad}" />
+                </ScrollViewer>
+            </StackPanel>
+        </Border>
+        <Border DockPanel.Dock="Top" x:Name="WarnBox" Background="{StaticResource WarnSoft}" CornerRadius="5" Padding="10,6" Margin="0,0,0,6" Visibility="Collapsed">
+            <StackPanel>
+                <TextBlock Text="Warnings:" FontWeight="SemiBold" Foreground="{StaticResource Warn}" />
+                <ScrollViewer MaxHeight="100" VerticalScrollBarVisibility="Auto">
+                    <TextBlock x:Name="WarnText" TextWrapping="Wrap" Foreground="{StaticResource Warn}" />
+                </ScrollViewer>
+            </StackPanel>
+        </Border>
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button Content="Cancel" IsCancel="True" MinWidth="100" Margin="0,0,8,0" />
+            <Button x:Name="ApplyButton" Content="Apply import" Style="{StaticResource PrimaryButton}" MinWidth="150" Click="Apply_Click" />
+        </StackPanel>
+        <v:DbcDiffView x:Name="Diff" />
+    </DockPanel>
+</Window>

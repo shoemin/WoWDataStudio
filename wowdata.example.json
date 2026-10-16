@@ -1,0 +1,11 @@
+{
+  "_comment": "Copy to wowdata.json and change what differs on your machine. Every key can also be set with WOWDATA_<KEY>.",
+  "client_dir": "<your WoW Custom Client folder>\Client",
+  "server_dbc_dir": "<your WoW Custom Client folder>\Server\data\5875\dbc",
+  "mysql_exe": "<your WoW Custom Client folder>\Server\mysql5\bin\mysql.exe",
+  "mysql_host": "127.0.0.1",
+  "mysql_user": "root",
+  "mysql_password": "root",
+  "mysql_database": "mangos",
+  "patch_name": "patch-3.MPQ"
+}

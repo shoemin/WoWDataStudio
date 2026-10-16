@@ -1,0 +1,83 @@
+<Window x:Class="WoWDataStudio.Views.MapImportWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:h="clr-namespace:WoWDataStudio.Helpers"
+        xmlns:s="clr-namespace:WoWDataStudio.Services"
+        s:Manual.Topic="maps-and-terrain"
+        Style="{StaticResource AppWindow}"
+        Title="Import map changes - review" Width="1060" Height="820" MinWidth="760" MinHeight="520" WindowStartupLocation="CenterOwner">
+    <Window.Resources>
+        <h:BoolToCollapsedConverter x:Key="BoolVis" />
+    </Window.Resources>
+    <DockPanel Margin="16" Background="{StaticResource WindowBg}">
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <TextBlock Text="{Binding Heading}" Style="{StaticResource H1}" FontSize="22" />
+            <TextBlock Text="{Binding Source}" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,6" />
+            <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Text="{Binding Intro}" />
+            <ItemsControl ItemsSource="{Binding General}" Margin="0,6,0,0">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="{StaticResource WarnSoft}" CornerRadius="5" Padding="10,6" Margin="0,4,0,0">
+                            <TextBlock Text="{Binding}" TextWrapping="Wrap" Foreground="{StaticResource Warn}" />
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Bottom">
+                <Button Content="Cancel" IsCancel="True" MinWidth="110" Margin="0,0,8,0" ToolTip="Nothing is saved." />
+                <Button x:Name="SaveButton" Content="Save into my workspace" MinWidth="200" Style="{StaticResource PrimaryButton}" IsEnabled="{Binding CanSave}" Click="Save_Click"
+                        ToolTip="Saves the selected map files into your workspace as one import. The game is not changed yet: use Test map in game or Build release patch afterwards, then Update server maps." />
+            </StackPanel>
+            <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,16,0" />
+        </DockPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding Rows}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{StaticResource Card}" Margin="0,0,0,8" Padding="12,10">
+                            <DockPanel>
+                                <CheckBox DockPanel.Dock="Left" IsChecked="{Binding Include}" IsEnabled="{Binding CanInclude}" VerticalAlignment="Top" Margin="0,3,10,0" ToolTip="Include this file when saving." />
+                                <Button DockPanel.Dock="Right" Content="Compare" Command="{Binding CompareCommand}" IsEnabled="{Binding CanCompare}" VerticalAlignment="Top" Padding="12,4" Margin="10,0,0,0"
+                                        ToolTip="The tile before and after in two synchronized 3D views, with the height difference and the list of changes." />
+                                <StackPanel>
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Left" Text="&#xE707;" FontFamily="Segoe MDL2 Assets" FontSize="15" Foreground="{StaticResource Accent}" Margin="0,2,8,0" />
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding Status}" FontWeight="SemiBold" Margin="8,0,0,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{StaticResource TextMuted}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding StatusBrushKey}" Value="Good"><Setter Property="Foreground" Value="{StaticResource Good}" /></DataTrigger>
+                                                        <DataTrigger Binding="{Binding StatusBrushKey}" Value="Bad"><Setter Property="Foreground" Value="{StaticResource Bad}" /></DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock FontSize="14" TextTrimming="CharacterEllipsis"><Run Text="{Binding Title, Mode=OneWay}" FontWeight="SemiBold" /><Run Text="  " /><Run Text="{Binding Kind, Mode=OneWay}" Foreground="{StaticResource TextMuted}" FontSize="12" /></TextBlock>
+                                    </DockPanel>
+                                    <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Margin="0,3,0,0" />
+                                    <TextBlock Text="{Binding Validation}" Foreground="{StaticResource TextMuted}" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                    <ItemsControl ItemsSource="{Binding Problems}" Margin="0,4,0,0" Visibility="{Binding HasProblems, Converter={StaticResource BoolVis}}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <DockPanel Margin="0,2,0,0">
+                                                    <TextBlock DockPanel.Dock="Left" Text="&#xE7BA;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource Warn}" Margin="0,2,8,0" />
+                                                    <TextBlock Text="{Binding}" TextWrapping="Wrap" />
+                                                </DockPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <Expander Header="Details (every change, chunk by chunk)" Margin="0,4,0,0" Visibility="{Binding HasDetails, Converter={StaticResource BoolVis}}">
+                                        <TextBox Text="{Binding Details, Mode=OneWay}" IsReadOnly="True" FontFamily="Consolas" FontSize="11" MaxHeight="220" VerticalScrollBarVisibility="Auto" TextWrapping="NoWrap" HorizontalScrollBarVisibility="Auto" />
+                                    </Expander>
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

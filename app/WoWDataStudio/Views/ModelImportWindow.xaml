@@ -1,0 +1,102 @@
+<Window x:Class="WoWDataStudio.Views.ModelImportWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:h="clr-namespace:WoWDataStudio.Helpers"
+        xmlns:s="clr-namespace:WoWDataStudio.Services"
+        s:Manual.Topic="model-export-import"
+        Style="{StaticResource AppWindow}"
+        Title="Import edited model - review the changes" Width="1060" Height="820" MinWidth="760" MinHeight="520" WindowStartupLocation="CenterOwner">
+    <Window.Resources>
+        <h:BoolToCollapsedConverter x:Key="BoolVis" />
+        <h:BoolToCollapsedConverter x:Key="BoolVisInv" Invert="True" />
+        <DataTemplate x:Key="RuleTemplate">
+            <DockPanel Margin="0,2,0,0">
+                <TextBlock DockPanel.Dock="Left" Text="{Binding Glyph}" FontFamily="Segoe MDL2 Assets" Margin="0,2,8,0" VerticalAlignment="Top">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="{StaticResource Accent}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding BrushKey}" Value="Warn"><Setter Property="Foreground" Value="{StaticResource Warn}" /></DataTrigger>
+                                <DataTrigger Binding="{Binding BrushKey}" Value="Bad"><Setter Property="Foreground" Value="{StaticResource Bad}" /></DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+            </DockPanel>
+        </DataTemplate>
+    </Window.Resources>
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <TextBlock Text="{Binding Heading}" Style="{StaticResource H1}" FontSize="22" />
+            <TextBlock Text="{Binding Source}" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,6" />
+            <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap"
+                       Text="Each row is one change found in your file. Tick what to keep, click Compare to see the original next to your edit. Nothing is written until you click &quot;Save into my workspace&quot;; the game itself only changes when you test or release." />
+            <Border Background="{StaticResource WarnSoft}" CornerRadius="5" Padding="12,8" Margin="0,8,0,0" Visibility="{Binding HasUsersWarning, Converter={StaticResource BoolVis}}">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Left" Text="&#xE7BA;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource Warn}" FontSize="16" Margin="0,1,10,0" />
+                    <TextBlock Text="{Binding UsersWarning}" TextWrapping="Wrap" FontWeight="SemiBold" />
+                </DockPanel>
+            </Border>
+            <ItemsControl ItemsSource="{Binding General}" ItemTemplate="{StaticResource RuleTemplate}" Margin="0,6,0,0" />
+        </StackPanel>
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Bottom">
+                <Button Content="Cancel" IsCancel="True" MinWidth="110" Margin="0,0,8,0" ToolTip="Nothing is saved." />
+                <Button x:Name="SaveButton" Content="Save into my workspace" MinWidth="200" Style="{StaticResource PrimaryButton}" IsEnabled="{Binding CanSave}" Click="Save_Click"
+                        ToolTip="Converts the selected files to the game's formats and saves them into your workspace as one import. The game is not changed yet: use Test in game or Build release patch afterwards." />
+            </StackPanel>
+            <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,16,0" />
+        </DockPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding Rows}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{StaticResource Card}" Margin="0,0,0,8" Padding="12,10">
+                            <DockPanel>
+                                <CheckBox DockPanel.Dock="Left" IsChecked="{Binding Include}" IsEnabled="{Binding CanInclude}" VerticalAlignment="Top" Margin="0,3,10,0"
+                                          ToolTip="Include this change when saving." />
+                                <Button DockPanel.Dock="Right" Content="Compare" Command="{Binding CompareCommand}" IsEnabled="{Binding CanCompare}" VerticalAlignment="Top" Padding="12,4" Margin="10,0,0,0"
+                                        ToolTip="Original (from game) next to your edit: the texture compare, or two synchronized 3D views for the mesh." />
+                                <StackPanel>
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Left" Text="{Binding KindGlyph}" FontFamily="Segoe MDL2 Assets" FontSize="15" Foreground="{StaticResource Accent}" Margin="0,2,8,0" />
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding Status}" FontWeight="SemiBold" Margin="8,0,0,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{StaticResource TextMuted}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding StatusBrushKey}" Value="Good"><Setter Property="Foreground" Value="{StaticResource Good}" /></DataTrigger>
+                                                        <DataTrigger Binding="{Binding StatusBrushKey}" Value="Bad"><Setter Property="Foreground" Value="{StaticResource Bad}" /></DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" TextTrimming="CharacterEllipsis" />
+                                    </DockPanel>
+                                    <TextBlock Text="{Binding Detail}" Foreground="{StaticResource TextMuted}" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                    <ItemsControl ItemsSource="{Binding Lines}" Margin="0,4,0,0" Visibility="{Binding HasLines, Converter={StaticResource BoolVis}}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding}" TextWrapping="Wrap" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <ItemsControl ItemsSource="{Binding Rules}" ItemTemplate="{StaticResource RuleTemplate}" Margin="0,4,0,0" Visibility="{Binding IsUnchanged, Converter={StaticResource BoolVisInv}}" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding ShowResize, Converter={StaticResource BoolVis}}">
+                                        <TextBlock Text="Size:" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                        <ComboBox ItemsSource="{Binding ResizeOptions}" SelectedIndex="{Binding ResizeChoice}" MinWidth="280" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding ShowFormat, Converter={StaticResource BoolVis}}">
+                                        <TextBlock Text="Transparency:" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                        <ComboBox ItemsSource="{Binding FormatOptions}" SelectedIndex="{Binding FormatChoice}" MinWidth="320" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

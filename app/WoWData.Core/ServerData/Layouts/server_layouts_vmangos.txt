@@ -1,0 +1,1461 @@
+# WoW Data Studio: what the tables of the VMaNGOS world database mean (0.9.0, the Server data tab).
+#
+# The world server (VMaNGOS mangosd) keeps items, creatures, quests, game objects, spells, loot, vendors, trainers,
+# areas, maps, flight points and factions in its MySQL world database ("mangos"). The column NAMES AND TYPES always come
+# from the live database itself (SHOW COLUMNS): this file only adds what they mean, so a column that is not described
+# here is still shown and edited, raw, with a hint. The facts below were read from the VMaNGOS schema and its loaders
+# (ObjectMgr / SpellMgr: which rows a 1.12 server loads, the checks it makes at start) and checked on the database of
+# this machine (schema migration 20231231082728); no server code is copied.
+#
+# @kind <name> = <table>.<key column> <label column> [| plain name]   ("*": a list of rows, named by its size)
+#     an object other columns link to ("-> item"). Links to the client's tables: "-> dbc:<Table>".
+# @enum / @flags <Name>, then "  <value> = <text>" lines. Named values of the DBC layouts (Race, ClassMask,
+#     SpellSchool, SpellEffect, AuraType, ...) can be used too.
+# [table]
+#   about:    what the table controls, in plain words
+#   label:    the column that names a row (in links and lists)
+#   version:  patch        one row per entry and content patch (`patch`): the server uses the row with the highest
+#                          patch <= its WowPatch (mangosd.conf; 10 = 1.12)
+#             build        one row per entry and client build (`build`): the row with the highest build <= 5875
+#             build=       only the rows of build 5875 are loaded
+#             patch-range  `patch_min` .. `patch_max`: the row is loaded when the server's patch is in the range
+#             build-range  `build_min` .. `build_max`: loaded when 5875 is in the range
+#   reload:   the GM command that reloads the table while the server runs (".reload ..."), or "restart"
+#   == Group  starts a group of columns in the details panel
+#   column [semantic] [-> link [modifier]] [| hint]
+#     semantic: id  patch  text  bool  enum(Name)  flags(Name)  money (copper)  ms  seconds  percent  coords
+#     link modifiers: zero (0 is a real row: map 0), abs (the absolute value links), neg (only a negative value links, as -value),
+#                     sign(<kind>) (a negative value links to <kind> instead, as -value)
+#     Name[N] makes Name1..NameN; Name_[N] makes Name_1..Name_N. A "~" before the name: a best guess (not verified).
+
+# ---------------------------------------------------------------------------------------------- objects
+
+@kind item = item_template.entry name | item
+@kind creature = creature_template.entry name | creature (NPC)
+@kind quest = quest_template.entry Title | quest
+@kind gameobject = gameobject_template.entry name | game object
+@kind spell = spell_template.entry name | spell
+@kind faction = faction.id name | faction
+@kind faction_template = faction_template.id faction_id | faction template
+@kind map = map_template.entry map_name | map
+@kind area = area_template.entry name | area
+@kind taxi = taxi_nodes.id name | flight point
+@kind page_text = page_text.entry text | page of text
+@kind npc_text = npc_text.ID BroadcastTextID0 | NPC text
+@kind broadcast_text = broadcast_text.entry male_text | text
+@kind gossip_menu = gossip_menu.entry text_id | gossip menu
+@kind vendor_template = npc_vendor_template.entry * | vendor template
+@kind trainer_template = npc_trainer_template.entry * | trainer template
+@kind equipment = creature_equip_template.entry * | equipment
+@kind creature_loot = creature_loot_template.entry * | creature loot
+@kind gameobject_loot = gameobject_loot_template.entry * | game object loot
+@kind item_loot = item_loot_template.entry * | item contents
+@kind pickpocketing_loot = pickpocketing_loot_template.entry * | pickpocketing loot
+@kind skinning_loot = skinning_loot_template.entry * | skinning loot
+@kind fishing_loot = fishing_loot_template.entry * | fishing loot
+@kind reference_loot = reference_loot_template.entry * | reference loot
+@kind disenchant_loot = disenchant_loot_template.entry * | disenchanting loot
+@kind mail_loot = mail_loot_template.entry * | mail loot
+@kind creature_spawn = creature.guid id | creature spawn
+@kind gameobject_spawn = gameobject.guid id | game object spawn
+@kind condition = conditions.condition_entry type | condition
+@kind creature_spells = creature_spells.entry name | creature spell list
+
+# ---------------------------------------------------------------------------------------------- named values
+
+@enum ItemQuality
+  0 = Poor (grey)
+  1 = Common (white)
+  2 = Uncommon (green)
+  3 = Rare (blue)
+  4 = Epic (purple)
+  5 = Legendary (orange)
+  6 = Artifact
+
+@enum ItemBonding
+  0 = Not bound
+  1 = Binds when picked up
+  2 = Binds when equipped
+  3 = Binds when used
+  4 = Quest item
+  5 = Quest item (2)
+
+@enum ItemStat
+  0 = Mana
+  1 = Health
+  3 = Agility
+  4 = Strength
+  5 = Intellect
+  6 = Spirit
+  7 = Stamina
+
+@enum ItemSpellTrigger
+  0 = Use
+  1 = On equip
+  2 = Chance on hit
+  4 = Soulstone
+  5 = Use (no delay)
+  6 = Learn the spell (recipe)
+
+@enum ItemSheath
+  0 = None
+  1 = Two-handed weapon (back)
+  2 = Staff
+  3 = One-handed (side)
+  4 = Shield
+  5 = Enchanter's rod
+  6 = Off hand
+
+@enum ItemMaterial
+  -1 = Consumable
+  0 = Not defined
+  1 = Metal
+  2 = Wood
+  3 = Liquid
+  4 = Jewelry
+  5 = Chain
+  6 = Plate
+  7 = Cloth
+  8 = Leather
+
+@enum FoodType
+  0 = Not food
+  1 = Meat
+  2 = Fish
+  3 = Cheese
+  4 = Bread
+  5 = Fungus
+  6 = Fruit
+  7 = Raw meat
+  8 = Raw fish
+
+@enum AmmoType
+  0 = None
+  2 = Arrows
+  3 = Bullets
+
+@enum Language
+  0 = Universal
+  1 = Orcish
+  2 = Darnassian
+  3 = Taurahe
+  6 = Dwarvish
+  7 = Common
+  8 = Demonic
+  9 = Titan
+  10 = Thalassian
+  11 = Draconic
+  12 = Kalimag
+  13 = Gnomish
+  14 = Troll
+  33 = Gutterspeak
+
+@flags ItemFlags
+  0x1 = Soulbound (internal)
+  0x2 = Conjured
+  0x4 = Openable (right-click to open)
+  0x8 = Wrapped gift
+  0x20 = Totem
+  0x40 = Usable while channeling / triggers a spell
+  0x200 = Wrapper (gift wrap)
+  0x400 = Gifts ignore
+  0x800 = Party loot (everyone can loot)
+  0x2000 = Charter
+  0x8000 = PvP reward
+  0x80000 = Unique when equipped
+  0x400000 = Throwable
+
+@enum CreatureRank
+  0 = Normal
+  1 = Elite
+  2 = Rare elite
+  3 = Boss
+  4 = Rare
+
+@enum CreatureType
+  0 = None
+  1 = Beast
+  2 = Dragonkin
+  3 = Demon
+  4 = Elemental
+  5 = Giant
+  6 = Undead
+  7 = Humanoid
+  8 = Critter
+  9 = Mechanical
+  10 = Not specified
+  11 = Totem
+
+@enum UnitClass
+  0 = (not set: warrior)
+  1 = Warrior (health only)
+  2 = Paladin (health and mana)
+  4 = Rogue
+  8 = Mage (more mana)
+
+@flags NpcFlags
+  0x1 = Gossip
+  0x2 = Quest giver
+  0x4 = Vendor
+  0x8 = Flight master
+  0x10 = Trainer
+  0x20 = Spirit healer
+  0x40 = Spirit guide
+  0x80 = Innkeeper
+  0x100 = Banker
+  0x200 = Petitioner (guild charters)
+  0x400 = Tabard designer
+  0x800 = Battlemaster
+  0x1000 = Auctioneer
+  0x2000 = Stable master
+  0x4000 = Repairs items
+
+@flags UnitFlags
+  0x2 = Not attackable
+  0x4 = Cannot move (disable move)
+  0x8 = PvP attackable
+  0x40 = Not selectable for some spells (imm. to PC)
+  0x100 = Immune to players
+  0x200 = Immune to creatures
+  0x800 = Passive (does not fight back)
+  0x1000 = PvP
+  0x8000 = Pacified
+  0x40000 = Confused
+  0x80000 = Fleeing
+  0x2000000 = Not selectable
+  0x4000000 = Skinnable
+
+@enum TrainerType
+  0 = Class trainer
+  1 = Mount (riding) trainer
+  2 = Profession trainer
+  3 = Pet trainer
+
+@enum MovementType
+  0 = Stays in place
+  1 = Wanders around (random)
+  2 = Follows a path (waypoints)
+
+@flags InhabitType
+  1 = Ground
+  2 = Water
+  4 = Air
+
+@enum QuestMethod
+  0 = Completes automatically
+  1 = Disabled
+  2 = Normal
+
+@flags QuestFlags
+  0x1 = Must stay alive
+  0x2 = Party accept (an escort or event start)
+  0x4 = Exploration
+  0x8 = Sharable
+  0x20 = Epic
+  0x40 = Raid
+  0x200 = Hidden rewards
+  0x400 = Auto rewarded
+  0x1000 = Daily-like (not in 1.12 client)
+
+@flags QuestSpecialFlags
+  1 = Repeatable
+  2 = Explore or event (completed by a script)
+
+@enum GameObjectType
+  0 = Door
+  1 = Button
+  2 = Quest giver
+  3 = Chest (lootable)
+  4 = Binder
+  5 = Generic
+  6 = Trap
+  7 = Chair
+  8 = Spell focus
+  9 = Text (book, plaque)
+  10 = Goober (clickable)
+  11 = Transport (elevator)
+  12 = Area damage
+  13 = Camera
+  14 = Map object
+  15 = Moving transport (ship, zeppelin)
+  16 = Duel arbiter
+  17 = Fishing node (bobber)
+  18 = Summoning ritual
+  19 = Mailbox
+  20 = Auction house
+  21 = Guard post
+  22 = Spell caster
+  23 = Meeting stone
+  24 = Flag stand
+  25 = Fishing hole (school of fish)
+  26 = Flag drop
+  27 = Mini game
+  28 = Lottery kiosk
+  29 = Capture point
+  30 = Aura generator
+  31 = Dungeon difficulty
+
+@flags GameObjectFlags
+  0x1 = In use
+  0x2 = Locked
+  0x4 = Needs a condition to interact
+  0x8 = Transport
+  0x10 = Not selectable
+  0x20 = Never despawns
+  0x40 = Triggered
+
+@enum MapType
+  0 = Continent (common)
+  1 = Dungeon (instance)
+  2 = Raid
+  3 = Battleground
+
+@enum AreaTeamServer
+  0 = Contested
+  2 = Alliance
+  4 = Horde
+  6 = Sanctuary
+
+@enum SpawnState
+  0 = Ready (active)
+  1 = Not ready (closed / used)
+
+@enum GossipIcon
+  0 = Chat
+  1 = Vendor
+  2 = Flight
+  3 = Trainer
+  4 = Interact (1)
+  5 = Interact (2)
+  6 = Money bag
+  7 = Talk
+  8 = Tabard
+  9 = Battle
+  10 = Dot
+
+@enum GossipOption
+  0 = None
+  1 = Gossip (sub menu)
+  2 = Quest giver
+  3 = Vendor
+  4 = Flight master
+  5 = Trainer
+  6 = Spirit healer
+  7 = Spirit guide
+  8 = Innkeeper
+  9 = Banker
+  10 = Petitioner
+  11 = Tabard designer
+  12 = Battlefield
+  13 = Auctioneer
+  14 = Stable pet
+  15 = Armorer (repair)
+  16 = Unlearn talents
+  17 = Unlearn pet skills
+
+@flags SpellSchoolMask
+  0x1 = Physical
+  0x2 = Holy
+  0x4 = Fire
+  0x8 = Nature
+  0x10 = Frost
+  0x20 = Shadow
+  0x40 = Arcane
+
+@enum DisplayGender
+  0 = Male
+  1 = Female
+  2 = None
+
+@enum ChatType
+  0 = Say
+  1 = Yell
+  2 = Text emote
+  3 = Boss emote
+  4 = Whisper
+  5 = Boss whisper
+  6 = Zone yell
+
+# ---------------------------------------------------------------------------------------------- items
+
+[item_template]
+view: items
+about: Every item: its name, quality, look (display), price, stats, damage, armor, the spells it casts, who may use it, its text page and the quest it starts. The game also has the item in its cache (WDB\itemcache.wdb) after seeing it once.
+label: name
+version: patch
+reload: .reload item_template
+== The item
+entry           id                        | The item's ID (the same number everywhere: loot, vendors, quests, the client's cache).
+patch           patch
+name            text                      | The name shown in tooltips (the server sends it to the game).
+description     text                      | The yellow text at the bottom of the tooltip.
+class           enum(ItemClass)           | Weapon, armor, consumable, trade goods, quest...
+subclass                                  | The kind within the class (for a weapon: 0 one-handed axe, 7 one-handed sword...).
+display_id      -> dbc:ItemDisplayInfo    | The look: model, textures and icon (a row of the game's ItemDisplayInfo table).
+quality         enum(ItemQuality)
+flags           flags(ItemFlags)
+inventory_type  enum(InventoryType)       | Where it is worn (head, chest, main hand...) or 0 = not wearable.
+item_level                                | The item's level (used for its value and disenchanting).
+required_level                            | Players below this level cannot use it.
+max_count                                 | How many one player may have (0 = no limit).
+stackable                                 | How many fit in one bag slot.
+container_slots                           | For a bag: its number of slots.
+bonding         enum(ItemBonding)
+material        enum(ItemMaterial)        | The sound it makes when moved.
+sheath          enum(ItemSheath)          | Where a weapon is carried when not in use.
+== Price
+buy_count                                 | How many a vendor sells at once.
+buy_price       money                     | The price at a vendor, in copper (100 copper = 1 silver).
+sell_price      money                     | What a vendor pays for it, in copper.
+== Requirements
+allowable_class flags(ClassMask)          | Classes that may use it (-1 = all).
+allowable_race  flags(RaceMask)           | Races that may use it (-1 = all).
+required_skill  -> dbc:SkillLine          | A skill needed to use it.
+required_skill_rank                       | The skill value needed.
+required_spell  -> spell                  | A spell the player must know.
+required_honor_rank                       | PvP rank needed.
+required_city_rank
+required_reputation_faction -> faction    | A faction whose reputation is needed.
+required_reputation_rank enum(ReputationRank)
+area_bound      -> area                   | Only usable in this area (0 = anywhere).
+map_bound       -> map                    | Only usable on this map (0 = anywhere).
+== Stats
+stat_type[10]   enum(ItemStat)            | Which stat the value below raises.
+stat_value[10]                            | How much.
+armor
+block                                     | Block value of a shield.
+holy_res
+fire_res
+nature_res
+frost_res
+shadow_res
+arcane_res
+== Weapon
+delay           ms                        | The weapon's speed in milliseconds (2600 = 2.60).
+range_mod                                 | Range modifier of a ranged weapon.
+ammo_type       enum(AmmoType)
+dmg_min[5]                                | Damage per hit, lowest.
+dmg_max[5]                                | Damage per hit, highest.
+dmg_type[5]     enum(SpellSchool)         | The school of the damage.
+max_durability                            | Durability (0 = never breaks).
+== Spells
+spellid_[5]     -> spell                  | A spell the item casts or teaches.
+spelltrigger_[5] enum(ItemSpellTrigger)
+spellcharges_[5]                          | Charges (0 = unlimited; negative = the item is used up).
+spellppmrate_[5]                          | Procs per minute for "chance on hit".
+spellcooldown_[5] ms                      | Cooldown of the spell (-1 = the spell's own).
+spellcategory_[5] -> dbc:SpellCategory    | Cooldown category shared with other items.
+spellcategorycooldown_[5] ms              | Cooldown of the category (-1 = the spell's own).
+== Text and quest
+page_text       -> page_text              | The first page of text it shows when read.
+page_language   enum(Language)
+page_material   -> dbc:PageTextMaterial
+start_quest     -> quest                  | The quest the item starts when you right-click it.
+== Other
+lock_id         -> dbc:Lock               | The lock of a lockbox (lockpicking, key).
+random_property -> dbc:ItemRandomProperties | Random enchantments ("of the Bear").
+set_id          -> dbc:ItemSet            | The item set it belongs to.
+duration        seconds                   | It disappears after this many seconds (0 = never).
+bag_family      flags                     | Bag families (quiver, ammo pouch, soul bag, herb bag...).
+disenchant_id   -> disenchant_loot        | What disenchanting gives (a disenchant_loot_template entry).
+food_type       enum(FoodType)            | Pet food kind.
+min_money_loot  money                     | Money inside when opened (lowest).
+max_money_loot  money
+wrapped_gift    -> item                   | The item inside a wrapped gift.
+extra_flags     flags                     | VMaNGOS extra flags (1 = real-time duration).
+~other_team_entry                         | VMaNGOS: the item of the other faction for a faction change (1 = none).
+
+# ---------------------------------------------------------------------------------------------- creatures
+
+[creature_template]
+view: creatures
+about: Every creature and NPC: name, level, faction, what it looks like (up to four displays), what it sells, trains and says, its loot, its spells and its AI. The game caches it in WDB\creaturecache.wdb.
+label: name
+version: patch
+reload: .reload creature_template
+== The creature
+entry           id                        | The creature's ID (spawns, loot, quests use it).
+patch           patch
+name            text
+subname         text                      | The second line under the name (<Weapon Merchant>).
+level_min                                 | Lowest level (each spawn picks a level in the range).
+level_max
+rank            enum(CreatureRank)
+type            enum(CreatureType)
+type_flags      flags                     | Creature type flags (tameable 1, ghost visible 2...).
+faction         -> faction_template       | Who it is friendly or hostile to (a faction template).
+npc_flags       flags(NpcFlags)           | What it does when you talk to it: vendor, trainer, quest giver...
+unit_flags      flags(UnitFlags)
+unit_class      enum(UnitClass)           | Decides health and mana per level.
+== Look
+display_id[4]   -> dbc:CreatureDisplayInfo | The looks it may have (a row of the game's CreatureDisplayInfo; 0 = none).
+display_scale[4]                          | Size of each look (0 = the display's own size).
+display_probability[4]                    | How often each look is chosen.
+display_total_probability                 | The sum of the probabilities (0 = equal chances).
+mount_display_id -> dbc:CreatureDisplayInfo | A mount it rides.
+equipment_id    -> equipment              | The weapons it holds (creature_equip_template).
+== Movement
+speed_walk
+speed_run
+movement_type   enum(MovementType)
+inhabit_type    flags(InhabitType)
+detection_range                           | How close a player must come before it attacks.
+call_for_help_range
+leash_range                               | How far it follows before going back (0 = default).
+== Combat
+health_multiplier                         | Health = the class's health at its level times this.
+mana_multiplier
+armor_multiplier
+damage_multiplier
+damage_variance
+damage_school   enum(SpellSchool)         | The school of its melee damage.
+base_attack_time ms
+ranged_attack_time ms
+xp_multiplier                             | Experience given when killed, times this.
+holy_res
+fire_res
+nature_res
+frost_res
+shadow_res
+arcane_res
+spell_id[4]     -> spell                  | Spells it can cast (older AI).
+spell_list_id   -> creature_spells        | Its spell list (creature_spells).
+pet_spell_list_id
+spawn_spell_id  -> spell                  | A spell it casts when it appears.
+auras           text                      | Auras it always has: spell IDs separated by spaces.
+mechanic_immune_mask flags                | Mechanics it is immune to (stun, fear...).
+school_immune_mask flags(SpellSchoolMask)
+immunity_flags  flags
+regeneration    flags                     | Health / mana regeneration (1 health, 2 mana).
+== Loot
+loot_id         -> creature_loot          | Its loot when killed (creature_loot_template entry; usually the same as entry).
+pickpocket_loot_id -> pickpocketing_loot
+skinning_loot_id -> skinning_loot
+gold_min        money                     | Money it drops, lowest (copper).
+gold_max        money
+== Services
+gossip_menu_id  -> gossip_menu            | What it says when you talk to it.
+vendor_id       -> vendor_template        | A shared vendor list (npc_vendor_template) in addition to its own npc_vendor rows.
+trainer_id      -> trainer_template       | A shared trainer list (npc_trainer_template).
+trainer_type    enum(TrainerType)
+trainer_spell   -> spell                  | For a profession trainer: the profession spell the student must know.
+trainer_class   enum(Class)               | For a class trainer: the class it trains.
+trainer_race    enum(Race)                | For a mount trainer: the race it trains.
+pet_family      -> dbc:CreatureFamily     | Its family when tamed (wolf, cat...).
+== Scripts
+ai_name         text                      | The AI (EventAI, ...); empty = default.
+script_name     text                      | A C++ script of the server (empty = none).
+civilian        bool                      | Killing it gives dishonor.
+racial_leader   bool
+flags_extra     flags                     | VMaNGOS extra flags (no aggro, no XP, invisible...).
+
+[creature]
+view: spawns
+about: Where creatures stand in the world: one row per spawn with its position, respawn time and movement.
+label: id
+version: patch-range
+reload: .reload creature
+== Spawn
+guid            id                        | The spawn's own number.
+id              -> creature               | The creature that appears here.
+id2             -> creature               | Other creatures that may appear here instead (picked at random).
+id3             -> creature
+id4             -> creature
+id5             -> creature
+map             -> map zero
+position_x      coords
+position_y      coords
+position_z      coords
+orientation                               | Facing, in radians.
+spawntimesecsmin seconds                  | Respawn time, shortest.
+spawntimesecsmax seconds
+wander_distance                           | How far it wanders (with random movement).
+health_percent  percent
+mana_percent    percent
+movement_type   enum(MovementType)
+spawn_flags     flags
+visibility_mod
+patch_min       patch
+patch_max       patch
+
+[creature_addon]
+about: Extras of one spawn: its own display, mount, equipment, stand state, emote and auras.
+version: patch
+reload: restart
+guid            -> creature_spawn
+patch           patch
+display_id      -> dbc:CreatureDisplayInfo
+mount_display_id -> dbc:CreatureDisplayInfo
+equipment_id    -> equipment
+stand_state                               | 0 standing, 1 sitting, 7 dead...
+sheath_state                              | 0 unarmed, 1 melee weapons out, 2 ranged.
+emote_state     -> dbc:Emotes
+auras           text
+
+[creature_equip_template]
+about: The weapons creatures hold (up to three items).
+label: item1
+version: patch-range
+reload: restart
+entry           id
+probability                               | Chance among several equipment rows of the same entry.
+item1           -> item                   | Main hand.
+item2           -> item                   | Off hand.
+item3           -> item                   | Ranged.
+patch_min       patch
+patch_max       patch
+
+[creature_display_info_addon]
+about: The server's own facts about each creature look: reach, collision size, gender and walking speed. The server warns at start when a creature uses a display that has no row here.
+label: display_id
+version: build
+reload: .reload creature_display_info_addon
+display_id      id -> dbc:CreatureDisplayInfo
+build                                     | The client build this row is for.
+bounding_radius
+combat_reach                              | How close it must be to hit.
+speed_walk
+speed_run
+gender          enum(DisplayGender)
+display_id_other_gender -> dbc:CreatureDisplayInfo
+
+[creature_onkill_reputation]
+about: Reputation gained or lost when a creature is killed.
+label: creature_id
+version: patch
+reload: .reload creature_onkill_reputation
+creature_id     id -> creature
+patch           patch
+RewOnKillRepFaction1 -> faction
+RewOnKillRepFaction2 -> faction
+MaxStanding1    enum(ReputationRank)
+MaxStanding2    enum(ReputationRank)
+IsTeamAward1    bool
+IsTeamAward2    bool
+RewOnKillRepValue1
+RewOnKillRepValue2
+TeamDependent   bool
+
+# ---------------------------------------------------------------------------------------------- quests
+
+[quest_template]
+view: quests
+about: Every quest: its texts, levels, who may take it, what to do (items, kills, spells), the rewards and the chain it belongs to. Quest givers and enders are in creature_questrelation / creature_involvedrelation (and the game object tables). The game caches quests in WDB\questcache.wdb.
+label: Title
+version: patch
+reload: .reload all_quest
+== The quest
+entry           id
+patch           patch
+Title           text
+Details         text                      | The text when you are offered the quest.
+Objectives      text                      | The short summary in the quest log.
+OfferRewardText text                      | The text when you hand it in.
+RequestItemsText text                     | The text while you still have to bring items.
+EndText         text
+ObjectiveText[4] text                     | Custom text for an objective (instead of "<name> slain").
+Method          enum(QuestMethod)
+ZoneOrSort      -> area sign(dbc:QuestSort) | The zone it is listed under in the quest log (negative = a quest category).
+Type            -> dbc:QuestInfo          | Group, elite, dungeon, raid, PvP... (0 = normal).
+QuestFlags      flags(QuestFlags)
+SpecialFlags    flags(QuestSpecialFlags)
+SuggestedPlayers
+LimitTime       seconds                   | Time limit (0 = none).
+== Levels and who may take it
+MinLevel                                  | Lowest player level to get it.
+MaxLevel                                  | Highest player level (0 = no limit).
+QuestLevel                                | The quest's level (its colour in the log).
+RequiredClasses flags(ClassMask)          | 0 = any class.
+RequiredRaces   flags(RaceMask)           | 0 = any race.
+RequiredSkill   -> dbc:SkillLine
+RequiredSkillValue
+RequiredCondition -> condition
+RequiredMinRepFaction -> faction
+RequiredMinRepValue
+RequiredMaxRepFaction -> faction
+RequiredMaxRepValue
+RepObjectiveFaction -> faction            | Reputation to reach as the goal.
+RepObjectiveValue
+== Chain
+PrevQuestId     -> quest abs              | A quest that must be done first (negative: must be active instead).
+NextQuestId     -> quest abs              | A quest this one opens (negative: ... while it is active).
+ExclusiveGroup                            | Quests of one group exclude each other (negative: all must be done).
+BreadcrumbForQuestId -> quest             | This is a breadcrumb that leads to that quest.
+NextQuestInChain -> quest                 | The next quest offered right after this one (in the same window).
+== Provided at start
+SrcItemId       -> item                   | An item given when the quest is accepted.
+SrcItemCount
+SrcSpell        -> spell                  | A spell cast on the player when it is accepted.
+== Objectives
+ReqItemId[4]    -> item                   | Items to bring.
+ReqItemCount[4]
+ReqSourceId[4]  -> item                   | Items that make the required items (shown in the log).
+ReqSourceCount[4]
+ReqCreatureOrGOId[4] -> creature sign(gameobject) | Creatures to kill (negative: game objects to use).
+ReqCreatureOrGOCount[4]
+ReqSpellCast[4] -> spell                  | A spell to cast on the creature / object instead of killing it.
+== Rewards
+RewChoiceItemId[6] -> item                | Items to choose one from.
+RewChoiceItemCount[6]
+RewItemId[4]    -> item                   | Items always given.
+RewItemCount[4]
+RewRepFaction[5] -> faction
+RewRepValue[5]
+RewXP                                     | Experience given (VMaNGOS gives exactly this, less to players 6+ levels above the quest; 0 = none).
+RewOrReqMoney   money                     | Money given (negative: money required).
+RewMoneyMaxLevel money                    | Money given instead of experience at the maximum level.
+RewSpell        -> spell                  | A spell taught.
+RewSpellCast    -> spell                  | A spell cast on the player.
+RewMailTemplateId                         | A letter sent later.
+RewMailDelaySecs seconds
+RewMailMoney    money
+== Map point and emotes
+PointMapId      -> map
+PointX          coords
+PointY          coords
+PointOpt
+DetailsEmote[4] -> dbc:Emotes
+DetailsEmoteDelay[4] ms
+IncompleteEmote -> dbc:Emotes
+CompleteEmote   -> dbc:Emotes
+OfferRewardEmote[4] -> dbc:Emotes
+OfferRewardEmoteDelay[4] ms
+StartScript                               | A script run when the quest is accepted (quest_start_scripts).
+CompleteScript                            | A script run when it is completed (quest_end_scripts).
+
+[creature_questrelation]
+about: Which creatures offer which quests (quest givers).
+label: quest
+version: patch-range
+reload: .reload creature_questrelation
+id              -> creature               | The quest giver.
+quest           -> quest
+patch_min       patch
+patch_max       patch
+
+[creature_involvedrelation]
+about: Which creatures take which quests back (quest enders).
+label: quest
+version: patch-range
+reload: .reload creature_involvedrelation
+id              -> creature               | The NPC you hand the quest in to.
+quest           -> quest
+patch_min       patch
+patch_max       patch
+
+[gameobject_questrelation]
+about: Which game objects offer quests (wanted posters, books...).
+label: quest
+version: patch-range
+reload: .reload gameobject_questrelation
+id              -> gameobject
+quest           -> quest
+patch_min       patch
+patch_max       patch
+
+[gameobject_involvedrelation]
+about: Which game objects take quests back.
+label: quest
+version: patch-range
+reload: .reload gameobject_involvedrelation
+id              -> gameobject
+quest           -> quest
+patch_min       patch
+patch_max       patch
+
+# ---------------------------------------------------------------------------------------------- game objects
+
+[gameobject_template]
+view: gameobjects
+about: Every game object: chests, doors, herbs, ore veins, mailboxes, signs, books... Its type decides what the data0..data23 values mean. The game caches it in WDB\gameobjectcache.wdb.
+label: name
+version: patch
+reload: .reload gameobject_template
+== The object
+entry           id
+patch           patch
+name            text
+type            enum(GameObjectType)
+displayId       -> dbc:GameObjectDisplayInfo | Its model (a row of the game's GameObjectDisplayInfo).
+faction         -> faction_template
+flags           flags(GameObjectFlags)
+size                                      | Scale (1 = normal).
+== Type data (meaning depends on the type)
+data0                                     | Chest, door, button: the lock (Lock.dbc). Text: the page. Spell focus: the focus id.
+data1                                     | Chest and fishing hole: the loot (gameobject_loot_template entry). Door: reset time.
+data2                                     | Chest: restock time. Spell caster: charges.
+data3
+data4
+data5
+data6
+data7
+data8
+data9
+data10
+data11
+data12
+data13
+data14
+data15
+data16
+data17
+data18
+data19
+data20
+data21
+data22
+data23
+== Other
+mingold         money                     | Money in a chest, lowest.
+maxgold         money
+script_name     text
+
+[gameobject]
+view: spawns
+about: Where game objects stand in the world: one row per spawn with its position, rotation and respawn time.
+label: id
+version: patch-range
+reload: .reload gameobject
+guid            id
+id              -> gameobject
+map             -> map zero
+position_x      coords
+position_y      coords
+position_z      coords
+orientation
+rotation0
+rotation1
+rotation2
+rotation3
+spawntimesecsmin seconds                  | Respawn time (negative: despawned until an event).
+spawntimesecsmax seconds
+animprogress
+state           enum(SpawnState)
+spawn_flags     flags
+visibility_mod
+patch_min       patch
+patch_max       patch
+
+# ---------------------------------------------------------------------------------------------- spells
+
+[spell_template]
+view: spells
+about: Every spell as the server computes it: school, costs, cast time, cooldowns, range, the three effects and their numbers, auras, procs. VMaNGOS reads spells from this table, not from a DBC file; the game shows names, icons and tooltips from its own Spell.dbc (the "Client" column).
+label: name
+version: build
+reload: restart
+== The spell
+entry           id
+build                                     | The client build this row is for (the server uses the highest build <= 5875).
+name            text
+nameFlags
+nameSubtext     text                      | The rank ("Rank 1").
+nameSubtextFlags
+description     text                      | The tooltip text.
+descriptionFlags
+auraDescription text                      | The text of the buff / debuff.
+auraDescriptionFlags
+school          enum(SpellSchool)
+category        -> dbc:SpellCategory
+castUI
+dispel          -> dbc:SpellDispelType
+mechanic        -> dbc:SpellMechanic
+spellIconId     -> dbc:SpellIcon          | The icon (a row of the game's SpellIcon table).
+activeIconId    -> dbc:SpellIcon
+spellVisual1    -> dbc:SpellVisual
+spellVisual2    -> dbc:SpellVisual
+spellPriority
+spellFamilyName enum(SpellFamily)
+spellFamilyFlags flags                    | The class spell set (64 bits; the client keeps it as two 32-bit masks).
+customFlags     flags                     | VMaNGOS only: extra handling of the spell on the server.
+== Attributes
+attributes      flags(SpellAttributes)
+attributesEx    flags(SpellAttributesEx)
+attributesEx2   flags(SpellAttributesEx2)
+attributesEx3   flags(SpellAttributesEx3)
+attributesEx4   flags(SpellAttributesEx4)
+stances         flags                     | Shapeshift forms the spell needs.
+stancesNot      flags                     | Forms in which it cannot be cast.
+targets         flags(SpellCastTargetFlags)
+targetCreatureType flags(CreatureTypeMask)
+requiresSpellFocus -> dbc:SpellFocusObject
+casterAuraState enum(AuraState)
+targetAuraState enum(AuraState)
+== Casting
+castingTimeIndex -> dbc:SpellCastTimes
+recoveryTime    ms                        | Cooldown.
+categoryRecoveryTime ms                   | Cooldown of the category.
+startRecoveryCategory
+startRecoveryTime ms                      | Global cooldown.
+interruptFlags  flags(SpellInterruptFlags)
+auraInterruptFlags flags(AuraInterruptFlags)
+channelInterruptFlags flags
+durationIndex   -> dbc:SpellDuration
+rangeIndex      -> dbc:SpellRange
+speed                                     | Missile speed.
+modelNextSpell  -> spell                  | The spell cast next (auto-repeat).
+stackAmount
+maxAffectedTargets
+dmgClass        enum(DamageClass)
+preventionType  enum(PreventionType)
+stanceBarOrder
+== Levels
+maxLevel
+baseLevel
+spellLevel
+minTargetLevel
+maxTargetLevel
+== Costs
+powerType       enum(PowerType)
+manaCost
+manCostPerLevel
+manaPerSecond
+manaPerSecondPerLevel
+manaCostPercentage percent
+procFlags       flags(ProcFlags)
+procChance      percent
+procCharges
+== Items needed
+totem[2]        -> item
+reagent[8]      -> item
+reagentCount[8]
+equippedItemClass enum(ItemClass)
+equippedItemSubClassMask flags
+equippedItemInventoryTypeMask flags
+== Effects
+effect[3]       enum(SpellEffect)
+effectBasePoints[3]                       | The effect's number minus 1 (damage 10..20 = base points 9, die sides 11).
+effectDieSides[3]
+effectBaseDice[3]
+effectDicePerLevel[3]
+effectRealPointsPerLevel[3]
+effectBonusCoefficient[3]                 | VMaNGOS only: how much spell power adds.
+effectMechanic[3] -> dbc:SpellMechanic
+effectImplicitTargetA[3] enum(SpellTarget)
+effectImplicitTargetB[3] enum(SpellTarget)
+effectRadiusIndex[3] -> dbc:SpellRadius
+effectApplyAuraName[3] enum(AuraType)
+effectAmplitude[3] ms                     | The time between ticks of a periodic aura.
+effectMultipleValue[3]
+effectChainTarget[3]
+effectItemType[3] -> item                 | The item an effect creates.
+effectMiscValue[3]                        | Depends on the effect (a creature to summon, a stat, a school...).
+effectTriggerSpell[3] -> spell
+effectPointsPerComboPoint[3]
+dmgMultiplier[3]                          | Damage of each chained target.
+== Reputation and vision
+minFactionId    -> faction
+minReputation
+requiredAuraVision
+
+[skill_line_ability]
+about: Which spells belong to which skill (recipes of a profession, abilities of a class): the server's copy of the game's SkillLineAbility table.
+label: spell_id
+version: build=
+reload: restart
+id              id
+build
+skill_id        -> dbc:SkillLine
+spell_id        -> spell
+race_mask       flags(RaceMask)
+class_mask      flags(ClassMask)
+req_skill_value
+superseded_by_spell -> spell
+learn_on_get_skill enum(LearnOnGetSkill)
+max_value
+min_value
+req_train_points
+
+# ---------------------------------------------------------------------------------------------- loot
+
+[creature_loot_template]
+view: loot
+about: What creatures drop when killed. Rows with the same group (groupid > 0) drop at most one item of the group; a negative "mincountOrRef" includes a reference loot table.
+label: item
+version: patch-range
+reload: .reload creature_loot_template
+entry           id -> creature_loot       | The loot ID (creature_template.loot_id).
+item            -> item
+ChanceOrQuestChance percent               | Drop chance in % (negative: only for players on the quest that needs it).
+groupid                                   | 0 = drops on its own; N = one item of group N drops.
+mincountOrRef   -> reference_loot neg     | Lowest count; a negative number includes reference_loot_template entry -N.
+maxcount                                  | Highest count (or how many times a reference is rolled).
+condition_id    -> condition
+patch_min       patch
+patch_max       patch
+
+[gameobject_loot_template]
+view: loot
+about: What chests, herbs, ore veins and other game objects give (gameobject_template.data1 of a chest or fishing hole).
+label: item
+version: patch-range
+reload: .reload gameobject_loot_template
+entry           id -> gameobject_loot
+item            -> item
+ChanceOrQuestChance percent
+groupid
+mincountOrRef   -> reference_loot neg
+maxcount
+condition_id    -> condition
+patch_min       patch
+patch_max       patch
+
+[item_loot_template]
+view: loot
+about: What an item contains when opened (bags of loot, clams, lockboxes).
+label: item
+version: patch-range
+reload: .reload item_loot_template
+entry           id -> item                | The item that is opened.
+item            -> item
+ChanceOrQuestChance percent
+groupid
+mincountOrRef   -> reference_loot neg
+maxcount
+condition_id    -> condition
+patch_min       patch
+patch_max       patch
+
+[pickpocketing_loot_template]
+view: loot
+about: What rogues can pickpocket from creatures (creature_template.pickpocket_loot_id).
+label: item
+version: patch-range
+reload: .reload pickpocketing_loot_template
+entry           id -> pickpocketing_loot
+item            -> item
+ChanceOrQuestChance percent
+groupid
+mincountOrRef   -> reference_loot neg
+maxcount
+condition_id    -> condition
+patch_min       patch
+patch_max       patch
+
+[skinning_loot_template]
+view: loot
+about: What skinning (also herbalism and mining of creatures) gives (creature_template.skinning_loot_id).
+label: item
+version: patch-range
+reload: .reload skinning_loot_template
+entry           id -> skinning_loot
+item            -> item
+ChanceOrQuestChance percent
+groupid
+mincountOrRef   -> reference_loot neg
+maxcount
+condition_id    -> condition
+patch_min       patch
+patch_max       patch
+
+[fishing_loot_template]
+view: loot
+about: What fishing gives, per zone or area (entry = the area ID; 0 = junk when fishing fails).
+label: item
+version: patch-range
+reload: .reload fishing_loot_template
+entry           id -> area
+item            -> item
+ChanceOrQuestChance percent
+groupid
+mincountOrRef   -> reference_loot neg
+maxcount
+condition_id    -> condition
+patch_min       patch
+patch_max       patch
+
+[reference_loot_template]
+view: loot
+about: Shared loot lists that other loot tables include with a negative mincountOrRef (world drops, boss loot groups).
+label: item
+version: patch-range
+reload: .reload reference_loot_template
+entry           id -> reference_loot
+item            -> item
+ChanceOrQuestChance percent
+groupid
+mincountOrRef   -> reference_loot neg
+maxcount
+condition_id    -> condition
+patch_min       patch
+patch_max       patch
+
+[disenchant_loot_template]
+view: loot
+about: What disenchanting gives (item_template.disenchant_id).
+label: item
+version: patch-range
+reload: .reload disenchant_loot_template
+entry           id -> disenchant_loot
+item            -> item
+ChanceOrQuestChance percent
+groupid
+mincountOrRef   -> reference_loot neg
+maxcount
+condition_id    -> condition
+patch_min       patch
+patch_max       patch
+
+[mail_loot_template]
+view: loot
+about: Items sent by mail (quest reward letters).
+label: item
+version: patch-range
+reload: .reload mail_loot_template
+entry           id -> mail_loot
+item            -> item
+ChanceOrQuestChance percent
+groupid
+mincountOrRef   -> reference_loot neg
+maxcount
+condition_id    -> condition
+patch_min       patch
+patch_max       patch
+
+# ---------------------------------------------------------------------------------------------- vendors and trainers
+
+[npc_vendor]
+view: vendors
+about: What vendors sell: one row per creature and item. The creature needs the Vendor flag (npc_flags 0x4).
+label: item
+version: none
+reload: .reload npc_vendor
+entry           -> creature               | The vendor.
+slot                                      | The item's place in the vendor's list.
+item            -> item
+maxcount                                  | Limited stock (0 = unlimited).
+incrtime        seconds                   | Time to restock one limited item.
+itemflags       flags
+condition_id    -> condition
+
+[npc_vendor_template]
+view: vendors
+about: Shared vendor lists: a creature whose vendor_id is the entry sells these items too.
+label: item
+version: none
+reload: .reload npc_vendor
+entry           id -> vendor_template
+slot
+item            -> item
+maxcount
+incrtime        seconds
+itemflags       flags
+condition_id    -> condition
+
+[npc_trainer]
+view: trainers
+about: What trainers teach: one row per creature and spell. The creature needs the Trainer flag (npc_flags 0x10).
+label: spell
+version: build-range
+reload: .reload npc_trainer
+entry           -> creature               | The trainer.
+spell           -> spell                  | The spell taught (usually a "learn" spell that teaches the real one).
+spellcost       money                     | Price in copper.
+reqskill        -> dbc:SkillLine          | A skill needed.
+reqskillvalue
+reqlevel                                  | Level needed.
+build_min                                 | First client build that has this row.
+build_max                                 | Last client build that has this row (5875 = 1.12).
+
+[npc_trainer_template]
+view: trainers
+about: Shared trainer lists: a creature whose trainer_id is the entry teaches these spells too.
+label: spell
+version: build-range
+reload: .reload npc_trainer
+entry           id -> trainer_template
+spell           -> spell
+spellcost       money
+reqskill        -> dbc:SkillLine
+reqskillvalue
+reqlevel
+build_min
+build_max
+
+# ---------------------------------------------------------------------------------------------- gossip and texts
+
+[gossip_menu]
+about: What an NPC says when you talk to it: a menu shows one of its texts (npc_text) and its options.
+label: text_id
+version: none
+reload: .reload gossip_menu
+entry           id -> gossip_menu         | The menu (creature_template.gossip_menu_id).
+text_id         -> npc_text
+script_id
+condition_id    -> condition
+
+[gossip_menu_option]
+about: The options of a gossip menu ("I want to browse your goods", "Train me").
+label: option_text
+version: none
+reload: .reload gossip_menu_option
+menu_id         -> gossip_menu
+id                                        | The option's place in the menu.
+option_icon     enum(GossipIcon)
+option_text     text
+option_broadcast_text -> broadcast_text
+option_id       enum(GossipOption)        | What the option does.
+npc_option_npcflag flags(NpcFlags)        | The NPC flag the option needs.
+action_menu_id                            | The menu opened next (-1 = close).
+action_poi_id
+action_script_id
+box_coded       bool
+box_money       money
+box_text        text
+box_broadcast_text -> broadcast_text
+condition_id    -> condition
+
+[npc_text]
+about: The texts gossip menus show; each refers to up to eight broadcast texts with a probability.
+label: BroadcastTextID0
+version: none
+reload: .reload npc_text
+ID              id
+BroadcastTextID0 -> broadcast_text
+Probability0    percent
+BroadcastTextID1 -> broadcast_text
+Probability1    percent
+BroadcastTextID2 -> broadcast_text
+Probability2    percent
+BroadcastTextID3 -> broadcast_text
+Probability3    percent
+BroadcastTextID4 -> broadcast_text
+Probability4    percent
+BroadcastTextID5 -> broadcast_text
+Probability5    percent
+BroadcastTextID6 -> broadcast_text
+Probability6    percent
+BroadcastTextID7 -> broadcast_text
+Probability7    percent
+
+[broadcast_text]
+about: Texts NPCs say (gossip, yells, emotes), for male and female speakers, with a language, sound and emotes.
+label: male_text
+version: none
+reload: restart
+entry           id
+male_text       text
+female_text     text
+chat_type       enum(ChatType)
+sound_id        -> dbc:SoundEntries
+language_id     enum(Language)
+emote_id1       -> dbc:Emotes
+emote_id2       -> dbc:Emotes
+emote_id3       -> dbc:Emotes
+emote_delay1    ms
+emote_delay2    ms
+emote_delay3    ms
+
+[page_text]
+about: The pages of books, letters and plaques (item_template.page_text, text game objects).
+label: text
+version: none
+reload: .reload page_text
+entry           id
+text            text
+next_page       -> page_text              | The next page (0 = the last).
+
+# ---------------------------------------------------------------------------------------------- world: areas, maps, flight points, factions
+
+[area_template]
+view: areas
+about: The server's copy of the game's zones and subzones (AreaTable.dbc): names, parent zone, exploration bit, level, side. The game keeps its own copy in AreaTable.dbc.
+label: name
+version: none
+reload: restart
+entry           id
+map_id          -> map zero
+zone_id         -> area                   | The parent zone (0 = it is a zone).
+explore_flag                              | The exploration bit.
+flags           flags(AreaFlags)
+area_level                                | Level for the exploration experience.
+name            text
+team            enum(AreaTeamServer)
+liquid_type     -> dbc:LiquidType
+
+[map_template]
+view: maps
+about: The server's copy of the game's maps (Map.dbc) with the server's own settings: kind, player limit, reset time, where ghosts appear, the instance script.
+label: map_name
+version: patch
+reload: .reload map_template
+entry           id
+patch           patch
+parent          -> map zero               | The continent an instance belongs to.
+map_type        enum(MapType)
+linked_zone     -> area                   | The zone of an instance.
+player_limit                              | Largest group that may enter (0 = no limit).
+reset_delay                               | Instance reset time in days (0 = none).
+ghost_entrance_map -> map zero            | Where a ghost appears after dying inside.
+ghost_entrance_x coords
+ghost_entrance_y coords
+map_name        text
+script_name     text
+
+[taxi_nodes]
+view: taxis
+about: The server's copy of the flight points (TaxiNodes.dbc): position, name and the mounts of the Horde and the Alliance.
+label: name
+version: build
+reload: restart
+id              id
+build
+map_id          -> map zero
+x               coords
+y               coords
+z               coords
+name            text
+mount_creature_id1 -> creature            | The flying mount of the Horde.
+mount_creature_id2 -> creature            | The flying mount of the Alliance.
+
+[faction]
+view: factions
+about: The server's copy of the factions (Faction.dbc): reputation settings per race and class, parent faction, name.
+label: name
+version: build
+reload: restart
+id              id
+build
+reputation_list_id                        | Position in the reputation list (-1 = none).
+base_rep_race_mask[4] flags(RaceMask)
+base_rep_class_mask[4] flags(ClassMask)
+base_rep_value[4]                         | Starting reputation for those races and classes.
+reputation_flags[4] flags(ReputationFlags)
+team            -> faction                | The parent faction (the group it is listed under).
+name            text
+description     text
+
+[faction_template]
+view: faction_templates
+about: The server's copy of the faction templates (FactionTemplate.dbc): the faction of creatures and who they are friendly or hostile to.
+label: faction_id
+version: build
+reload: restart
+id              id
+build
+faction_id      -> faction
+faction_flags   flags(FactionTemplateFlags)
+our_mask        flags(FactionMask)
+friendly_mask   flags(FactionMask)
+hostile_mask    flags(FactionMask)
+enemy_faction[4] -> faction
+friend_faction[4] -> faction
+
+[item_display_info]
+about: A copy of the icons of the game's item displays (ItemDisplayInfo.dbc: ID and icon) kept for the repack's tools; the world server itself does not read it.
+label: icon
+version: none
+reload: restart
+ID              id -> dbc:ItemDisplayInfo
+icon            text
+
+[conditions]
+about: Conditions other rows refer to (loot, gossip, vendors, quests): a type and up to four values.
+label: type
+version: none
+reload: .reload conditions
+condition_entry id
+type
+value1
+value2
+value3
+value4
+flags           flags
+
+[creature_spells]
+about: Spell lists of creatures (creature_template.spell_list_id): up to eight spells with chances, targets and delays.
+label: name
+version: none
+reload: .reload creature_spells
+entry           id
+name            text
+
+# ---------------------------------------------------------------------------------------------- languages
+
+[locales_item]
+view: locales
+about: The names and descriptions of items in the other languages (loc1 koKR ... loc7 esMX, loc8 ruRU).
+label: name_loc2
+version: none
+reload: .reload locales_item
+entry           id -> item
+
+[locales_creature]
+view: locales
+about: The names and subnames of creatures in the other languages.
+label: name_loc2
+version: none
+reload: .reload locales_creature
+entry           id -> creature
+
+[locales_quest]
+view: locales
+about: The texts of quests in the other languages.
+label: Title_loc2
+version: none
+reload: .reload locales_quest
+entry           id -> quest
+
+[locales_gameobject]
+view: locales
+about: The names of game objects in the other languages.
+label: name_loc2
+version: none
+reload: .reload locales_gameobject
+entry           id -> gameobject
+
+[locales_page_text]
+view: locales
+about: Pages of text in the other languages.
+label: Text_loc2
+version: none
+reload: .reload locales_page_text
+entry           id -> page_text
+
+[locales_gossip_menu_option]
+view: locales
+about: Gossip options in the other languages.
+label: option_text_loc2
+version: none
+reload: .reload locales_gossip_menu_option
+menu_id         -> gossip_menu
+
+[locales_broadcast_text]
+view: locales
+about: NPC texts in the other languages.
+label: male_text_loc2
+version: none
+reload: restart
+entry           id -> broadcast_text
+
+[locales_spell]
+view: locales
+about: Spell names and texts in the other languages.
+label: name_loc2
+version: none
+reload: restart
+entry           id -> spell
+
+[locales_area]
+view: locales
+about: Area names in the other languages.
+label: NameLoc2
+version: none
+reload: restart
+Entry           id -> area
+
+[locales_taxi_node]
+view: locales
+about: Flight point names in the other languages.
+label: name_loc2
+version: none
+reload: restart
+entry           id -> taxi
+
+[locales_faction]
+view: locales
+about: Faction names in the other languages.
+label: name_loc2
+version: none
+reload: restart
+entry           id -> faction

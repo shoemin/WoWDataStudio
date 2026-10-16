@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>false</UseWindowsForms>
+    <AssemblyName>WoWDataStudio</AssemblyName>
+    <RootNamespace>WoWDataStudio</RootNamespace>
+    <Description>Find, view, export and re-import World of Warcraft 1.12 game data.</Description>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+    <PackageReference Include="OpenTK.GLWpfControl" Version="4.3.6" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WoWData.Core\WoWData.Core.csproj" />
+  </ItemGroup>
+
+  <!-- Phase 3c: the Blender add-on and the scripts "Open in Blender" / "Install the Blender add-on" run (bin\blender_addon) -->
+  <ItemGroup>
+    <None Include="..\..\blender_addon\wowdata_blender\*.py" Link="blender_addon\wowdata_blender\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="..\..\blender_addon\studio\*.py" Link="blender_addon\studio\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

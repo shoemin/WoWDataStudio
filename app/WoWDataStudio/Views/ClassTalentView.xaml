@@ -1,0 +1,320 @@
+<UserControl x:Class="WoWDataStudio.Views.ClassTalentView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:h="clr-namespace:WoWDataStudio.Helpers"
+             xmlns:s="clr-namespace:WoWDataStudio.Services"
+             s:Manual.Topic="class-and-talent-designer">
+    <UserControl.Resources>
+        <h:BoolToCollapsedConverter x:Key="BoolVis" />
+        <h:BoolToCollapsedConverter x:Key="BoolVisInv" Invert="True" />
+        <h:NullToCollapsedConverter x:Key="NullVis" />
+        <Style x:Key="ToolButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+            <Setter Property="Margin" Value="0,0,6,6" />
+            <Setter Property="Padding" Value="9,4" />
+        </Style>
+        <Style x:Key="Section" TargetType="TextBlock" BasedOn="{StaticResource H3}">
+            <Setter Property="Margin" Value="0,10,0,4" />
+        </Style>
+        <DataTemplate x:Key="ProblemTemplate">
+            <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="12" Margin="0,1">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Foreground" Value="{StaticResource TextMuted}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsError}" Value="True"><Setter Property="Foreground" Value="{StaticResource Bad}" /></DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </DataTemplate>
+    </UserControl.Resources>
+    <UserControl.InputBindings>
+        <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
+    </UserControl.InputBindings>
+
+    <DockPanel Margin="0,8,0,0">
+        <!-- ============================== THE CLASS ============================== -->
+        <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Padding="12,8" Margin="0,0,0,8">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Save to my workspace" Command="{Binding SaveCommand}" Style="{StaticResource PrimaryButton}" Padding="14,6"
+                        ToolTip="Save the trees, talents, rank spells, class data and server rows into your workspace as one change (Ctrl+S)." />
+                <Button DockPanel.Dock="Right" Content="Discard changes" Command="{Binding DiscardCommand}" Margin="0,0,8,0" Padding="10,6" />
+                <TextBlock Text="Class" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <ComboBox ItemsSource="{Binding Classes}" SelectedItem="{Binding SelectedClass}" Width="170" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding ClassText}" VerticalAlignment="Center" Margin="12,0,12,0" TextWrapping="Wrap" />
+            </DockPanel>
+        </Border>
+        <Border DockPanel.Dock="Bottom" Padding="4,6,4,0">
+            <TextBlock Text="{Binding Status}" TextWrapping="Wrap">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding StatusIsError}" Value="True"><Setter Property="Foreground" Value="{StaticResource Bad}" /></DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </Border>
+
+        <TabControl x:Name="InnerTabs" Background="Transparent" BorderThickness="0">
+            <!-- ============================== TALENT TREES ============================== -->
+            <TabItem Header="Talent trees" Padding="12,4">
+                <Grid Margin="0,8,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="250" />
+                        <ColumnDefinition Width="8" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="8" />
+                        <ColumnDefinition Width="*" MinWidth="300" />
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource Card}" Padding="12,10">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
+                                <TextBlock Text="Trees of this class" Style="{StaticResource H3}" />
+                                <ListBox ItemsSource="{Binding Trees}" SelectedItem="{Binding SelectedTree}" Height="120" Margin="0,4,0,6" />
+                                <TextBlock Text="New tree name" FontWeight="SemiBold" />
+                                <TextBox Text="{Binding NewTreeName, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,4" />
+                                <WrapPanel>
+                                    <Button Content="Add tree..." Command="{Binding AddTreeCommand}" Style="{StaticResource ToolButton}" ToolTip="A new talent tree (tab) for this class: the 1.12 talent frame shows up to 5." />
+                                    <Button Content="Remove tree" Command="{Binding RemoveTreeCommand}" Style="{StaticResource ToolButton}" ToolTip="Remove the selected tree and its talents (their rank spells stay)." />
+                                </WrapPanel>
+                                <TextBlock Text="Tree settings" Style="{StaticResource Section}" />
+                                <TextBlock Text="Name" /><TextBox Text="{Binding TreeName, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,4" />
+                                <TextBlock Text="Icon (file name or SpellIcon ID)" /><TextBox Text="{Binding TreeIcon, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,4" />
+                                <TextBlock Text="Background (Interface\TalentFrame\...)" /><TextBox Text="{Binding TreeBackground, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,4" />
+                                <TextBlock Text="Order (0-4)" /><TextBox Text="{Binding TreeOrder, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,6" Width="50" HorizontalAlignment="Left" />
+                                <Button Content="Apply tree changes" Command="{Binding ApplyTreeCommand}" Style="{StaticResource ToolButton}" HorizontalAlignment="Left" />
+                                <TextBlock Text="Check the tree" Style="{StaticResource Section}" />
+                                <TextBlock Text="{Binding ChecksText}" TextWrapping="Wrap" FontSize="12" />
+                                <ItemsControl ItemsSource="{Binding TreeProblems}" ItemTemplate="{StaticResource ProblemTemplate}" />
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+
+                    <!-- the grid: 8 tiers x 4 columns, as the 1.12 talent frame -->
+                    <Border Grid.Column="2" Style="{StaticResource Card}" Padding="6">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <Grid x:Name="TalentGrid" Width="{Binding GridWidth}" Height="{Binding GridHeight}">
+                                <Image Source="{Binding Background}" Stretch="UniformToFill" Opacity="0.55" />
+                                <ItemsControl ItemsSource="{Binding Arrows}">
+                                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><Canvas /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Line X1="{Binding X1}" Y1="{Binding Y1}" X2="{Binding X2}" Y2="{Binding Y2}" Stroke="#FFFFD100" StrokeThickness="4" StrokeEndLineCap="Triangle" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <ItemsControl ItemsSource="{Binding Cells}">
+                                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><Canvas /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemContainerStyle>
+                                        <Style TargetType="ContentPresenter">
+                                            <Setter Property="Canvas.Left" Value="{Binding X}" />
+                                            <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                                        </Style>
+                                    </ItemsControl.ItemContainerStyle>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Command="{Binding DataContext.SelectCellCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                                    Width="96" Height="70" Padding="0" Background="Transparent" BorderThickness="0" ToolTip="{Binding Tip}" Cursor="Hand">
+                                                <StackPanel>
+                                                    <Border Width="44" Height="44" HorizontalAlignment="Left" Margin="4,0,0,0" CornerRadius="3" BorderThickness="2">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="BorderBrush" Value="#40FFFFFF" />
+                                                                <Setter Property="Background" Value="#30000000" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding HasTalent}" Value="True"><Setter Property="BorderBrush" Value="#FF2FAF4A" /><Setter Property="Background" Value="#FF101010" /></DataTrigger>
+                                                                    <DataTrigger Binding="{Binding IsSelected}" Value="True"><Setter Property="BorderBrush" Value="#FFFFD100" /></DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <Grid>
+                                                            <Image Source="{Binding Icon}" Stretch="Uniform" />
+                                                            <Border HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="#E0000000" Padding="2,0" Visibility="{Binding HasTalent, Converter={StaticResource BoolVis}}">
+                                                                <TextBlock Text="{Binding RankText}" Foreground="#FF2FAF4A" FontSize="10" FontWeight="Bold" />
+                                                            </Border>
+                                                        </Grid>
+                                                    </Border>
+                                                    <TextBlock Text="{Binding Name}" FontSize="10" Foreground="White" TextTrimming="CharacterEllipsis" Width="94" Margin="2,1,0,0">
+                                                        <TextBlock.Effect><DropShadowEffect ShadowDepth="1" BlurRadius="2" Opacity="0.9" /></TextBlock.Effect>
+                                                    </TextBlock>
+                                                </StackPanel>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Grid>
+                        </ScrollViewer>
+                    </Border>
+
+                    <Border Grid.Column="4" Style="{StaticResource Card}" Padding="12,10">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
+                                <TextBlock Text="The selected place" Style="{StaticResource H3}" />
+                                <TextBlock Text="Rank spells (IDs, comma-separated)" Margin="0,4,0,0" />
+                                <TextBox Text="{Binding TalentRanks, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,4" ToolTip="1 to 5 spells, one per rank (the server reads 5)." />
+                                <TextBlock Text="Prerequisite (talent ID:rank)" />
+                                <TextBox Text="{Binding TalentPrereq, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,4" ToolTip="The talent that must be learned first and the rank it needs (1234:5). Empty = none." />
+                                <WrapPanel>
+                                    <TextBlock Text="Tier" VerticalAlignment="Center" Margin="0,0,4,6" />
+                                    <TextBox Text="{Binding MoveTier, UpdateSourceTrigger=PropertyChanged}" Width="40" Margin="0,0,8,6" />
+                                    <TextBlock Text="Column" VerticalAlignment="Center" Margin="0,0,4,6" />
+                                    <TextBox Text="{Binding MoveColumn, UpdateSourceTrigger=PropertyChanged}" Width="40" Margin="0,0,8,6" />
+                                </WrapPanel>
+                                <WrapPanel>
+                                    <Button Content="Add talent here" Command="{Binding AddTalentHereCommand}" Style="{StaticResource ToolButton}" ToolTip="A new talent in the selected empty place, with these rank spells." />
+                                    <Button Content="Apply talent changes" Command="{Binding ApplyTalentCommand}" Style="{StaticResource ToolButton}" ToolTip="Move the selected talent, change its ranks or its prerequisite." />
+                                    <Button Content="Remove talent" Command="{Binding RemoveTalentCommand}" Style="{StaticResource ToolButton}" />
+                                    <Button Content="Open rank 1 in the Spell designer" Command="{Binding OpenRankSpellCommand}" Style="{StaticResource ToolButton}" />
+                                </WrapPanel>
+                                <TextBlock Text="Make rank spells" Style="{StaticResource Section}" />
+                                <TextBlock Text="Copies of a template spell (a passive talent spell, say), one per rank, with the value of effect 1 per rank." TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource TextMuted}" />
+                                <TextBlock Text="Template spell ID" Margin="0,4,0,0" /><TextBox Text="{Binding RankTemplate, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,4" />
+                                <TextBlock Text="Name" /><TextBox Text="{Binding RankName, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,4" />
+                                <WrapPanel>
+                                    <TextBlock Text="Ranks" VerticalAlignment="Center" Margin="0,0,4,6" />
+                                    <TextBox Text="{Binding RankCount, UpdateSourceTrigger=PropertyChanged}" Width="40" Margin="0,0,8,6" />
+                                    <TextBlock Text="Values per rank" VerticalAlignment="Center" Margin="0,0,4,6" />
+                                    <TextBox Text="{Binding RankValues, UpdateSourceTrigger=PropertyChanged}" Width="120" Margin="0,0,8,6" ToolTip="1,2,3,4,5 (empty = the template's value)." />
+                                </WrapPanel>
+                                <Button Content="Make rank spells" Command="{Binding MakeRankSpellsCommand}" Style="{StaticResource ToolButton}" HorizontalAlignment="Left" />
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- ============================== SPELLS BY LEVEL ============================== -->
+            <TabItem Header="Spells by level" Padding="12,4">
+                <Grid Margin="0,8,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="8" />
+                        <ColumnDefinition Width="330" />
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource Card}" Padding="10">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Text="{Binding SpellsNote}" TextWrapping="Wrap" Margin="0,0,0,6" Foreground="{StaticResource TextMuted}" />
+                            <DataGrid ItemsSource="{Binding Spells}" SelectedItem="{Binding SelectedSpell}" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
+                                      GridLinesVisibility="Horizontal" CanUserAddRows="False" SelectionMode="Single" MouseDoubleClick="Spells_DoubleClick">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Level" Binding="{Binding Level}" Width="50" />
+                                    <DataGridTextColumn Header="Spell" Binding="{Binding Spell}" Width="70" />
+                                    <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" />
+                                    <DataGridTextColumn Header="Rank" Binding="{Binding Rank}" Width="70" />
+                                    <DataGridTextColumn Header="How" Binding="{Binding SourceText}" Width="150" />
+                                    <DataGridTextColumn Header="From" Binding="{Binding From}" Width="160" />
+                                    <DataGridTextColumn Header="Skill line" Binding="{Binding SkillLine}" Width="120" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </DockPanel>
+                    </Border>
+                    <Border Grid.Column="2" Style="{StaticResource Card}" Padding="12,10">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
+                                <TextBlock Text="Assign level" Style="{StaticResource H3}" />
+                                <TextBlock Text="The selected spell comes at this level: its trainer rows of the class and its own level follow." TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource TextMuted}" />
+                                <WrapPanel Margin="0,6,0,0">
+                                    <TextBlock Text="Level" VerticalAlignment="Center" Margin="0,0,4,6" />
+                                    <TextBox Text="{Binding AssignLevel, UpdateSourceTrigger=PropertyChanged}" Width="40" Margin="0,0,8,6" />
+                                    <TextBlock Text="Cost" VerticalAlignment="Center" Margin="0,0,4,6" />
+                                    <TextBox Text="{Binding AssignCost, UpdateSourceTrigger=PropertyChanged}" Width="60" Margin="0,0,8,6" ToolTip="Copper or 25s / 1g 50s (empty = keep)." />
+                                </WrapPanel>
+                                <CheckBox Content="Add it to every trainer of the class" IsChecked="{Binding AssignAllTrainers}" Margin="0,0,0,6" />
+                                <WrapPanel>
+                                    <Button Content="Assign level" Command="{Binding AssignSpellLevelCommand}" Style="{StaticResource ToolButton}" />
+                                    <Button Content="Open in the Spell designer" Command="{Binding OpenClassSpellCommand}" Style="{StaticResource ToolButton}" />
+                                </WrapPanel>
+                                <TextBlock Text="Skill lines" Style="{StaticResource Section}" />
+                                <ItemsControl ItemsSource="{Binding Skills}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock FontSize="12"><Run Text="{Binding Name, Mode=OneWay}" /><Run Text=" (" Foreground="Gray" /><Run Text="{Binding Category, Mode=OneWay}" Foreground="Gray" /><Run Text=")" Foreground="Gray" /></TextBlock>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- ============================== CLASS MASKS ============================== -->
+            <TabItem Header="Class masks" Padding="12,4">
+                <Border Style="{StaticResource Card}" Padding="14,12" Margin="0,8,0,0" HorizontalAlignment="Left" Width="640" VerticalAlignment="Top">
+                    <StackPanel>
+                        <TextBlock Text="Class masks" Style="{StaticResource H3}" />
+                        <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextMuted}" Margin="0,2,0,8"
+                                   Text="Many rows say which classes they are for with a class mask (bit n-1 = class n): skill lines, talent trees, items, quests. Add or remove the selected class's bit in rows of a table. A mask of 0 means every class." />
+                        <TextBlock Text="Table and column" />
+                        <ComboBox ItemsSource="{Binding MaskTables}" SelectedItem="{Binding MaskTable}" Margin="0,2,0,6" Width="280" HorizontalAlignment="Left" />
+                        <TextBlock Text="Row IDs (comma-separated)" />
+                        <TextBox Text="{Binding MaskIds, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,8" />
+                        <WrapPanel>
+                            <Button Content="Add the class" Command="{Binding AddToMaskCommand}" Style="{StaticResource ToolButton}" />
+                            <Button Content="Remove the class" Command="{Binding RemoveFromMaskCommand}" Style="{StaticResource ToolButton}" />
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+            </TabItem>
+
+            <!-- ============================== A NEW CLASS (EXPERIMENTAL) ============================== -->
+            <TabItem Header="New class (experimental)" Padding="12,4">
+                <Grid Margin="0,8,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="380" />
+                        <ColumnDefinition Width="8" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource Card}" Padding="12,10">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
+                                <Border Background="{StaticResource WarnSoft}" CornerRadius="5" Padding="10,8" Margin="0,0,0,8">
+                                    <TextBlock TextWrapping="Wrap" FontWeight="SemiBold"
+                                               Text="EXPERIMENTAL: this makes the data of a new class (tables and server rows). The 1.12 game and the server also need code changes before it can be played: see the list on the right." />
+                                </Border>
+                                <TextBlock Text="Name" /><TextBox Text="{Binding NewClassName, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,4" />
+                                <TextBlock Text="Token (KNIGHT)" /><TextBox Text="{Binding NewClassToken, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,4" />
+                                <TextBlock Text="Copy from class" /><ComboBox ItemsSource="{Binding Classes}" SelectedItem="{Binding CopyFrom}" Margin="0,2,0,4" />
+                                <TextBlock Text="Races" />
+                                <ItemsControl ItemsSource="{Binding Races}" Margin="0,2,0,6">
+                                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate><CheckBox Content="{Binding Name}" IsChecked="{Binding IsChecked}" Margin="0,0,10,4" /></DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <Button Content="Create the class data" Command="{Binding CreateClassCommand}" Style="{StaticResource ToolButton}" HorizontalAlignment="Left"
+                                        ToolTip="ChrClasses, CharBaseInfo, shared skill lines, start outfits; playercreateinfo*, player_classlevelstats, player_levelstats on the server (copied from the template class)." />
+                                <ItemsControl ItemsSource="{Binding NewClassDone}" Margin="0,6,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="12" Margin="0,1" /></DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                    <Border Grid.Column="2" Style="{StaticResource Card}" Padding="12,10">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Text="What a new class still needs" Style="{StaticResource H3}" />
+                            <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Foreground="{StaticResource TextMuted}" Margin="0,2,0,6" FontSize="12"
+                                       Text="The places in the game client (our decompile of WoW.exe and its interface files) and the server (VMaNGOS source) that know the classes by number. Data rows are made by the designers; code rows need a change in the client project or the server source." />
+                            <DataGrid ItemsSource="{Binding EngineItems}" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Side" Binding="{Binding Side}" Width="60" />
+                                    <DataGridTextColumn Header="Area" Binding="{Binding Area}" Width="130" />
+                                    <DataGridTextColumn Header="Needs" Binding="{Binding Kind}" Width="50" />
+                                    <DataGridTemplateColumn Header="What" Width="*">
+                                        <DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding What}" TextWrapping="Wrap" FontSize="12" /></DataTemplate></DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTemplateColumn Header="Where" Width="260">
+                                        <DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Where}" TextWrapping="Wrap" FontSize="11" Foreground="{StaticResource TextMuted}" /></DataTemplate></DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </DockPanel>
+                    </Border>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</UserControl>

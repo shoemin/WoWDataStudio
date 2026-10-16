@@ -1,0 +1,433 @@
+<UserControl x:Class="WoWDataStudio.Views.QuestDesignerView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:h="clr-namespace:WoWDataStudio.Helpers"
+             xmlns:v="clr-namespace:WoWDataStudio.Views"
+             xmlns:c="clr-namespace:WoWDataStudio.Controls"
+             xmlns:s="clr-namespace:WoWDataStudio.Services"
+             s:Manual.Topic="quest-chain-designer">
+    <UserControl.Resources>
+        <h:BoolToCollapsedConverter x:Key="BoolVis" />
+        <h:BoolToCollapsedConverter x:Key="BoolVisInv" Invert="True" />
+        <Style x:Key="ToolButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+            <Setter Property="Margin" Value="0,0,6,6" />
+            <Setter Property="Padding" Value="9,4" />
+        </Style>
+        <Style x:Key="Lbl" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,6,0,2" />
+        </Style>
+        <Style x:Key="Small" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="Foreground" Value="{StaticResource TextMuted}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="Exp" TargetType="Expander">
+            <Setter Property="Margin" Value="0,0,0,6" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+    </UserControl.Resources>
+    <UserControl.InputBindings>
+        <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
+    </UserControl.InputBindings>
+
+    <Grid Margin="0,8,0,0">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="290" MinWidth="220" />
+            <ColumnDefinition Width="8" />
+            <ColumnDefinition Width="*" MinWidth="420" />
+            <ColumnDefinition Width="8" />
+            <ColumnDefinition Width="470" MinWidth="340" />
+        </Grid.ColumnDefinitions>
+
+        <!-- ============================== FIND AND BUILD ============================== -->
+        <Border Style="{StaticResource Card}" Padding="12,10">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top">
+                    <TextBlock Text="Quest chains" Style="{StaticResource H2}" />
+                    <TextBlock Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,8"
+                               Text="Open a chain to see it as a flowchart, edit its quests in plain fields, and build new chains: after, before, branches, the other faction's copy, the discipline template." />
+                    <TextBlock Text="Find a quest" FontWeight="SemiBold" />
+                    <DockPanel Margin="0,4,0,0">
+                        <Button DockPanel.Dock="Right" Content="Find" Command="{Binding SearchCommand}" Padding="9,3" Margin="6,0,0,0" />
+                        <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" ToolTip="Words of the title (whirlwind) or a quest ID (1718).">
+                            <TextBox.InputBindings>
+                                <KeyBinding Key="Enter" Command="{Binding SearchCommand}" />
+                            </TextBox.InputBindings>
+                        </TextBox>
+                    </DockPanel>
+                    <ListBox ItemsSource="{Binding Results}" SelectedItem="{Binding SelectedResult}" DisplayMemberPath="Text" Height="150" Margin="0,6,0,0" MouseDoubleClick="Results_DoubleClick" />
+                    <WrapPanel Margin="0,6,0,0">
+                        <Button Content="Open chain" Command="{Binding OpenChainCommand}" Style="{StaticResource ToolButton}" ToolTip="Show the selected quest's whole chain as a flowchart, and the quest in the editor." />
+                        <Button Content="Import quests..." Command="{Binding ImportQuestsCommand}" Style="{StaticResource ToolButton}" ToolTip="Quests from a JSON or CSV file (made by Export chain... or wds quests export)." />
+                    </WrapPanel>
+                </StackPanel>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,4,0,0">
+                    <StackPanel>
+                        <Expander Header="Add quests" IsExpanded="{Binding OpenAdd}" Style="{StaticResource Exp}">
+                            <StackPanel TextElement.FontWeight="Normal" Margin="4,2,0,4">
+                                <TextBlock Text="New quest's title" Style="{StaticResource Lbl}" />
+                                <TextBox Text="{Binding NewTitle, UpdateSourceTrigger=PropertyChanged}" ToolTip="The title of the quest to add." />
+                                <WrapPanel Margin="0,6,0,0">
+                                    <Button Content="Add quest after" Command="{Binding AddAfterCommand}" Style="{StaticResource ToolButton}" ToolTip="After the open quest: it needs that one done, and the NPC that takes that one back offers it next (next in chain)." />
+                                    <Button Content="Add quest before" Command="{Binding AddBeforeCommand}" Style="{StaticResource ToolButton}" ToolTip="Before the open quest: the open quest then needs the new one done first." />
+                                    <Button Content="New quest" Command="{Binding NewQuestCommand}" Style="{StaticResource ToolButton}" ToolTip="A quest on its own (first free ID of your custom range), with the open quest's levels, races and classes." />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Expander>
+                        <Expander Header="Branch and choice" IsExpanded="{Binding OpenBranch}" Style="{StaticResource Exp}">
+                            <StackPanel TextElement.FontWeight="Normal" Margin="4,2,0,4">
+                                <TextBlock Style="{StaticResource Small}" Text="Follow-ups of the open quest. A choice: taking one closes the others (pick one of three rewards = one of three follow-ups)." />
+                                <TextBlock Text="Titles (one per line)" Style="{StaticResource Lbl}" />
+                                <TextBox Text="{Binding BranchTitles, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="60" TextWrapping="Wrap" />
+                                <TextBlock Text="Reward items (IDs, comma-separated, optional)" Style="{StaticResource Lbl}" />
+                                <TextBox Text="{Binding BranchRewards, UpdateSourceTrigger=PropertyChanged}" />
+                                <CheckBox Content="A choice (only one of them can be done)" IsChecked="{Binding BranchChoice}" Margin="0,6,0,0" />
+                                <Button Content="Add branch" Command="{Binding AddBranchCommand}" Style="{StaticResource ToolButton}" HorizontalAlignment="Left" Margin="0,6,0,0" />
+                                <TextBlock Text="Join (quest IDs)" Style="{StaticResource Lbl}" />
+                                <TextBox Text="{Binding JoinIds, UpdateSourceTrigger=PropertyChanged}" ToolTip="The quests the new quest comes after: 900002, 900003" />
+                                <TextBlock Text="Title of the joining quest" Style="{StaticResource Lbl}" />
+                                <TextBox Text="{Binding JoinTitle, UpdateSourceTrigger=PropertyChanged}" />
+                                <CheckBox Content="All of them must be done (else: any one)" IsChecked="{Binding JoinAll}" Margin="0,6,0,0" />
+                                <Button Content="Join" Command="{Binding JoinCommand}" Style="{StaticResource ToolButton}" HorizontalAlignment="Left" Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Expander>
+                        <Expander Header="The other faction" IsExpanded="{Binding OpenFaction}" Style="{StaticResource Exp}">
+                            <StackPanel TextElement.FontWeight="Normal" Margin="4,2,0,4">
+                                <TextBlock Style="{StaticResource Small}" Text="A copy of the open quest's whole chain for the other faction: new IDs, the links between the copies, and what you swap (NPCs, creatures, items, zones, factions, words)." />
+                                <TextBlock Text="For" Style="{StaticResource Lbl}" />
+                                <ComboBox ItemsSource="{Binding Factions}" SelectedItem="{Binding DuplicateFaction}" />
+                                <TextBlock Text="Swaps (one per line: old=new)" Style="{StaticResource Lbl}" />
+                                <TextBox Text="{Binding DuplicateSwaps, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="80" TextWrapping="Wrap"
+                                         ToolTip="234=3429 swaps creature 234 for 3429; object:a=b, item:a=b, zone:40=17, faction:72=76, spell:a=b; text:Sentinel Hill=the Crossroads swaps words of the texts." />
+                                <TextBlock Text="Add to the titles (optional)" Style="{StaticResource Lbl}" />
+                                <TextBox Text="{Binding DuplicateSuffix, UpdateSourceTrigger=PropertyChanged}" />
+                                <Button Content="Duplicate for the other faction" Command="{Binding DuplicateChainCommand}" Style="{StaticResource ToolButton}" HorizontalAlignment="Left" Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Expander>
+                        <Expander Header="Template: discipline chain" IsExpanded="{Binding OpenTemplate}" Style="{StaticResource Exp}">
+                            <StackPanel TextElement.FontWeight="Normal" Margin="4,2,0,4">
+                                <TextBlock Style="{StaticResource Small}" Text="The Warrior's Stance Disciplines: talk to the outpost's commander, then the drill: kill N, return, learn the discipline (a spell)." />
+                                <TextBlock Text="Discipline" Style="{StaticResource Lbl}" />
+                                <TextBox Text="{Binding TplName, UpdateSourceTrigger=PropertyChanged}" ToolTip="Riposte Drill" />
+                                <TextBlock Text="Faction" Style="{StaticResource Lbl}" />
+                                <ComboBox ItemsSource="{Binding Factions}" SelectedItem="{Binding TplFaction}" />
+                                <TextBlock Text="Level" Style="{StaticResource Lbl}" />
+                                <TextBox Text="{Binding TplLevel, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock Text="Drill NPC (creature ID)" Style="{StaticResource Lbl}" />
+                                <TextBox Text="{Binding TplGiver, UpdateSourceTrigger=PropertyChanged}" ToolTip="The drill sergeant or champion who gives the drill and takes it back (make one under New quest giver)." />
+                                <TextBlock Text="Talk step: sent by (creature ID, optional)" Style="{StaticResource Lbl}" />
+                                <TextBox Text="{Binding TplIntro, UpdateSourceTrigger=PropertyChanged}" ToolTip="The outpost's commander who sends the player to the drill NPC (none: no talk step)." />
+                                <TextBlock Text="Outpost" Style="{StaticResource Lbl}" />
+                                <TextBox Text="{Binding TplOutpost, UpdateSourceTrigger=PropertyChanged}" ToolTip="Sentinel Hill" />
+                                <TextBlock Text="Fight (creature ID) and how many" Style="{StaticResource Lbl}" />
+                                <DockPanel>
+                                    <TextBox DockPanel.Dock="Right" Width="50" Text="{Binding TplCount, UpdateSourceTrigger=PropertyChanged}" Margin="6,0,0,0" />
+                                    <TextBox Text="{Binding TplKill, UpdateSourceTrigger=PropertyChanged}" />
+                                </DockPanel>
+                                <TextBlock Text="Discipline spell (ID), or clone from (ID)" Style="{StaticResource Lbl}" />
+                                <DockPanel>
+                                    <TextBox DockPanel.Dock="Right" Width="80" Text="{Binding TplCloneSpell, UpdateSourceTrigger=PropertyChanged}" Margin="6,0,0,0" ToolTip="A template spell cloned into the discipline's spell when the first box is empty." />
+                                    <TextBox Text="{Binding TplSpell, UpdateSourceTrigger=PropertyChanged}" ToolTip="An existing spell (empty: a clone of the second box's spell)." />
+                                </DockPanel>
+                                <TextBlock Text="Experience" Style="{StaticResource Lbl}" />
+                                <TextBox Text="{Binding TplXp, UpdateSourceTrigger=PropertyChanged}" />
+                                <Button Content="Make the chain" Command="{Binding MakeTemplateCommand}" Style="{StaticResource ToolButton}" HorizontalAlignment="Left" Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Expander>
+                        <Expander Header="New quest giver" IsExpanded="{Binding OpenNpc}" Style="{StaticResource Exp}">
+                            <StackPanel TextElement.FontWeight="Normal" Margin="4,2,0,4">
+                                <TextBlock Style="{StaticResource Small}" Text="A new NPC (custom ID) that looks like an existing creature, with the Quest giver flag, placed on the map." />
+                                <TextBlock Text="Name" Style="{StaticResource Lbl}" />
+                                <TextBox Text="{Binding NpcName, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock Text="Title under the name (optional)" Style="{StaticResource Lbl}" />
+                                <TextBox Text="{Binding NpcSubname, UpdateSourceTrigger=PropertyChanged}" ToolTip="Drill Sergeant" />
+                                <TextBlock Text="Look like (creature ID)" Style="{StaticResource Lbl}" />
+                                <TextBox Text="{Binding NpcCopyFrom, UpdateSourceTrigger=PropertyChanged}" ToolTip="Its look, faction and level come from this creature." />
+                                <TextBlock Text="Level (optional)" Style="{StaticResource Lbl}" />
+                                <TextBox Text="{Binding NpcLevel, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock Text="Map, x, y" Style="{StaticResource Lbl}" />
+                                <UniformGrid Columns="3">
+                                    <TextBox Text="{Binding NpcMap, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,4,0" ToolTip="0 Eastern Kingdoms, 1 Kalimdor" />
+                                    <TextBox Text="{Binding NpcX, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,4,0" />
+                                    <TextBox Text="{Binding NpcY, UpdateSourceTrigger=PropertyChanged}" />
+                                </UniformGrid>
+                                <WrapPanel Margin="0,6,0,0">
+                                    <Button Content="Pick on the map" Command="{Binding PickNpcOnMapCommand}" Style="{StaticResource ToolButton}" ToolTip="Opens the Maps tab: click where the NPC should stand." />
+                                    <Button Content="Make the quest giver" Command="{Binding MakeNpcCommand}" Style="{StaticResource ToolButton}" />
+                                    <Button Content="Place here" Command="{Binding PlaceNpcCommand}" Style="{StaticResource ToolButton}" ToolTip="Another spawn of the creature in the NPC box (right) at this position." />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Expander>
+                        <Expander Header="Quest log categories" IsExpanded="{Binding OpenCategories}" Style="{StaticResource Exp}">
+                            <StackPanel TextElement.FontWeight="Normal" Margin="4,2,0,4">
+                                <TextBlock Style="{StaticResource Small}" Text="The headers of the quest log for class quests (QuestSort.dbc, a game table the server also reads)." />
+                                <TextBlock Text="Name" Style="{StaticResource Lbl}" />
+                                <TextBox Text="{Binding CategoryName, UpdateSourceTrigger=PropertyChanged}" />
+                                <Button Content="New quest log category" Command="{Binding NewCategoryCommand}" Style="{StaticResource ToolButton}" HorizontalAlignment="Left" Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Expander>
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+
+        <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" Background="Transparent" />
+
+        <!-- ============================== THE FLOWCHART ============================== -->
+        <Grid Grid.Column="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" MinHeight="200" />
+                <RowDefinition Height="8" />
+                <RowDefinition Height="230" MinHeight="80" />
+            </Grid.RowDefinitions>
+            <Border Style="{StaticResource Card}" Padding="0">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top" Margin="12,8,12,4">
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="Check the chain" Command="{Binding CheckChainCommand}" Padding="9,3" ToolTip="Lay the chain out again and run every check." />
+                            <Button DockPanel.Dock="Right" Content="Export chain..." Command="{Binding ExportChainCommand}" Padding="9,3" Margin="0,0,6,0" ToolTip="The chain's quests to a JSON or CSV file." />
+                            <TextBlock Text="Flowchart" Style="{StaticResource H2}" FontSize="16" />
+                        </DockPanel>
+                        <TextBlock Text="{Binding ChainText}" Style="{StaticResource Muted}" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding ServerText}" Style="{StaticResource Small}" Visibility="{Binding HasServer, Converter={StaticResource BoolVisInv}}" Foreground="{StaticResource Bad}" />
+                    </StackPanel>
+                    <Border DockPanel.Dock="Bottom" Background="#FFF7F9FC" BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0" Padding="12,5">
+                        <TextBlock Style="{StaticResource Small}"
+                                   Text="Lanes: the races and classes that may take the quests. Arrows: solid = must be done first; orange = must be in the quest log; dashed = opens; thick blue = next in chain (offered right after); dotted = breadcrumb. Orange frame: a choice (one of); green frame: all of. Red or orange border: errors or warnings. Click a quest to edit it; wheel: zoom; right-drag: move; double-click: fit." />
+                    </Border>
+                    <c:QuestChainView x:Name="ChainView" Chain="{Binding Chain}" Selected="{Binding SelectedQuest}" />
+                </DockPanel>
+            </Border>
+            <GridSplitter Grid.Row="1" Height="8" HorizontalAlignment="Stretch" Background="Transparent" />
+            <Border Grid.Row="2" Style="{StaticResource Card}" Padding="8,6">
+                <TabControl SelectedIndex="{Binding BottomTab}" BorderThickness="0">
+                    <TabItem Header="Checks (the whole chain)">
+                        <DockPanel Margin="4">
+                            <TextBlock DockPanel.Dock="Top" Text="{Binding ChainChecksText}" TextWrapping="Wrap" Margin="0,0,0,4" />
+                            <ListBox ItemsSource="{Binding ChainProblems}" SelectedItem="{Binding SelectedProblem}" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     ToolTip="Click a problem to open its quest.">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Left" Text="{Binding Icon}" FontFamily="Segoe MDL2 Assets" Margin="0,2,6,0" Foreground="{Binding Brush}" />
+                                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </DockPanel>
+                    </TabItem>
+                    <TabItem Header="Text preview ($N, $C, $R, $G)">
+                        <DockPanel Margin="4">
+                            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6">
+                                <TextBlock Text="Player" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <TextBox Text="{Binding PreviewName, UpdateSourceTrigger=PropertyChanged}" Width="110" Margin="0,0,6,0" ToolTip="The player's name ($N)." />
+                                <ComboBox ItemsSource="{Binding PreviewRaces}" SelectedItem="{Binding PreviewRace}" Width="110" Margin="0,0,6,0" ToolTip="The race ($R, $r)." />
+                                <ComboBox ItemsSource="{Binding PreviewClasses}" SelectedItem="{Binding PreviewClass}" Width="110" Margin="0,0,6,0" ToolTip="The class ($C, $c)." />
+                                <CheckBox Content="Female ($G male:female;)" IsChecked="{Binding PreviewFemale}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <Border Background="#FFF6EEDC" BorderBrush="#FFD8C7A0" BorderThickness="1" CornerRadius="4" Padding="10,8">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <TextBlock Text="{Binding PreviewText}" TextWrapping="Wrap" FontFamily="Georgia" FontSize="13" Foreground="#FF3B2A14" />
+                                </ScrollViewer>
+                            </Border>
+                        </DockPanel>
+                    </TabItem>
+                </TabControl>
+            </Border>
+        </Grid>
+
+        <GridSplitter Grid.Column="3" Width="8" HorizontalAlignment="Stretch" Background="Transparent" />
+
+        <!-- ============================== THE QUEST EDITOR ============================== -->
+        <Border Grid.Column="4" Style="{StaticResource Card}" Padding="12,10">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top">
+                    <TextBlock Text="{Binding Title}" Style="{StaticResource H2}" TextWrapping="Wrap" />
+                </StackPanel>
+                <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                    <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,6">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding StatusIsError}" Value="True"><Setter Property="Foreground" Value="{StaticResource Bad}" /></DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <WrapPanel HorizontalAlignment="Right">
+                        <Button Content="Test in game" Command="{Binding TestInGameCommand}" Margin="0,0,6,0" Padding="10,6" ToolTip="How to try the quest in the game: GM commands (.quest add, .go creature id), reloading, the quest cache." />
+                        <Button Content="Apply to server..." Command="{Binding ApplyToServerCommand}" Margin="0,0,6,0" Padding="10,6" ToolTip="Write your saved server edits into the world database (backed up, logged, undoable: Server data tab)." />
+                        <Button Content="Discard changes" Command="{Binding DiscardCommand}" Margin="0,0,6,0" Padding="10,6" ToolTip="Throw away the designer's unsaved edits." />
+                        <Button Content="Save to my workspace" Command="{Binding SaveCommand}" Style="{StaticResource PrimaryButton}" Padding="14,6"
+                                ToolTip="Save the quests, givers, NPCs, loot and the game tables (categories, triggers, reward spells) into your workspace as one change (Ctrl+S)." />
+                    </WrapPanel>
+                </StackPanel>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding HasQuest, Converter={StaticResource BoolVis}}">
+                    <StackPanel>
+                        <!-- checks of this quest -->
+                        <Expander Header="Checks of this quest" IsExpanded="{Binding ShowChecks}" Style="{StaticResource Exp}">
+                            <StackPanel TextElement.FontWeight="Normal" Margin="4,2,0,4">
+                                <ItemsControl ItemsSource="{Binding QuestProblems}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <DockPanel Margin="0,1">
+                                                <TextBlock DockPanel.Dock="Left" Text="{Binding Icon}" FontFamily="Segoe MDL2 Assets" Margin="0,2,6,0" Foreground="{Binding Brush}" />
+                                                <TextBlock Text="{Binding P.Problem.Text}" TextWrapping="Wrap" />
+                                            </DockPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <Button Content="Delete quest" Command="{Binding DeleteQuestCommand}" Style="{StaticResource ToolButton}" HorizontalAlignment="Left" Margin="0,8,0,0" ToolTip="Delete the quest with its givers, enders and links (the quests around it are linked to each other)." />
+                            </StackPanel>
+                        </Expander>
+                        <!-- givers and enders -->
+                        <Expander Header="Quest givers and enders" IsExpanded="{Binding ShowGivers}" Style="{StaticResource Exp}">
+                            <StackPanel TextElement.FontWeight="Normal" Margin="4,2,0,4">
+                                <ListBox ItemsSource="{Binding Relations}" SelectedItem="{Binding SelectedRelation}" DisplayMemberPath="Text" MaxHeight="110" />
+                                <TextBlock Text="Find an NPC or object by name" Style="{StaticResource Lbl}" />
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Content="Find NPC" Command="{Binding FindNpcCommand}" Padding="8,3" Margin="6,0,0,0" />
+                                    <TextBox Text="{Binding NpcSearchText, UpdateSourceTrigger=PropertyChanged}" ToolTip="A name (thork, gryan) or an ID.">
+                                        <TextBox.InputBindings>
+                                            <KeyBinding Key="Enter" Command="{Binding FindNpcCommand}" />
+                                        </TextBox.InputBindings>
+                                    </TextBox>
+                                </DockPanel>
+                                <ListBox ItemsSource="{Binding NpcResults}" SelectedItem="{Binding SelectedNpcResult}" DisplayMemberPath="Text" MaxHeight="100" Margin="0,4,0,0"
+                                         Visibility="{Binding HasNpcResults, Converter={StaticResource BoolVis}}" />
+                                <TextBlock Text="NPC (creature ID, creature:ID or object:ID)" Style="{StaticResource Lbl}" />
+                                <TextBox Text="{Binding RelationText, UpdateSourceTrigger=PropertyChanged}" />
+                                <WrapPanel Margin="0,6,0,0">
+                                    <Button Content="Add giver" Command="{Binding AddGiverCommand}" Style="{StaticResource ToolButton}" ToolTip="This NPC offers the quest (a creature gets the Quest giver flag)." />
+                                    <Button Content="Add ender" Command="{Binding AddEnderCommand}" Style="{StaticResource ToolButton}" ToolTip="The player hands the quest in to this NPC." />
+                                    <Button Content="Remove" Command="{Binding RemoveRelationCommand}" Style="{StaticResource ToolButton}" />
+                                    <Button Content="Preview the NPC" Command="{Binding PreviewNpcCommand}" Style="{StaticResource ToolButton}" ToolTip="The NPC's model in 3D." />
+                                    <Button Content="Show on map" Command="{Binding ShowOnMapCommand}" Style="{StaticResource ToolButton}" ToolTip="Where the selected NPC (or every giver and ender) stands, on the Maps tab." />
+                                </WrapPanel>
+                                <Border Height="200" Visibility="{Binding HasNpcPreview, Converter={StaticResource BoolVis}}" Margin="0,4,0,0">
+                                    <v:ModelViewerView x:Name="NpcViewer" DataContext="{Binding Viewer}" />
+                                </Border>
+                            </StackPanel>
+                        </Expander>
+                        <!-- the fields -->
+                        <ItemsControl ItemsSource="{Binding Groups}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Expander Header="{Binding Name}" IsExpanded="{Binding IsExpanded}" Style="{StaticResource Exp}">
+                                        <ItemsControl ItemsSource="{Binding Fields}" Margin="4,2,0,4" TextElement.FontWeight="Normal">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Margin="0,2" ToolTip="{Binding Help}">
+                                                        <DockPanel>
+                                                            <TextBlock DockPanel.Dock="Left" Text="{Binding Label}" Width="170" VerticalAlignment="Top" Margin="0,3,6,0" TextWrapping="Wrap" />
+                                                            <Grid>
+                                                                <ComboBox ItemsSource="{Binding Choices}" SelectedItem="{Binding Choice}" DisplayMemberPath="Text" Visibility="{Binding IsChoice, Converter={StaticResource BoolVis}}" />
+                                                                <StackPanel Visibility="{Binding IsText, Converter={StaticResource BoolVis}}">
+                                                                    <TextBox Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" MinHeight="24" LostFocus="Field_LostFocus"
+                                                                             AcceptsReturn="{Binding IsLong}" MaxHeight="160" VerticalScrollBarVisibility="Auto">
+                                                                        <TextBox.Style>
+                                                                            <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding IsLong}" Value="True"><Setter Property="MinHeight" Value="64" /></DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </TextBox.Style>
+                                                                        <TextBox.InputBindings>
+                                                                            <KeyBinding Key="Enter" Modifiers="Ctrl" Command="{Binding CommitCommand}" />
+                                                                        </TextBox.InputBindings>
+                                                                    </TextBox>
+                                                                    <TextBlock Text="{Binding Shown}" Style="{StaticResource Small}" Visibility="{Binding HasShown, Converter={StaticResource BoolVis}}" />
+                                                                </StackPanel>
+                                                            </Grid>
+                                                        </DockPanel>
+                                                        <ItemsControl ItemsSource="{Binding Bits}" Visibility="{Binding HasBits, Converter={StaticResource BoolVis}}" Margin="176,2,0,2">
+                                                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate><CheckBox Content="{Binding Name}" IsChecked="{Binding IsOn}" Margin="0,1,10,1" MinWidth="90" /></DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Expander>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <!-- objectives -->
+                        <Expander Header="Objectives in words" IsExpanded="{Binding ShowObjectives}" Style="{StaticResource Exp}">
+                            <StackPanel TextElement.FontWeight="Normal" Margin="4,2,0,4">
+                                <ItemsControl ItemsSource="{Binding Objectives}">
+                                    <ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,1" /></DataTemplate></ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Expander>
+                        <Expander Header="Drop sources" IsExpanded="{Binding ShowDrops}" Style="{StaticResource Exp}">
+                            <StackPanel TextElement.FontWeight="Normal" Margin="4,2,0,4">
+                                <TextBlock Style="{StaticResource Small}" Text="Where an item to collect comes from: creatures' loot, chests, containers, vendors, quests, spells." />
+                                <TextBlock Text="Item (ID)" Style="{StaticResource Lbl}" />
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Content="Show drop sources" Command="{Binding ShowDropSourcesCommand}" Padding="8,3" Margin="6,0,0,0" />
+                                    <TextBox Text="{Binding DropItemText, UpdateSourceTrigger=PropertyChanged}" />
+                                </DockPanel>
+                                <ListBox ItemsSource="{Binding DropSources}" SelectedItem="{Binding SelectedDropSource}" DisplayMemberPath="Text" MaxHeight="110" Margin="0,4,0,0" />
+                                <Button Content="Open in the loot editor" Command="{Binding OpenLootEditorCommand}" Style="{StaticResource ToolButton}" HorizontalAlignment="Left" Margin="0,4,0,0" ToolTip="The selected source's loot rows in the Server data tab." />
+                                <TextBlock Text="Creature that drops it (ID), chance %" Style="{StaticResource Lbl}" />
+                                <DockPanel>
+                                    <TextBox DockPanel.Dock="Right" Width="60" Text="{Binding DropChanceText, UpdateSourceTrigger=PropertyChanged}" Margin="6,0,0,0" />
+                                    <TextBox Text="{Binding DropCreatureText, UpdateSourceTrigger=PropertyChanged}" />
+                                </DockPanel>
+                                <CheckBox Content="Only while on the quest (quest drop)" IsChecked="{Binding DropQuestOnly}" Margin="0,4,0,0" />
+                                <Button Content="Add drop source" Command="{Binding AddDropSourceCommand}" Style="{StaticResource ToolButton}" HorizontalAlignment="Left" Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Expander>
+                        <Expander Header="Speak to an NPC" IsExpanded="{Binding ShowTalk}" Style="{StaticResource Exp}">
+                            <StackPanel TextElement.FontWeight="Normal" Margin="4,2,0,4">
+                                <TextBlock Style="{StaticResource Small}" Text="The NPC gets a gossip option shown while the quest is in the log; choosing it completes the objective." />
+                                <TextBlock Text="NPC (creature ID), objective slot" Style="{StaticResource Lbl}" />
+                                <DockPanel>
+                                    <TextBox DockPanel.Dock="Right" Width="40" Text="{Binding TalkSlotText, UpdateSourceTrigger=PropertyChanged}" Margin="6,0,0,0" />
+                                    <TextBox Text="{Binding TalkNpcText, UpdateSourceTrigger=PropertyChanged}" />
+                                </DockPanel>
+                                <TextBlock Text="Option text" Style="{StaticResource Lbl}" />
+                                <TextBox Text="{Binding TalkOptionText, UpdateSourceTrigger=PropertyChanged}" />
+                                <Button Content="Add speak-to objective" Command="{Binding AddTalkCommand}" Style="{StaticResource ToolButton}" HorizontalAlignment="Left" Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Expander>
+                        <Expander Header="Explore a place" IsExpanded="{Binding ShowExplore}" Style="{StaticResource Exp}">
+                            <StackPanel TextElement.FontWeight="Normal" Margin="4,2,0,4">
+                                <TextBlock Style="{StaticResource Small}" Text="Entering an area trigger completes the quest: an existing trigger, or a new one at a position (AreaTrigger.dbc and the server)." />
+                                <TextBlock Text="Area trigger (ID), or map, x, y and radius" Style="{StaticResource Lbl}" />
+                                <TextBox Text="{Binding ExploreTriggerText, UpdateSourceTrigger=PropertyChanged}" />
+                                <UniformGrid Columns="4" Margin="0,4,0,0">
+                                    <TextBox Text="{Binding ExploreMapText, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,4,0" />
+                                    <TextBox Text="{Binding ExploreXText, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,4,0" />
+                                    <TextBox Text="{Binding ExploreYText, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,4,0" />
+                                    <TextBox Text="{Binding ExploreRadiusText, UpdateSourceTrigger=PropertyChanged}" />
+                                </UniformGrid>
+                                <WrapPanel Margin="0,6,0,0">
+                                    <Button Content="Pick on the map" Command="{Binding PickExploreOnMapCommand}" Style="{StaticResource ToolButton}" />
+                                    <Button Content="Add explore objective" Command="{Binding AddExploreCommand}" Style="{StaticResource ToolButton}" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Expander>
+                        <Expander Header="Reward spell" IsExpanded="{Binding ShowReward}" Style="{StaticResource Exp}">
+                            <StackPanel TextElement.FontWeight="Normal" Margin="4,2,0,4">
+                                <TextBlock Style="{StaticResource Small}" Text="A spell the player learns at the end (its learn spell is made with the Spell designer when it has none). Titles: the 1.12 game has no quest title rewards." />
+                                <TextBlock Text="Spell (ID)" Style="{StaticResource Lbl}" />
+                                <TextBox Text="{Binding RewardSpellText, UpdateSourceTrigger=PropertyChanged}" />
+                                <CheckBox Content="The player learns it (else: it is cast on the player)" IsChecked="{Binding RewardLearn}" Margin="0,4,0,0" />
+                                <WrapPanel Margin="0,6,0,0">
+                                    <Button Content="Set reward spell" Command="{Binding SetRewardSpellCommand}" Style="{StaticResource ToolButton}" />
+                                    <Button Content="Open in the Spell designer" Command="{Binding OpenSpellDesignerCommand}" Style="{StaticResource ToolButton}" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Expander>
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

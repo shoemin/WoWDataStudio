@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- 0.9.0 developer tool: makes the isolated test database of the server data tests
+       (app\WoWData.Tests\serverdb\world_fixture.sql) from a READ-ONLY copy of the local world database.
+       Not part of WoWDataStudio.sln and not shipped. See docs\ARCHITECTURE.md, "Server data". -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\WoWData.Core\WoWData.Core.csproj" />
+  </ItemGroup>
+
+</Project>

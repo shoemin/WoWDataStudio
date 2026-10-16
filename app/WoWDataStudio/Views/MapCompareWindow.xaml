@@ -1,0 +1,65 @@
+<Window x:Class="WoWDataStudio.Views.MapCompareWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="clr-namespace:WoWDataStudio.Controls"
+        xmlns:s="clr-namespace:WoWDataStudio.Services"
+        s:Manual.Topic="maps-and-terrain"
+        Title="{Binding Title}" Width="1400" Height="860" Style="{StaticResource AppWindow}" WindowStartupLocation="CenterOwner">
+    <Window.Resources>
+        <Style x:Key="SideLabel" TargetType="Border">
+            <Setter Property="Background" Value="#C0101418" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="8,3" />
+            <Setter Property="Margin" Value="8" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+        </Style>
+    </Window.Resources>
+    <DockPanel Margin="12" Background="{StaticResource WindowBg}">
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <TextBlock Style="{StaticResource H2}"><Run Text="Compare: " /><Run Text="{Binding Title, Mode=OneWay}" /></TextBlock>
+            <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,2,0,0" />
+            <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Text="Both 3D views share one camera: turn, move or zoom either one. The picture on the right shows where the ground went up or down." />
+        </StackPanel>
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+            <Button DockPanel.Dock="Right" Content="Close" Padding="16,5" IsCancel="True" Click="Close_Click" />
+            <StackPanel Orientation="Horizontal">
+                <CheckBox Content="Doodads and buildings" IsChecked="{Binding ShowDoodads}" VerticalAlignment="Center" Margin="0,0,14,0" />
+                <CheckBox Content="Water" IsChecked="{Binding ShowWater}" VerticalAlignment="Center" Margin="0,0,14,0" />
+                <Button Content="Reset view" Command="{Binding ResetViewCommand}" Padding="10,4" />
+                <Button x:Name="FullScreenButton" Content="Full screen (F11)" Click="FullScreen_Click" Margin="10,0,0,0" Padding="10,4"
+                        ToolTip="Use the whole screen for the two 3D views (F11; Esc leaves full screen). The window can also be maximized or moved to another monitor." />
+            </StackPanel>
+        </DockPanel>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1*" />
+                <ColumnDefinition Width="6" />
+                <ColumnDefinition Width="1*" />
+                <ColumnDefinition Width="8" />
+                <ColumnDefinition Width="360" />
+            </Grid.ColumnDefinitions>
+            <Border CornerRadius="6" Background="#FF2B3038" ClipToBounds="True">
+                <Grid>
+                    <c:ModelViewport x:Name="LeftView" Terrain="{Binding Left}" Camera="{Binding Camera}" />
+                    <Border Style="{StaticResource SideLabel}"><TextBlock Text="{Binding LeftLabel}" Foreground="White" FontWeight="SemiBold" /></Border>
+                </Grid>
+            </Border>
+            <Border Grid.Column="2" CornerRadius="6" Background="#FF2B3038" ClipToBounds="True">
+                <Grid>
+                    <c:ModelViewport x:Name="RightView" Terrain="{Binding Right}" Camera="{Binding Camera}" />
+                    <Border Style="{StaticResource SideLabel}"><TextBlock Text="{Binding RightLabel}" Foreground="White" FontWeight="SemiBold" /></Border>
+                </Grid>
+            </Border>
+            <DockPanel Grid.Column="4">
+                <TextBlock DockPanel.Dock="Top" Text="Height difference" Style="{StaticResource H3}" Margin="0,0,0,4" />
+                <Image DockPanel.Dock="Top" Source="{Binding DifferenceImage}" Width="360" Height="360" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"
+                       ToolTip="The tile from above, north up: grey = unchanged, red = raised, blue = lowered." />
+                <TextBlock DockPanel.Dock="Top" Text="{Binding Legend}" TextWrapping="Wrap" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,4,0,6" />
+                <TextBlock DockPanel.Dock="Top" Text="Every change" Style="{StaticResource H3}" Margin="0,0,0,4" />
+                <TextBox Text="{Binding Details, Mode=OneWay}" IsReadOnly="True" FontFamily="Consolas" FontSize="11" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap" />
+            </DockPanel>
+        </Grid>
+    </DockPanel>
+</Window>

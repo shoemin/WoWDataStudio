@@ -1,0 +1,33 @@
+<UserControl x:Class="WoWDataStudio.Views.UsedInGameView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:h="clr-namespace:WoWDataStudio.Helpers">
+    <!-- "Used in game" (docs\manual\used-in-game.md). The sections are built in code from the UsageReport (see the
+         code-behind): every name in them is a link to that entry. -->
+    <UserControl.Resources>
+        <h:BoolToCollapsedConverter x:Key="BoolVis" />
+        <h:NullToCollapsedConverter x:Key="NullVis" />
+    </UserControl.Resources>
+    <StackPanel>
+        <DockPanel Margin="0,2,0,4">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button Content="Back" Command="{Binding BackCommand}" Visibility="{Binding CanGoBack, Converter={StaticResource BoolVis}}" Padding="8,2" Margin="0,0,6,0"
+                        ToolTip="Go back to the entry you came from (after clicking a name)." />
+                <Button Content="Refresh server data" Command="{Binding RefreshServerCommand}" Padding="8,2"
+                        ToolTip="Read the spawns, loot, vendors and quests from the server database again (after you changed it or started the server)." />
+            </StackPanel>
+            <TextBlock x:Name="Headline" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="13" />
+        </DockPanel>
+        <TextBlock Text="Reading..." Foreground="{StaticResource TextMuted}" Visibility="{Binding IsLoading, Converter={StaticResource BoolVis}}" />
+        <TextBlock Text="{Binding Error}" Foreground="{StaticResource Bad}" TextWrapping="Wrap" Visibility="{Binding Error, Converter={StaticResource NullVis}}" />
+        <StackPanel x:Name="Sections" />
+        <Border x:Name="ServerNote" Background="{StaticResource WarnSoft}" CornerRadius="4" Padding="10,6" Margin="0,6,0,0" Visibility="Collapsed">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Settings..." Command="{Binding OpenSettingsCommand}" Padding="8,2" Margin="8,0,0,0" VerticalAlignment="Center"
+                        ToolTip="Open the settings to connect the server database." />
+                <TextBlock x:Name="ServerNoteText" TextWrapping="Wrap" Foreground="{StaticResource Warn}" VerticalAlignment="Center" />
+            </DockPanel>
+        </Border>
+        <TextBlock Text="{Binding TimingText}" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,6,0,0" />
+    </StackPanel>
+</UserControl>

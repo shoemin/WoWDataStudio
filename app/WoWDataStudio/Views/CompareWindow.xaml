@@ -1,0 +1,32 @@
+<Window x:Class="WoWDataStudio.Views.CompareWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:v="clr-namespace:WoWDataStudio.Views"
+        xmlns:s="clr-namespace:WoWDataStudio.Services"
+        s:Manual.Topic="editing-textures"
+        Style="{StaticResource AppWindow}"
+        Title="Compare original vs. edited" Width="1180" Height="780" MinWidth="760" MinHeight="520"
+        WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="16">
+        <!-- import confirmation part (hidden when just comparing) -->
+        <Border x:Name="ConfirmBar" DockPanel.Dock="Bottom" Margin="0,12,0,0" Visibility="Collapsed">
+            <DockPanel LastChildFill="True">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Bottom">
+                    <Button x:Name="CancelButton" Content="Cancel" MinWidth="110" Margin="0,0,8,0" IsCancel="True" Click="Cancel_Click"
+                            ToolTip="Nothing is saved. The game texture stays as it is." />
+                    <Button x:Name="KeepButton" Content="Keep this change" MinWidth="160" Style="{StaticResource PrimaryButton}" Click="Keep_Click"
+                            ToolTip="Save the edited texture into your workspace (the game is not changed yet: use 'Test in game' or 'Build release patch' afterwards)." />
+                </StackPanel>
+                <StackPanel x:Name="ConfirmText" Margin="0,0,16,0" />
+            </DockPanel>
+        </Border>
+        <Border x:Name="CloseBar" DockPanel.Dock="Bottom" Margin="0,12,0,0">
+            <Button Content="Close" HorizontalAlignment="Right" MinWidth="110" IsCancel="True" Click="Cancel_Click" />
+        </Border>
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+            <TextBlock x:Name="Heading" Style="{StaticResource H2}" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+            <TextBlock x:Name="SubHeading" Style="{StaticResource Muted}" Text="Left: the texture as it is in the game. Right: your edit, as the game will show it (after conversion to the game's format)." />
+        </StackPanel>
+        <v:CompareView x:Name="Compare" />
+    </DockPanel>
+</Window>

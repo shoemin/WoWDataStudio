@@ -1,0 +1,63 @@
+<UserControl x:Class="WoWDataStudio.Views.ModelCompareView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:WoWDataStudio.Controls"
+             xmlns:h="clr-namespace:WoWDataStudio.Helpers">
+    <!-- Reusable: two synchronized 3D views (one shared camera). DataContext = ModelCompareViewModel. -->
+    <UserControl.Resources>
+        <h:BoolToCollapsedConverter x:Key="BoolVis" />
+        <Style x:Key="SideLabel" TargetType="Border">
+            <Setter Property="Background" Value="#C0101418" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="8,3" />
+            <Setter Property="Margin" Value="8" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+        </Style>
+    </UserControl.Resources>
+    <Grid>
+        <!-- side by side -->
+        <Grid Visibility="{Binding IsSideBySide, Converter={StaticResource BoolVis}}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition />
+                <ColumnDefinition Width="6" />
+                <ColumnDefinition />
+            </Grid.ColumnDefinitions>
+            <Border CornerRadius="6" Background="#FF2B3038" ClipToBounds="True">
+                <Grid>
+                    <c:ModelViewport x:Name="LeftView" Scene="{Binding Left.Scene}" Camera="{Binding Camera}" />
+                    <Border Style="{StaticResource SideLabel}">
+                        <StackPanel>
+                            <TextBlock Text="{Binding Left.Label}" Foreground="White" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding Left.Detail}" Foreground="#FFC8D2DE" FontSize="11" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+            <Border Grid.Column="2" CornerRadius="6" Background="#FF2B3038" ClipToBounds="True">
+                <Grid>
+                    <c:ModelViewport x:Name="RightView" Scene="{Binding Right.Scene}" Camera="{Binding Camera}" />
+                    <Border Style="{StaticResource SideLabel}">
+                        <StackPanel>
+                            <TextBlock Text="{Binding Right.Label}" Foreground="White" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding Right.Detail}" Foreground="#FFC8D2DE" FontSize="11" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+        </Grid>
+        <!-- toggle: one view, switched in place -->
+        <Border CornerRadius="6" Background="#FF2B3038" ClipToBounds="True" Visibility="{Binding IsToggle, Converter={StaticResource BoolVis}}">
+            <Grid>
+                <c:ModelViewport x:Name="ToggleView" Scene="{Binding Shown.Scene}" Camera="{Binding Camera}" />
+                <Border Style="{StaticResource SideLabel}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding Shown.Label}" Foreground="White" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding Shown.Detail}" Foreground="#FFC8D2DE" FontSize="11" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

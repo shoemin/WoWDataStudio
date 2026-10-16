@@ -1,0 +1,15 @@
+﻿<Project>
+  <!--
+    0.8.0: the ONE place of the version of WoW Data Studio. The desktop app (WoWDataStudio.exe), the command line
+    (wds.exe) and the core library all take it from here, so the two front ends always report the same version and
+    build (WoWData.Core.StudioInfo; "wds version" and Help > About WoW Data Studio).
+    build_installer.ps1 passes -p:Version=<x.y.z> -p:WdsBuild=<stamp> for a release; a developer build says "dev".
+  -->
+  <PropertyGroup>
+    <Version>0.13.1</Version>
+    <WdsBuild Condition="'$(WdsBuild)' == ''">dev</WdsBuild>
+    <SourceRevisionId>$(WdsBuild)</SourceRevisionId>
+    <Product>WoW Data Studio</Product>
+    <Company>WoWDataTool project</Company>
+  </PropertyGroup>
+</Project>

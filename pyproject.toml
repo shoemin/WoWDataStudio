@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wowdata"
+version = "0.1.0"
+description = "World of Warcraft 1.12 client data tool: find, extract, convert and repack assets"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24", "Pillow>=9.1"]
+
+[project.scripts]
+wowdata = "wowdata.cli:main"
+
+[tool.setuptools]
+packages = ["wowdata", "wowdata.m2", "wowdata.maps"]

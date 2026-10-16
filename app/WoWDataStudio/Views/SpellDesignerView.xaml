@@ -1,0 +1,267 @@
+<UserControl x:Class="WoWDataStudio.Views.SpellDesignerView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:h="clr-namespace:WoWDataStudio.Helpers"
+             xmlns:v="clr-namespace:WoWDataStudio.Views"
+             xmlns:s="clr-namespace:WoWDataStudio.Services"
+             s:Manual.Topic="spell-designer">
+    <UserControl.Resources>
+        <h:BoolToCollapsedConverter x:Key="BoolVis" />
+        <h:BoolToCollapsedConverter x:Key="BoolVisInv" Invert="True" />
+        <h:NullToCollapsedConverter x:Key="NullVis" />
+        <Style x:Key="ToolButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+            <Setter Property="Margin" Value="0,0,6,6" />
+            <Setter Property="Padding" Value="9,4" />
+        </Style>
+        <Style x:Key="Section" TargetType="TextBlock" BasedOn="{StaticResource H3}">
+            <Setter Property="Margin" Value="0,10,0,4" />
+        </Style>
+    </UserControl.Resources>
+    <UserControl.InputBindings>
+        <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
+    </UserControl.InputBindings>
+
+    <Grid Margin="0,8,0,0">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="270" MinWidth="200" />
+            <ColumnDefinition Width="8" />
+            <ColumnDefinition Width="*" MinWidth="420" />
+            <ColumnDefinition Width="8" />
+            <ColumnDefinition Width="430" MinWidth="320" />
+        </Grid.ColumnDefinitions>
+
+        <!-- ============================== FIND, NEW, CLONE ============================== -->
+        <Border Style="{StaticResource Card}" Padding="12,10">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top">
+                    <TextBlock Text="Spell designer" Style="{StaticResource H2}" />
+                    <TextBlock Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,8"
+                               Text="Make a new spell or clone an existing one, then edit it like a player thinks of it. Saving writes the game's Spell.dbc and the server's spell_template together." />
+                    <TextBlock Text="Find a spell" FontWeight="SemiBold" />
+                    <DockPanel Margin="0,4,0,0">
+                        <Button DockPanel.Dock="Right" Content="Find" Command="{Binding SearchCommand}" Padding="9,3" Margin="6,0,0,0" />
+                        <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" ToolTip="A name (shadow bolt) or a spell ID (686).">
+                            <TextBox.InputBindings>
+                                <KeyBinding Key="Enter" Command="{Binding SearchCommand}" />
+                            </TextBox.InputBindings>
+                        </TextBox>
+                    </DockPanel>
+                </StackPanel>
+                <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                    <WrapPanel>
+                        <Button Content="Open" Command="{Binding OpenSelectedCommand}" Style="{StaticResource ToolButton}" ToolTip="Open the selected spell in the form." />
+                    </WrapPanel>
+                    <TextBlock Text="New name" FontWeight="SemiBold" Margin="0,4,0,2" />
+                    <TextBox Text="{Binding NewName, UpdateSourceTrigger=PropertyChanged}" ToolTip="The name of the new spell (or of the clone)." />
+                    <TextBlock Text="Rank" FontWeight="SemiBold" Margin="0,4,0,2" />
+                    <TextBox Text="{Binding NewRank, UpdateSourceTrigger=PropertyChanged}" />
+                    <WrapPanel Margin="0,8,0,0">
+                        <Button Content="New spell" Command="{Binding NewSpellCommand}" Style="{StaticResource ToolButton}"
+                                ToolTip="A new, empty spell (instant, self, mana) with the first free ID of your custom ID range." />
+                        <Button Content="Clone this spell" Command="{Binding CloneCommand}" Style="{StaticResource ToolButton}"
+                                ToolTip="A copy of the selected spell (every value, the icon and the visual) with a new ID and the new name." />
+                    </WrapPanel>
+                </StackPanel>
+                <ListBox ItemsSource="{Binding Results}" SelectedItem="{Binding SelectedResult}" DisplayMemberPath="Text" Margin="0,6,0,0" MouseDoubleClick="Results_DoubleClick" />
+            </DockPanel>
+        </Border>
+
+        <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" Background="Transparent" />
+
+        <!-- ============================== THE FORM ============================== -->
+        <Border Grid.Column="2" Style="{StaticResource Card}" Padding="12,10">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top">
+                    <TextBlock Text="{Binding Title}" Style="{StaticResource H2}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding ServerText}" Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,6" />
+                </StackPanel>
+                <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                    <Button DockPanel.Dock="Right" Content="Save to my workspace" Command="{Binding SaveCommand}" Style="{StaticResource PrimaryButton}" Padding="14,6"
+                            ToolTip="Save the spell (and the helper rows, visuals, trainers and skill lines) into your workspace as one change, the server's rows in step (Ctrl+S)." />
+                    <Button DockPanel.Dock="Right" Content="Discard changes" Command="{Binding DiscardCommand}" Margin="0,0,8,0" Padding="10,6"
+                            ToolTip="Throw away the designer's unsaved edits." />
+                    <TextBlock Text="{Binding Status}" TextWrapping="Wrap" VerticalAlignment="Center">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding StatusIsError}" Value="True"><Setter Property="Foreground" Value="{StaticResource Bad}" /></DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </DockPanel>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding HasSpell, Converter={StaticResource BoolVis}}">
+                    <ItemsControl ItemsSource="{Binding Groups}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Expander Header="{Binding Name}" IsExpanded="{Binding IsExpanded}" Margin="0,0,0,6" FontWeight="SemiBold">
+                                    <StackPanel Margin="18,4,0,4" TextElement.FontWeight="Normal">
+                                        <Border Background="{StaticResource AccentSoft}" CornerRadius="4" Padding="8,5" Margin="0,0,0,6"
+                                                Visibility="{Binding HasExplanation, Converter={StaticResource BoolVis}}">
+                                            <TextBlock Text="{Binding Explanation}" TextWrapping="Wrap" FontSize="12" />
+                                        </Border>
+                                        <ItemsControl ItemsSource="{Binding Fields}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <DockPanel Margin="0,2" ToolTip="{Binding Help}">
+                                                        <TextBlock DockPanel.Dock="Left" Text="{Binding Label}" Width="190" VerticalAlignment="Top" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
+                                                        <Expander DockPanel.Dock="Bottom" Header="Choose flags" Visibility="{Binding HasFlags, Converter={StaticResource BoolVis}}" Margin="0,2,0,2" FontSize="12">
+                                                            <ItemsControl ItemsSource="{Binding Flags}" Margin="4,2,0,2">
+                                                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate><CheckBox Content="{Binding Name}" IsChecked="{Binding IsOn}" ToolTip="{Binding Tip}" Margin="0,1,12,1" MinWidth="200" /></DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </Expander>
+                                                        <Grid>
+                                                            <ComboBox ItemsSource="{Binding Choices}" SelectedItem="{Binding Choice}" DisplayMemberPath="Text"
+                                                                      Visibility="{Binding IsChoice, Converter={StaticResource BoolVis}}" />
+                                                            <TextBox Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" Visibility="{Binding IsText, Converter={StaticResource BoolVis}}"
+                                                                     TextWrapping="Wrap" AcceptsReturn="False" MinHeight="24">
+                                                                <TextBox.InputBindings>
+                                                                    <KeyBinding Key="Enter" Command="{Binding CommitCommand}" />
+                                                                </TextBox.InputBindings>
+                                                            </TextBox>
+                                                        </Grid>
+                                                    </DockPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Expander>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+
+        <GridSplitter Grid.Column="3" Width="8" HorizontalAlignment="Stretch" Background="Transparent" />
+
+        <!-- ============================== PREVIEW, CHECKS, VISUAL, LEARNING ============================== -->
+        <Border Grid.Column="4" Style="{StaticResource Card}" Padding="12,10">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Visibility="{Binding HasSpell, Converter={StaticResource BoolVis}}">
+                    <TextBlock x:Name="TooltipBox" Text="Tooltip preview" Style="{StaticResource H3}" />
+                    <Border Background="#FF14181F" CornerRadius="5" Padding="10,8" Margin="0,4,0,0">
+                        <DockPanel>
+                            <Border DockPanel.Dock="Left" Width="44" Height="44" Margin="0,0,10,0" VerticalAlignment="Top" BorderBrush="#FF6E6E6E" BorderThickness="1">
+                                <Image Source="{Binding IconImage}" Stretch="Uniform" />
+                            </Border>
+                            <StackPanel>
+                                <TextBlock Text="{Binding Title}" Foreground="White" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding TooltipText}" Foreground="#FFFFD100" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                <TextBlock Text="{Binding AuraText}" Foreground="#FFB0C4DE" TextWrapping="Wrap" Margin="0,6,0,0" FontSize="12" />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                    <DockPanel Margin="0,4,0,0">
+                        <TextBlock Text="Caster level" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBox Text="{Binding Level, UpdateSourceTrigger=PropertyChanged}" Width="50" HorizontalAlignment="Left"
+                                 ToolTip="The tooltip as a caster of this level sees it (per-level values and durations grow with it)." />
+                    </DockPanel>
+
+                    <TextBlock Text="Checks (1.12 client and server)" Style="{StaticResource Section}" />
+                    <TextBlock Text="{Binding ChecksText}" TextWrapping="Wrap" FontSize="12" />
+                    <ItemsControl ItemsSource="{Binding Problems}" Margin="0,4,0,0">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="12" Margin="0,1">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="{StaticResource TextMuted}" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsError}" Value="True"><Setter Property="Foreground" Value="{StaticResource Bad}" /></DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Text="Icon" Style="{StaticResource Section}" />
+                    <TextBlock Text="{Binding IconText}" FontSize="12" Foreground="{StaticResource TextMuted}" />
+                    <DockPanel Margin="0,4,0,0">
+                        <Button DockPanel.Dock="Right" Content="Find icons" Command="{Binding FindIconsCommand}" Padding="9,3" Margin="6,0,0,0" />
+                        <TextBox Text="{Binding IconSearch, UpdateSourceTrigger=PropertyChanged}" ToolTip="Words of an icon's file name (shadow bolt, frost, sword...)." />
+                    </DockPanel>
+                    <ListBox ItemsSource="{Binding IconResults}" SelectedItem="{Binding SelectedIcon}" MaxHeight="110" Margin="0,4,0,0" />
+                    <Button Content="Use this icon" Command="{Binding UseIconCommand}" Style="{StaticResource ToolButton}" HorizontalAlignment="Left" Margin="0,4,0,0" />
+
+                    <TextBlock Text="Visual" Style="{StaticResource Section}" />
+                    <ItemsControl ItemsSource="{Binding VisualParts}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="12" /></DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="Pick visual..." FontWeight="SemiBold" Margin="0,6,0,2" />
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Content="Find" Command="{Binding FindVisualsCommand}" Padding="9,3" Margin="6,0,0,0" />
+                        <TextBox Text="{Binding VisualSearch, UpdateSourceTrigger=PropertyChanged}" ToolTip="Words of the name of a spell whose look you want (frostbolt, chain lightning...)." />
+                    </DockPanel>
+                    <ListBox ItemsSource="{Binding VisualResults}" SelectedItem="{Binding SelectedVisual}" DisplayMemberPath="Text" MaxHeight="110" Margin="0,4,0,0" />
+                    <WrapPanel Margin="0,4,0,0">
+                        <Button Content="Use this visual" Command="{Binding UseVisualCommand}" Style="{StaticResource ToolButton}" ToolTip="Use the whole visual of the selected spell." />
+                        <ComboBox ItemsSource="{Binding SlotChoices}" SelectedItem="{Binding ComposeSlot}" Width="90" Margin="0,0,6,6" ToolTip="Which part to take: precast, cast, missile, impact, aura, channel, area." />
+                        <Button Content="Use its part" Command="{Binding UseVisualPartCommand}" Style="{StaticResource ToolButton}" ToolTip="Take only this part of the selected visual (your spell gets its own visual row when others share it)." />
+                    </WrapPanel>
+                    <TextBlock Text="Duplicate visual (tint and size)" FontWeight="SemiBold" Margin="0,4,0,2" />
+                    <WrapPanel>
+                        <TextBlock Text="Tint" VerticalAlignment="Center" Margin="0,0,4,6" />
+                        <TextBox Text="{Binding TintText, UpdateSourceTrigger=PropertyChanged}" Width="80" Margin="0,0,8,6" ToolTip="#RRGGBB multiplied into the copied models' colours and textures (empty = keep the colours)." />
+                        <TextBlock Text="Size" VerticalAlignment="Center" Margin="0,0,4,6" />
+                        <TextBox Text="{Binding ScaleText, UpdateSourceTrigger=PropertyChanged}" Width="50" Margin="0,0,8,6" ToolTip="1 = unchanged, 1.5 = half again as big." />
+                        <Button Content="Duplicate visual" Command="{Binding DuplicateVisualCommand}" Style="{StaticResource ToolButton}"
+                                ToolTip="Copy the visual with its own kits and effect models (Spells\WDS\...), tinted and scaled; other spells keep the original." />
+                    </WrapPanel>
+                    <TextBlock Text="Effect models" FontWeight="SemiBold" Margin="0,4,0,2" />
+                    <ListBox ItemsSource="{Binding VisualModels}" SelectedItem="{Binding SelectedModel}" MaxHeight="90">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock FontSize="12"><Run Text="{Binding Slot, Mode=OneWay}" /><Run Text=", " /><Run Text="{Binding Where, Mode=OneWay}" /><Run Text=": " /><Run Text="{Binding Name, Mode=OneWay}" /></TextBlock>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <Button Content="Show in 3D" Command="{Binding ShowModelCommand}" Style="{StaticResource ToolButton}" HorizontalAlignment="Left" Margin="0,4,0,0"
+                            ToolTip="The selected effect model in the 3D view below (a duplicated copy after saving)." />
+                    <Border Height="260" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="4">
+                        <v:ModelViewerView x:Name="EffectViewer" DataContext="{Binding Viewer}" />
+                    </Border>
+
+                    <TextBlock x:Name="LearningBox" Text="Learning" Style="{StaticResource Section}" />
+                    <ItemsControl ItemsSource="{Binding Trainers}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="12" /></DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <WrapPanel Margin="0,4,0,0">
+                        <TextBlock Text="Trainer" VerticalAlignment="Center" Margin="0,0,4,6" />
+                        <TextBox Text="{Binding TrainerText, UpdateSourceTrigger=PropertyChanged}" Width="70" Margin="0,0,8,6" ToolTip="The trainer's creature entry (3156), or list:N for a shared trainer list." />
+                        <TextBlock Text="Level" VerticalAlignment="Center" Margin="0,0,4,6" />
+                        <TextBox Text="{Binding TrainerLevel, UpdateSourceTrigger=PropertyChanged}" Width="40" Margin="0,0,8,6" />
+                        <TextBlock Text="Cost" VerticalAlignment="Center" Margin="0,0,4,6" />
+                        <TextBox Text="{Binding TrainerCost, UpdateSourceTrigger=PropertyChanged}" Width="60" Margin="0,0,8,6" ToolTip="Copper (2500) or 25s, 1g 50s." />
+                        <Button Content="Add to trainer" Command="{Binding AddToTrainerCommand}" Style="{StaticResource ToolButton}"
+                                ToolTip="The trainer teaches it at this level for this price (through a &quot;learn&quot; spell, made when the spell has none)." />
+                    </WrapPanel>
+                    <ItemsControl ItemsSource="{Binding SkillLines}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="12" /></DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <WrapPanel Margin="0,4,0,0">
+                        <TextBlock Text="Skill line" VerticalAlignment="Center" Margin="0,0,4,6" />
+                        <TextBox Text="{Binding SkillLineText, UpdateSourceTrigger=PropertyChanged}" Width="50" Margin="0,0,8,6" ToolTip="A SkillLine ID: a class's talent-tree tab (Destruction 593), a profession..." />
+                        <TextBlock Text="Classes" VerticalAlignment="Center" Margin="0,0,4,6" />
+                        <TextBox Text="{Binding SkillClasses, UpdateSourceTrigger=PropertyChanged}" Width="110" Margin="0,0,8,6" ToolTip="Class names or IDs, comma-separated (empty = every class)." />
+                        <Button Content="Add to skill line" Command="{Binding AddToSkillLineCommand}" Style="{StaticResource ToolButton}"
+                                ToolTip="A SkillLineAbility row in the game's table and the server's skill_line_ability (same ID)." />
+                    </WrapPanel>
+                    <Button Content="Sync with the server" Command="{Binding SyncServerCommand}" Style="{StaticResource ToolButton}" HorizontalAlignment="Left"
+                            ToolTip="Make the server's spell_template row follow the game's row on the next save (after editing the game's side in the Data tables tab)." />
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+    </Grid>
+</UserControl>

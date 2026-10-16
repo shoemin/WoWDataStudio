@@ -1,0 +1,82 @@
+<Window x:Class="WoWDataStudio.Views.NoggitWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:h="clr-namespace:WoWDataStudio.Helpers"
+        xmlns:s="clr-namespace:WoWDataStudio.Services"
+        s:Manual.Topic="maps-and-terrain"
+        Style="{StaticResource AppWindow}"
+        Title="Edit in Noggit" Width="860" Height="820" MinWidth="640" MinHeight="520" WindowStartupLocation="CenterOwner">
+    <Window.Resources>
+        <h:BoolToCollapsedConverter x:Key="BoolVis" />
+        <h:NullToCollapsedConverter x:Key="NullVis" />
+    </Window.Resources>
+    <DockPanel Margin="18" Background="{StaticResource WindowBg}">
+        <StackPanel DockPanel.Dock="Top">
+            <TextBlock Text="Edit the map in Noggit" Style="{StaticResource H1}" FontSize="22" />
+            <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,10"
+                       Text="Noggit is a free map editor for World of Warcraft: sculpt the ground, paint textures, cut holes, add water, place trees and buildings. WoW Data Studio prepared a project for it; you edit in Noggit, save, and come back here." />
+        </StackPanel>
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
+            <Button DockPanel.Dock="Right" Content="Close" IsCancel="True" MinWidth="100" Click="Close_Click" />
+            <StackPanel Orientation="Horizontal">
+                <Button Content="Start Noggit" Command="{Binding StartNoggitCommand}" IsEnabled="{Binding NoggitFound}" Style="{StaticResource PrimaryButton}" MinWidth="140" Margin="0,0,8,0"
+                        ToolTip="Starts noggit.exe (a separate program) and puts the project file's path on the clipboard." />
+                <Button Content="Copy the project path" Command="{Binding CopyProjectPathCommand}" Margin="0,0,8,0" />
+                <Button Content="Open the project folder" Command="{Binding OpenProjectFolderCommand}" Margin="0,0,8,0" />
+                <Button Content="Settings..." Command="{Binding OpenSettingsCommand}" Click="Settings_Click" Visibility="{Binding NoggitMissing, Converter={StaticResource BoolVis}}" />
+            </StackPanel>
+        </DockPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <Border Background="{StaticResource BadSoft}" CornerRadius="5" Padding="12,8" Margin="0,0,0,10" Visibility="{Binding NoggitMissing, Converter={StaticResource BoolVis}}">
+                    <TextBlock TextWrapping="Wrap" Text="Noggit was not found. Set the path to noggit.exe (our fixed fork's build) in Settings, Maps and terrain. The project below is ready anyway." />
+                </Border>
+                <TextBlock Text="{Binding LaunchStatus}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{StaticResource Good}" Margin="0,0,0,8" Visibility="{Binding LaunchStatus, Converter={StaticResource NullVis}}" />
+
+                <TextBlock Text="Steps" Style="{StaticResource H2}" FontSize="16" />
+                <TextBlock TextWrapping="Wrap" Margin="0,4,0,0">
+                    <Run Text="1. Click " /><Run Text="Start Noggit" FontWeight="SemiBold" /><Run Text=". The first time, in Noggit's start window click " /><Run Text="Open an existing project" FontWeight="SemiBold" /><Run Text=" and pick the project file below (its path is on the clipboard: paste it into the file name box). After that it is listed under Recent Projects." />
+                </TextBlock>
+                <TextBlock TextWrapping="Wrap" Margin="0,4,0,0">
+                    <Run Text="2. In Noggit's map window, open the " /><Run Text="Bookmarks" FontWeight="SemiBold" /><Run Text=" tab on the left and double-click the bookmark below: Noggit flies to the tile you selected. (Noggit cannot be started at a place directly; the bookmark is the way.)" />
+                </TextBlock>
+                <TextBlock TextWrapping="Wrap" Margin="0,4,0,0">
+                    <Run Text="3. Edit. Before saving, run " /><Run Text="Assist > Check loaded tiles for 1.12 issues" FontWeight="SemiBold" /><Run Text=" in Noggit. If Noggit asks about unique ids on an untouched Blizzard map, choose &quot;Get max UID&quot;." />
+                </TextBlock>
+                <TextBlock TextWrapping="Wrap" Margin="0,4,0,0">
+                    <Run Text="4. Save in Noggit (Ctrl+S, or File > Save all). Then come back here and click " /><Run Text="Import map changes..." FontWeight="SemiBold" /><Run Text=": you see every changed tile, checked against the 1.12 rules, with a 3D before/after, and choose what to keep." />
+                </TextBlock>
+
+                <TextBlock Text="The project" Style="{StaticResource H2}" FontSize="16" Margin="0,14,0,0" />
+                <Grid Margin="0,4,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <TextBlock Text="Project file" Foreground="{StaticResource TextMuted}" />
+                    <TextBox Grid.Column="1" Text="{Binding ProjectFile, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent" TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="1" Text="Bookmark" Foreground="{StaticResource TextMuted}" Margin="0,4,0,0" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Bookmark}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,4,0,0" />
+                    <TextBlock Grid.Row="2" Text="Noggit saves into" Foreground="{StaticResource TextMuted}" Margin="0,4,0,0" />
+                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding SaveDir, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent" TextWrapping="Wrap" Margin="0,4,0,0" />
+                    <TextBlock Grid.Row="3" Text="Game data it reads" Foreground="{StaticResource TextMuted}" Margin="0,4,0,0" />
+                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding ClientNote}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                    <TextBlock Grid.Row="4" Text="Noggit program" Foreground="{StaticResource TextMuted}" Margin="0,4,0,0" />
+                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding ExeText}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                </Grid>
+                <TextBlock Text="{Binding SyncNote}" TextWrapping="Wrap" Margin="0,6,0,0" Visibility="{Binding HasSyncNote, Converter={StaticResource BoolVis}}" />
+
+                <TextBlock Text="Good to know" Style="{StaticResource H2}" FontSize="16" Margin="0,14,0,0" />
+                <TextBlock TextWrapping="Wrap" Margin="0,4,0,0"
+                           Text="• Noggit never writes into your game folder: it reads the app's own view of the game's archives and saves only into the project folder above. The game changes only when you test or release from WoW Data Studio." />
+                <TextBlock TextWrapping="Wrap" Margin="0,4,0,0"
+                           Text="• Disabled for 1.12 on purpose in our fixed Noggit: the Area (zone) editor, the sound entries editor and the light and sky editor. They would damage the 1.12 data tables. Painting zone ids on the ground still works." />
+                <TextBlock TextWrapping="Wrap" Margin="0,4,0,0"
+                           Text="• Use only our fixed Noggit, never the upstream download: it fixes the far-terrain file (WDL), sound emitters, water bits and the texture blending format for 1.12, and has no auto-updater." />
+                <TextBlock TextWrapping="Wrap" Margin="0,4,0,0"
+                           Text="• Do not use Noggit's own patch export into the game: WoW Data Studio builds patch-3.MPQ and can undo it." />
+                <TextBlock TextWrapping="Wrap" Margin="0,4,0,0">
+                    <Run Text="• Noggit is a separate program under the GNU GPL version 3; WoW Data Studio only starts it and reads the files it saves. " /><Run Text="{Binding SourceNote, Mode=OneWay}" />
+                </TextBlock>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

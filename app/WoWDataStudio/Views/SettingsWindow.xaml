@@ -1,0 +1,150 @@
+<Window x:Class="WoWDataStudio.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:h="clr-namespace:WoWDataStudio.Helpers"
+        xmlns:s="clr-namespace:WoWDataStudio.Services"
+        s:Manual.Topic="settings"
+        Style="{StaticResource AppWindow}"
+        Title="Settings" Width="680" SizeToContent="Height" MaxHeight="980" ResizeMode="NoResize" WindowStartupLocation="CenterOwner">
+    <Window.Resources>
+        <h:BoolToCollapsedConverter x:Key="BoolVis" />
+        <h:BoolToCollapsedConverter x:Key="BoolVisInv" Invert="True" />
+    </Window.Resources>
+    <DockPanel Margin="20">
+        <TextBlock DockPanel.Dock="Top" Text="Settings" Style="{StaticResource H1}" FontSize="22" Margin="0,0,0,12" />
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button Content="Cancel" IsCancel="True" MinWidth="100" Margin="0,0,8,0" />
+            <Button Content="Save" IsDefault="True" MinWidth="100" Style="{StaticResource PrimaryButton}" Click="Save_Click" />
+        </StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel>
+
+        <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock Text="World of Warcraft folder" Style="{StaticResource H2}" FontSize="15" />
+                <TextBlock Style="{StaticResource Muted}" Text="The game folder (with WoW.exe and the Data folder). Version 1.12.1, build 5875." Margin="0,2,0,8" />
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Browse..." Command="{Binding BrowseClientCommand}" Margin="8,0,0,0" />
+                    <TextBox Text="{Binding ClientDir, UpdateSourceTrigger=PropertyChanged}" />
+                </DockPanel>
+                <TextBlock Text="{Binding ClientCheck}" Margin="0,6,0,0" TextWrapping="Wrap" Foreground="{StaticResource Good}" Visibility="{Binding ClientOk, Converter={StaticResource BoolVis}}" />
+                <TextBlock Text="{Binding ClientCheck}" Margin="0,6,0,0" TextWrapping="Wrap" Foreground="{StaticResource Bad}" Visibility="{Binding ClientOk, Converter={StaticResource BoolVisInv}}" />
+            </StackPanel>
+        </Border>
+
+        <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock Text="Names from the server database (optional)" Style="{StaticResource H2}" FontSize="15" />
+                <TextBlock Style="{StaticResource Muted}" Margin="0,2,0,8"
+                           Text="With your local server's world database (CMaNGOS / VMaNGOS, MySQL), creatures, items and game objects are listed by their names, and the Server data tab shows and edits it. The app only reads it, except when you choose Apply to server in the Server data tab (backed up first, undoable). Without it, things are listed by model and display id." />
+                <CheckBox Content="Use the server database for names" IsChecked="{Binding ServerEnabled}" Margin="0,0,0,8" />
+                <Grid IsEnabled="{Binding ServerEnabled}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110" />
+                        <ColumnDefinition />
+                        <ColumnDefinition Width="80" />
+                        <ColumnDefinition Width="110" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="Server" VerticalAlignment="Center" />
+                    <TextBox Grid.Column="1" Text="{Binding Host, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" ToolTip="Usually 127.0.0.1 (this computer)." />
+                    <TextBlock Grid.Column="2" Text="Port" VerticalAlignment="Center" Margin="12,0,0,0" />
+                    <TextBox Grid.Column="3" Text="{Binding Port, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" ToolTip="MySQL's port, usually 3306." />
+                    <TextBlock Grid.Row="1" Text="User" VerticalAlignment="Center" />
+                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding User, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" />
+                    <TextBlock Grid.Row="1" Grid.Column="2" Text="Password" VerticalAlignment="Center" Margin="12,0,0,0" />
+                    <PasswordBox x:Name="Pwd" Grid.Row="1" Grid.Column="3" Margin="0,0,0,6" PasswordChanged="Pwd_PasswordChanged" />
+                    <TextBlock Grid.Row="2" Text="World database" VerticalAlignment="Center" />
+                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Database, UpdateSourceTrigger=PropertyChanged}" ToolTip="The world database, usually called mangos." />
+                </Grid>
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                    <Button Content="Test connection" Command="{Binding TestConnectionCommand}" Margin="0,0,8,0" ToolTip="Try to connect now (read-only)." />
+                    <Button Content="Use the defaults (127.0.0.1:3306, root/root, mangos)" Command="{Binding UseDefaultsCommand}" />
+                </StackPanel>
+                <TextBlock Text="{Binding TestResult}" TextWrapping="Wrap" Margin="0,8,0,0">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="{StaticResource TextMuted}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding TestOk}" Value="True"><Setter Property="Foreground" Value="{StaticResource Good}" /></DataTrigger>
+                                <DataTrigger Binding="{Binding TestOk}" Value="False"><Setter Property="Foreground" Value="{StaticResource Bad}" /></DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <CheckBox x:Name="RefreshBox" Content="Reload the names from the database when I click Save" Margin="0,8,0,0" />
+            </StackPanel>
+        </Border>
+
+        <Border x:Name="ServerDataCard" Style="{StaticResource Card}" Margin="0,0,0,12" s:Manual.Topic="server-data">
+            <StackPanel>
+                <TextBlock Text="Server data (world database)" Style="{StaticResource H2}" FontSize="15" />
+                <TextBlock Style="{StaticResource Muted}" Margin="0,2,0,8" TextWrapping="Wrap"
+                           Text="For the Server data tab: which version of each row the server uses, and the IDs that new rows get." />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="200" />
+                        <ColumnDefinition />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="Content patch of the server" VerticalAlignment="Center" />
+                    <TextBox Grid.Column="1" Text="{Binding ServerPatch, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,2"
+                             ToolTip="0 (1.2) to 10 (1.12). Empty: WowPatch of the server's mangosd.conf, else 10." />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="Empty: as the server's mangosd.conf says (WowPatch), else 10 (1.12)." Foreground="{StaticResource TextMuted}" FontSize="12" Margin="0,0,0,8" TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="2" Text="Custom ID range" VerticalAlignment="Center" />
+                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding CustomIds, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,2"
+                             ToolTip="New items, creatures, quests... get the first free ID of this range (from-to)." />
+                    <TextBlock Grid.Row="3" Grid.Column="1" Text="New rows (Add new, Duplicate as new) get the first free ID of this range, for example 900000-999999." Foreground="{StaticResource TextMuted}" FontSize="12" TextWrapping="Wrap" />
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <Border x:Name="HotReloadCard" Style="{StaticResource Card}" Margin="0,0,0,12" s:Manual.Topic="testing-in-game">
+            <StackPanel>
+                <TextBlock Text="Hot reload in the running game" Style="{StaticResource H2}" FontSize="15" />
+                <TextBlock Style="{StaticResource Muted}" Margin="0,2,0,8" TextWrapping="Wrap"
+                           Text="With hot reload, the running game reads your changed textures, models, buildings, terrain and data tables again without a restart (Reload in running game in My changes). It needs the project's own client (wowcode.dll from the HR1 update on) and is switched on for this game folder only: the app writes wowhotreload.txt next to WoW.exe. The game reads it when it starts, so restart the game once after switching it on." />
+                <CheckBox Content="Switch on hot reload for this game folder" IsChecked="{Binding HotReload}" />
+                <TextBlock Text="{Binding HotReloadCheck}" Foreground="{StaticResource TextMuted}" TextWrapping="Wrap" FontSize="12" Margin="0,6,0,0" />
+            </StackPanel>
+        </Border>
+
+        <Border x:Name="MapsCard" Style="{StaticResource Card}" Margin="0,0,0,4" s:Manual.Topic="maps-and-terrain">
+            <StackPanel>
+                <TextBlock Text="Maps and terrain" Style="{StaticResource H2}" FontSize="15" />
+                <TextBlock Style="{StaticResource Muted}" Margin="0,2,0,8" TextWrapping="Wrap"
+                           Text="Noggit (the map editor, a separate GPL program) and the server tools that update the world server's map data. Leave a field empty to use what the app finds next to it." />
+                <TextBlock Text="Noggit program (noggit.exe)" FontWeight="SemiBold" />
+                <DockPanel Margin="0,2,0,2">
+                    <Button DockPanel.Dock="Right" Content="Browse..." Command="{Binding BrowseNoggitCommand}" Margin="8,0,0,0" />
+                    <TextBox Text="{Binding NoggitPath, UpdateSourceTrigger=PropertyChanged}" ToolTip="Our fixed Noggit fork's build: third_party\noggit-build\bin\noggit.exe. Never the upstream download." />
+                </DockPanel>
+                <TextBlock Text="{Binding NoggitCheck}" Foreground="{StaticResource TextMuted}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,8" />
+                <TextBlock Text="Client copy for Noggit (optional)" FontWeight="SemiBold" />
+                <DockPanel Margin="0,2,0,2">
+                    <Button DockPanel.Dock="Right" Content="Browse..." Command="{Binding BrowseNoggitClientCommand}" Margin="8,0,0,0" />
+                    <TextBox Text="{Binding NoggitClientDir, UpdateSourceTrigger=PropertyChanged}" />
+                </DockPanel>
+                <TextBlock Text="Empty: the app makes its own client view for Noggit (links to the game's archives, no extra space). Never the game folder itself." Foreground="{StaticResource TextMuted}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,8" />
+                <TextBlock Text="Server tools folder" FontWeight="SemiBold" />
+                <DockPanel Margin="0,2,0,2">
+                    <Button DockPanel.Dock="Right" Content="Browse..." Command="{Binding BrowseServerToolsCommand}" Margin="8,0,0,0" />
+                    <TextBox Text="{Binding ServerToolsDir, UpdateSourceTrigger=PropertyChanged}" ToolTip="The folder with reextract.ps1 and swap_in.ps1 (WoWDataTool\server)." />
+                </DockPanel>
+                <TextBlock Text="{Binding ServerToolsCheck}" Foreground="{StaticResource TextMuted}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,8" />
+                <TextBlock Text="Server data folder" FontWeight="SemiBold" />
+                <DockPanel Margin="0,2,0,2">
+                    <Button DockPanel.Dock="Right" Content="Browse..." Command="{Binding BrowseServerDataCommand}" Margin="8,0,0,0" />
+                    <TextBox Text="{Binding ServerDataDir, UpdateSourceTrigger=PropertyChanged}" ToolTip="The world server's data folder with maps, vmaps and mmaps (Server\data)." />
+                </DockPanel>
+                <TextBlock Text="{Binding ServerDataCheck}" Foreground="{StaticResource TextMuted}" TextWrapping="Wrap" FontSize="12" />
+            </StackPanel>
+        </Border>
+    </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

@@ -1,0 +1,144 @@
+<Window x:Class="WoWDataStudio.Views.ServerUpdateWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:h="clr-namespace:WoWDataStudio.Helpers"
+        xmlns:s="clr-namespace:WoWDataStudio.Services"
+        s:Manual.Topic="maps-and-terrain"
+        Style="{StaticResource AppWindow}"
+        Title="Update server maps" Width="1000" Height="900" MinWidth="760" MinHeight="560" WindowStartupLocation="CenterOwner">
+    <Window.Resources>
+        <h:BoolToCollapsedConverter x:Key="BoolVis" />
+        <h:BoolToCollapsedConverter x:Key="BoolVisInv" Invert="True" />
+        <h:NullToCollapsedConverter x:Key="NullVis" />
+        <h:InverseBoolConverter x:Key="Not" />
+    </Window.Resources>
+    <DockPanel Margin="16" Background="{StaticResource WindowBg}">
+        <StackPanel DockPanel.Dock="Top">
+            <TextBlock Text="Update server maps" Style="{StaticResource H1}" FontSize="22" />
+            <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,8"
+                       Text="The world server never reads the game's archives: it has its own extracted copy of every map in its data folder. Terrain (maps: ground heights, zones, water), collision (vmaps: what blocks movement and line of sight) and pathing (mmaps: where creatures can walk). After a map change these must be extracted again from your patched game and put into the server, or creatures walk on the old ground and see through new walls." />
+        </StackPanel>
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+            <Button DockPanel.Dock="Right" Content="Close" MinWidth="100" IsCancel="True" Click="Close_Click" />
+            <Button DockPanel.Dock="Left" Content="Server tools README" Command="{Binding OpenReadmeCommand}" Padding="10,4" />
+            <TextBlock />
+        </DockPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <Border Background="{StaticResource BadSoft}" CornerRadius="5" Padding="12,8" Margin="0,0,0,10" Visibility="{Binding ToolsMissing, Converter={StaticResource BoolVis}}">
+                    <TextBlock TextWrapping="Wrap" Text="The server tools (WoWDataTool\server with reextract.ps1 and swap_in.ps1) were not found. Set their folder in Settings, Maps and terrain. They need Python and the built extractors (see the server README)." />
+                </Border>
+
+                <!-- 1 -->
+                <Border Style="{StaticResource Card}" Margin="0,0,0,10">
+                    <StackPanel>
+                        <TextBlock Text="1. Your map changes" Style="{StaticResource H2}" FontSize="16" />
+                        <TextBlock Text="{Binding ChangedMaps}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                        <TextBlock Text="{Binding PatchStatus}" TextWrapping="Wrap" Margin="0,6,0,0">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{StaticResource Warn}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding PatchOk}" Value="True"><Setter Property="Foreground" Value="{StaticResource Good}" /></DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button Content="Build release patch (patch-3.MPQ)..." Command="{Binding BuildPatchCommand}" Margin="0,0,8,0" Padding="10,4" />
+                            <Button Content="Check again" Command="{Binding CheckPatchCommand}" Padding="10,4" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- 2 -->
+                <Border Style="{StaticResource Card}" Margin="0,0,0,10">
+                    <StackPanel>
+                        <TextBlock Text="2. Extract into the staging folder" Style="{StaticResource H2}" FontSize="16" />
+                        <TextBlock TextWrapping="Wrap" Margin="0,4,0,0" Foreground="{StaticResource TextMuted}"
+                                   Text="Runs the project's extractors (reextract.ps1) on your game folder. They write only into the staging folder and compare the result with the server's data, which is only read. You can do this while the server runs." />
+                        <Grid Margin="0,6,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="140" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                            <TextBlock Text="Server tools" Foreground="{StaticResource TextMuted}" />
+                            <TextBlock Grid.Column="1" Text="{Binding ToolsDir}" TextWrapping="Wrap" />
+                            <TextBlock Grid.Row="1" Text="Staging folder" Foreground="{StaticResource TextMuted}" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding StagingDir}" TextWrapping="Wrap" />
+                            <TextBlock Grid.Row="2" Text="Server data (read)" Foreground="{StaticResource TextMuted}" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding ServerDataDir}" TextWrapping="Wrap" />
+                            <TextBlock Grid.Row="3" Text="Maps" Foreground="{StaticResource TextMuted}" />
+                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding MapsArgument}" TextWrapping="Wrap" />
+                        </Grid>
+                        <WrapPanel Margin="0,8,0,0">
+                            <CheckBox Content="Terrain (maps, about 20 s)" IsChecked="{Binding StepMaps}" Margin="0,0,14,4" />
+                            <CheckBox Content="Collision (vmaps, about 1 min)" IsChecked="{Binding StepVmaps}" Margin="0,0,14,4" />
+                            <CheckBox Content="Pathing (mmaps, 1-3 min per tile)" IsChecked="{Binding StepMmaps}" Margin="0,0,14,4" />
+                        </WrapPanel>
+                        <TextBlock Text="{x:Static s:ServerTexts.MmapsCaveat}" TextWrapping="Wrap" Foreground="{StaticResource TextMuted}" FontSize="12" Margin="0,2,0,6" />
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="Extract into staging" Command="{Binding ExtractCommand}" IsEnabled="{Binding ToolsFound}" Style="{StaticResource PrimaryButton}" Padding="12,5" Margin="0,0,8,0" />
+                            <Button Content="Cancel" Command="{Binding CancelCommand}" Visibility="{Binding Busy, Converter={StaticResource BoolVis}}" Padding="10,4" Margin="0,0,8,0" />
+                            <Button Content="Open the staging folder" Command="{Binding OpenStagingCommand}" Padding="10,4" Margin="0,0,8,0" />
+                            <Button Content="Open the full report" Command="{Binding OpenReportCommand}" Padding="10,4" />
+                        </StackPanel>
+                        <ProgressBar Height="10" Margin="0,8,0,0" Value="{Binding Progress}" Maximum="100" Foreground="{StaticResource Accent}" />
+                        <TextBlock Text="{Binding ProgressText}" TextTrimming="CharacterEllipsis" Margin="0,4,0,0" />
+                        <ItemsControl ItemsSource="{Binding ReportLines}" Margin="0,6,0,0" Visibility="{Binding HasReport, Converter={StaticResource BoolVis}}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <DockPanel Margin="0,1">
+                                        <TextBlock DockPanel.Dock="Left" Text="&#x2022;" Margin="2,0,8,0" />
+                                        <TextBlock Text="{Binding}" TextWrapping="Wrap" />
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Text="{Binding ReportNote}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,4,0,0" Visibility="{Binding ReportNote, Converter={StaticResource NullVis}}" />
+                        <Expander Header="Log" Margin="0,6,0,0">
+                            <TextBox Text="{Binding LogText, Mode=OneWay}" IsReadOnly="True" FontFamily="Consolas" FontSize="11" Height="200" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap" />
+                        </Expander>
+                    </StackPanel>
+                </Border>
+
+                <!-- 3 -->
+                <Border Style="{StaticResource Card}" Margin="0,0,0,10">
+                    <StackPanel>
+                        <TextBlock Text="3. Install into the server" Style="{StaticResource H2}" FontSize="16" />
+                        <TextBlock Text="{Binding ServerStatus}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,4,0,0">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{StaticResource Good}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ServerRunning}" Value="True"><Setter Property="Foreground" Value="{StaticResource Warn}" /></DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <TextBlock Text="{x:Static s:ServerTexts.StopHowTo}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                        <TextBlock TextWrapping="Wrap" Margin="0,4,0,0" Foreground="{StaticResource TextMuted}"
+                                   Text="The install (swap_in.ps1) copies only the files that differ from the server's data, after a verified backup of every file it replaces. It refuses to run while the world server runs. Start the server again afterwards (Server\Start mangosd 16bit.bat)." />
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button Content="Check again" Command="{Binding CheckServerNowCommand}" Padding="10,4" Margin="0,0,8,0" />
+                            <Button Content="Show what would change" Command="{Binding DryRunCommand}" IsEnabled="{Binding ToolsFound}" Padding="10,4" Margin="0,0,8,0"
+                                    ToolTip="A dry run: lists what the install would replace, add or remove. Allowed while the server runs; nothing is written." />
+                            <Button Content="Install into the server" Command="{Binding InstallCommand}" IsEnabled="{Binding ToolsFound}" Style="{StaticResource PrimaryButton}" Padding="12,5" Margin="0,0,8,0" />
+                            <Button Content="Open the backup folder" Command="{Binding OpenBackupCommand}" Padding="10,4" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding InstallResult}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,6,0,0" Visibility="{Binding InstallResult, Converter={StaticResource NullVis}}" />
+                        <TextBlock TextWrapping="Wrap" Margin="0,4,0,0" Foreground="{StaticResource TextMuted}"><Run Text="Backups go to " /><Run Text="{Binding BackupDir, Mode=OneWay}" /></TextBlock>
+                    </StackPanel>
+                </Border>
+
+                <!-- 4 -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="Undo" Style="{StaticResource H2}" FontSize="16" />
+                        <TextBlock Text="{Binding UndoText}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                        <Button Content="Undo server update" Command="{Binding UndoCommand}" IsEnabled="{Binding CanUndo}" HorizontalAlignment="Left" Padding="10,4" Margin="0,8,0,0"
+                                ToolTip="Puts the replaced server files back from the backup and removes the ones the update added (swap_in.ps1 -Restore). Needs the world server stopped." />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

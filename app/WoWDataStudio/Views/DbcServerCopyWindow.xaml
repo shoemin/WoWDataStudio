@@ -1,0 +1,44 @@
+<Window x:Class="WoWDataStudio.Views.DbcServerCopyWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:s="clr-namespace:WoWDataStudio.Services"
+        s:Manual.Topic="dbc-editor"
+        Style="{StaticResource AppWindow}"
+        Title="Copy tables to the server" Width="900" Height="640" MinWidth="640" MinHeight="420" WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="18">
+        <TextBlock DockPanel.Dock="Top" Text="Copy tables to the server" Style="{StaticResource H1}" FontSize="20" />
+        <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Margin="0,6,0,8"
+                   Text="The world server (mangosd) reads 46 tables from its own dbc folder when it starts. When you change one of them, the server needs your version too, or the game and the server disagree (a flight route, a talent, a creature's size...). Tables the server takes from its database (Spell, Map, AreaTable, Faction, FactionTemplate, TaxiNodes, SkillLineAbility...) are never copied: edit those in the server's database." />
+        <Border DockPanel.Dock="Top" Background="{StaticResource AccentSoft}" CornerRadius="5" Padding="10,6" Margin="0,0,0,8">
+            <StackPanel>
+                <TextBlock TextWrapping="Wrap"><Run Text="Server dbc folder: " FontWeight="SemiBold" /><Run x:Name="FolderRun" /></TextBlock>
+                <TextBlock x:Name="ServerState" TextWrapping="Wrap" Margin="0,2,0,0" />
+                <TextBlock Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0"
+                           Text="Every file that is replaced is backed up first (in the app's backup folder). Stop the world server before copying, and start it again afterwards so it reads the new files. The server data folder is set in Settings > Maps and terrain." />
+            </StackPanel>
+        </Border>
+        <StackPanel DockPanel.Dock="Bottom">
+            <TextBlock x:Name="ResultText" TextWrapping="Wrap" Margin="0,8,0,0" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+                <Button x:Name="UndoButton" Content="Undo last copy to server" MinWidth="170" Margin="0,0,8,0" Click="Undo_Click"
+                        ToolTip="Put the server's previous files back (also refused while the world server runs)." />
+                <Button Content="Close" IsCancel="True" MinWidth="100" Margin="0,0,8,0" />
+                <Button x:Name="CopyButton" Content="Copy to server" Style="{StaticResource PrimaryButton}" MinWidth="150" Click="Copy_Click" />
+            </StackPanel>
+        </StackPanel>
+        <Border Style="{StaticResource Card}" Padding="0">
+            <ListView x:Name="ItemList" BorderThickness="0">
+                <ListView.View>
+                    <GridView>
+                        <GridViewColumn Header="Table" Width="200" DisplayMemberBinding="{Binding Table}" />
+                        <GridViewColumn Header="What happens" Width="620">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate><TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" /></DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+                    </GridView>
+                </ListView.View>
+            </ListView>
+        </Border>
+    </DockPanel>
+</Window>

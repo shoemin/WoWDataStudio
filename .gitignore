@@ -1,0 +1,24 @@
+# build outputs
+bin/
+obj/
+.vs/
+*.user
+/app/publish/
+/dist/
+/build/
+/server/build/
+/server/bin/
+# caches, scratch, generated test data
+/cache/
+/work/
+/staging/
+/tests/ingame/results/
+/tests/ingame/IngameRunner/bin/
+/tests/ingame/IngameRunner/obj/
+/server/baseline/
+/server/verify/
+__pycache__/
+*.pyc
+*.sqlite
+TestResults/
+/app/.testcache/

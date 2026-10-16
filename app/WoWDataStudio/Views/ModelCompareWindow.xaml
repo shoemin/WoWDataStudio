@@ -1,0 +1,40 @@
+<Window x:Class="WoWDataStudio.Views.ModelCompareWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:v="clr-namespace:WoWDataStudio.Views"
+        xmlns:s="clr-namespace:WoWDataStudio.Services"
+        s:Manual.Topic="model-viewer"
+        Title="{Binding Title}" Width="1180" Height="760" Style="{StaticResource AppWindow}" WindowStartupLocation="CenterOwner">
+    <Window.Resources>
+        <h:BoolToCollapsedConverter x:Key="CompareBoolVis" xmlns:h="clr-namespace:WoWDataStudio.Helpers" />
+    </Window.Resources>
+    <DockPanel Margin="12">
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <TextBlock Text="{Binding Title}" Style="{StaticResource H2}" />
+            <TextBlock Style="{StaticResource Muted}" Text="{Binding Subtitle}" TextWrapping="Wrap" />
+        </StackPanel>
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+            <Button DockPanel.Dock="Right" Content="Close" Padding="16,5" IsCancel="True" Click="Close_Click" />
+            <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0" Visibility="{Binding HasSequences, Converter={StaticResource CompareBoolVis}}">
+                <TextBlock Text="Animation" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{StaticResource TextMuted}" />
+                <ComboBox DockPanel.Dock="Left" ItemsSource="{Binding Sequences}" SelectedItem="{Binding SelectedSequence}" Width="300" MaxDropDownHeight="420"
+                          ToolTip="Play this animation on both sides (a new animation of your edit plays on the right only)." />
+                <TextBlock DockPanel.Dock="Right" Text="{Binding TimeText}" Width="100" TextAlignment="Right" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}" />
+                <Slider Minimum="0" Maximum="{Binding DurationMs}" Value="{Binding TimeMs}" VerticalAlignment="Center" Margin="12,0,0,0" IsMoveToPointEnabled="True"
+                        ToolTip="Drag to scrub both sides (pauses)." />
+            </DockPanel>
+            <StackPanel Orientation="Horizontal">
+                <RadioButton Style="{StaticResource Segment}" Content="Side by side" GroupName="mode" IsChecked="{Binding IsSideBySide, Mode=OneWay}" Click="SideBySide_Click" />
+                <RadioButton Style="{StaticResource Segment}" Content="Toggle" GroupName="mode" IsChecked="{Binding IsToggle, Mode=OneWay}" Click="ToggleMode_Click" />
+                <Button Content="{Binding ToggleText}" Command="{Binding ToggleCommand}" Margin="10,0,0,0" Padding="10,4" ToolTip="Switch between the two (toggle mode)." />
+                <CheckBox Content="Same animation on both" IsChecked="{Binding SyncAnimation}" Margin="14,0,0,0" VerticalAlignment="Center"
+                          ToolTip="The right view plays the animation of the left view at the same time." />
+                <CheckBox Content="Play" IsChecked="{Binding Playing}" Margin="14,0,0,0" VerticalAlignment="Center" />
+                <Button Content="Reset view" Command="{Binding ResetViewCommand}" Margin="14,0,0,0" Padding="10,4" />
+                <Button x:Name="FullScreenButton" Content="Full screen (F11)" Click="FullScreen_Click" Margin="14,0,0,0" Padding="10,4"
+                        ToolTip="Use the whole screen for the two 3D views (F11; Esc leaves full screen). The window can also be maximized or moved to another monitor." />
+            </StackPanel>
+        </DockPanel>
+        <v:ModelCompareView x:Name="Compare" />
+    </DockPanel>
+</Window>

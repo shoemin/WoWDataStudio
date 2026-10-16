@@ -1,0 +1,2940 @@
+# WoW Data Studio: the DBC layouts of the World of Warcraft 1.12.1 client (build 5875).
+#
+# One [Table] section per DBFilesClient\<Table>.dbc. The keys of a section:
+#   category:     where the table is listed in the editor
+#   about:        what the table controls in the game, in plain words
+#   server:       client            only the game reads it
+#                 file              the world server (VMaNGOS mangosd) reads its own copy (Server\data\5875\dbc)
+#                 db <table>        the server reads the same data from that SQL table instead (edit it there)
+#   server-note:  extra advice about the server
+#   label:        the column that names a row in links (default: the first named text column)
+#   evidence:     where the layout comes from
+# Then one line per column, in file order:
+#   Name[N]  [storage] [semantic] [-> LinkedTable] [=> server thing] [| hint]
+#   storage:  int  uint  float  string  loc (8 languages + a flags field = 9 fields)  byte  ushort
+#   semantic: id  bool  enum(Name)  flags(Name)  flags  icon  texture  model  path
+#   Name[3] makes Name1, Name2, Name3. A "~" before the name: the meaning is a best guess (shown as not verified).
+#   col_N: an unknown column, shown as stored.
+#
+# Evidence used for every table (see docs\ARCHITECTURE.md, "DBC editor"):
+#   * the client itself: the record reader of each table in our decompile of WoW.exe (WoWDecomp\work\out66: the
+#     <Table>Rec__Read functions and the <Table>Rec structs) gives the number of fields, the record size, which fields
+#     are strings (the reader adds the string block's address to them), the 1- and 2-byte fields and many field names
+#     with the client code that reads them;
+#   * the server: the format strings and structures of the VMaNGOS DBC loader (read for facts only, no code taken)
+#     give the types (f = decimal number) and names of the columns the server reads; the enum names below follow the
+#     server's constant names;
+#   * the files: every layout is checked against the 1.12.1 file (fields, record size, string offsets, value ranges);
+#     the tests repeat these checks for all 154 tables.
+#
+# A column counts as verified (named) when the client code reads it, or the server reads it, or its public 1.12 name is
+# confirmed by the file (its links resolve, its values fit the meaning). Otherwise it is "~Name" (a best guess) or col_N.
+
+# ---------------------------------------------------------------------------------------------- named values
+
+@enum Bool
+  0 = No
+  1 = Yes
+
+@enum EmoteType
+  0 = Once (an animation)
+  1 = State (looping)
+  2 = Stand state
+
+@enum Gender
+  0 = Male
+  1 = Female
+
+@enum Race
+  0 = None
+  1 = Human
+  2 = Orc
+  3 = Dwarf
+  4 = Night Elf
+  5 = Undead
+  6 = Tauren
+  7 = Gnome
+  8 = Troll
+  9 = Goblin
+
+@flags RaceMask
+  0x1 = Human
+  0x2 = Orc
+  0x4 = Dwarf
+  0x8 = Night Elf
+  0x10 = Undead
+  0x20 = Tauren
+  0x40 = Gnome
+  0x80 = Troll
+  0x100 = Goblin
+
+@enum Class
+  0 = None
+  1 = Warrior
+  2 = Paladin
+  3 = Hunter
+  4 = Rogue
+  5 = Priest
+  7 = Shaman
+  8 = Mage
+  9 = Warlock
+  11 = Druid
+
+@flags ClassMask
+  0x1 = Warrior
+  0x2 = Paladin
+  0x4 = Hunter
+  0x8 = Rogue
+  0x10 = Priest
+  0x40 = Shaman
+  0x80 = Mage
+  0x100 = Warlock
+  0x400 = Druid
+
+@enum SpellSchool
+  0 = Physical
+  1 = Holy
+  2 = Fire
+  3 = Nature
+  4 = Frost
+  5 = Shadow
+  6 = Arcane
+
+@enum PowerType
+  -2 = Health
+  0 = Mana
+  1 = Rage
+  2 = Focus
+  3 = Energy
+  4 = Happiness
+
+@enum InstanceType
+  0 = Open world
+  1 = Dungeon
+  2 = Raid
+  3 = Battleground
+
+@enum CharSection
+  0 = Skin
+  1 = Face
+  2 = Facial hair
+  3 = Hair
+  4 = Underwear
+
+@enum InventoryType
+  -1 = None
+  0 = Not equipped
+  1 = Head
+  2 = Neck
+  3 = Shoulders
+  4 = Shirt
+  5 = Chest
+  6 = Waist
+  7 = Legs
+  8 = Feet
+  9 = Wrists
+  10 = Hands
+  11 = Finger
+  12 = Trinket
+  13 = One-hand weapon
+  14 = Shield
+  15 = Ranged (bow)
+  16 = Back
+  17 = Two-hand weapon
+  18 = Bag
+  19 = Tabard
+  20 = Robe
+  21 = Main hand
+  22 = Off hand
+  23 = Held in off hand
+  24 = Ammo
+  25 = Thrown
+  26 = Ranged (gun, wand)
+  27 = Quiver
+  28 = Relic
+
+@enum ItemClass
+  -1 = None
+  0 = Consumable
+  1 = Container
+  2 = Weapon
+  3 = Jewel
+  4 = Armor
+  5 = Reagent
+  6 = Projectile
+  7 = Trade goods
+  8 = Generic
+  9 = Recipe
+  10 = Money
+  11 = Quiver
+  12 = Quest
+  13 = Key
+  14 = Permanent
+  15 = Junk
+
+@enum EnchantmentType
+  0 = None
+  1 = Spell on hit (chance)
+  2 = Damage
+  3 = Spell while equipped
+  4 = Resistance
+  5 = Stat
+  6 = Totem
+
+@enum LockKeyType
+  0 = None
+  1 = Item (a key)
+  2 = Lock type (needs a skill)
+
+@flags FactionMask
+  0x1 = Player
+  0x2 = Alliance
+  0x4 = Horde
+  0x8 = Monster
+
+@flags FactionTemplateFlags
+  0x1 = Responds to calls for help
+  0x2 = Broadcasts to enemies (low)
+  0x4 = Broadcasts to enemies (medium)
+  0x8 = Broadcasts to enemies (high)
+  0x10 = Searches for enemies (low)
+  0x20 = Searches for enemies (medium)
+  0x40 = Searches for enemies (high)
+  0x80 = Searches for friends (low)
+  0x100 = Searches for friends (medium)
+  0x200 = Searches for friends (high)
+  0x400 = Flees from calls for help
+  0x800 = Assists players (PvP flagged)
+  0x1000 = Attacks PvP-active players
+
+@flags ReputationFlags
+  0x1 = Visible
+  0x2 = At war
+  0x4 = Hidden
+  0x8 = Invisible (forced)
+  0x10 = Peace (forced)
+
+@flags AreaFlags
+  0x1 = Snow
+  0x2 = Unknown (0x2)
+  0x4 = Development map
+  0x8 = Slave capital
+  0x10 = Unknown (0x10)
+  0x20 = Slave capital (2)
+  0x40 = Duels allowed
+  0x80 = Arena
+  0x100 = Capital city
+  0x200 = City
+
+@flags AreaTeam
+  0x2 = Alliance
+  0x4 = Horde
+
+@enum LearnOnGetSkill
+  0 = No
+  1 = When the profession is learned
+  2 = When the race or class skill is learned
+
+@flags SkillRaceClassFlags
+  0x1 = Listed even at value 0
+  0x2 = No skill-up message
+  0x10 = Always at the maximum value
+  0x20 = Can be unlearned
+  0x80 = Sorted in the spell book
+  0x100 = Not trainable
+  0x400 = Shows only one value
+
+
+@enum TaxiNodeFlag
+  0 = Normal
+  1 = Teleport (map change)
+  2 = Stop (wait here)
+
+
+
+# ---------------------------------------------------------------------------------------------- tables
+
+[AnimationData]
+category: Creatures and models
+about: The animations every model can play (Stand, Walk, Attack1H, SpellCast...): their names and what replaces an animation a model does not have.
+server: client
+evidence: client AnimationDataRec__Read @5738f0; 7 fields / 28 bytes per row; names of columns 2-4 from public 1.12 documentation; columns 5 and 6 from M2Model_ResolvePlayableAnimation @00711bf0 (it reads the record's +0x14 as flags 0x10 / 0x20 and follows +0x18 as the next animation), checked on all 9,691 client models: the playable-animation table of 9,647 of them is exactly what that code computes (0.10.0)
+ID                 id
+Name               string                     | The animation's name (Stand, Walk, Run, Attack1H, SpellCastDirected...). Models refer to animations by ID.
+~WeaponFlags       flags                      | How the animation uses weapons (sheathed / unsheathed / pulled).
+~BodyFlags         flags                      | Which part of the body plays the animation.
+~Priority          uint                       | Not read by the client's model animation code (values 0-500).
+Flags              flags                      | 0x10: the fallback is played backwards (Walkbackwards = Walk backwards); 0x20: the fallback is held on its last frame (Dead = Death held).
+Fallback           uint -> AnimationData      | The animation played instead when a model does not have this one (followed until the model has one).
+
+[AreaPOI]
+category: World and maps
+about: Points of interest drawn on the world map (cities, battleground flags, towers) with their icon, name and description.
+server: client
+evidence: client AreaPOIRec__Read @573ae0; 29 fields / 116 bytes per row; column names from public 1.12 documentation, value ranges checked on the file
+ID                 id
+~Importance        uint                       | Which point wins when two overlap (higher = more important).
+~Icon              uint                       | The icon drawn on the map (an index into the POI icon texture).
+~FactionID         uint -> FactionTemplate
+~X                 float
+~Y                 float
+~Z                 float
+~ContinentID       uint -> Map                | The map the point is on.
+~Flags             flags
+~AreaID            int -> AreaTable           | The zone the point belongs to (-1 none).
+Name               loc                        | The name shown on the map.
+Description        loc                        | The text of the tooltip.
+~WorldStateID      uint                       | A world state that changes the icon (battleground flags and towers).
+
+[AreaTable]
+category: World and maps
+about: Every zone and subzone: its name, map, parent zone, music, ambient sounds, exploration bit and PvP faction. The game shows the name when you enter it; maps store these IDs per terrain chunk.
+server: db area_template
+server-note: The map extractor of the server tools also reads AreaTable.dbc from the game's archives to make the server's terrain files: after changing it, build the release patch and run "Update server maps".
+label: AreaName
+evidence: client AreaTableRec__Read @574070 (fields 1, 2, 4-9, 12 and 13-16 read by named client functions: WorldMap_GetUnitMapPosition, World_ApplyAreaChange, Script_GetZonePVPInfo, AreaTable_GetLiquidTypeRec); VMaNGOS format "niiiixxxxxissssssssxixxxi"; 25 fields / 100 bytes per row
+ID                 id
+MapID              uint -> Map                | The map (continent or instance) the area is on.
+ParentAreaID       uint -> AreaTable          | For a subzone: the zone it belongs to (0 = it is a zone itself).
+AreaBit            uint                       | The exploration bit: which bit of the explored-areas mask this area sets (unique).
+Flags              flags(AreaFlags)
+SoundProviderPref  uint -> SoundProviderPreferences | Sound reverb preset outside water.
+SoundProviderPrefUnderwater uint -> SoundProviderPreferences | Sound reverb preset under water.
+AmbienceID         uint -> SoundAmbience      | Ambient sounds (day / night) of the area.
+ZoneMusic          uint -> ZoneMusic          | The music played in the area.
+IntroSound         uint -> ZoneIntroMusicTable | The short music played when you enter the area.
+ExplorationLevel   int                        | The level used for the exploration experience (-1 none).
+AreaName           loc                        | The name shown when you enter the area and on the map.
+FactionGroupMask   flags(AreaTeam)            | Which side owns the area for PvP: 2 Alliance, 4 Horde, 0 contested.
+LiquidType[4]      uint -> LiquidType         | Liquid type used instead of water, ocean, magma and slime in this area (0 = the normal one).
+
+[AreaTrigger]
+category: World and maps
+about: Invisible trigger spheres and boxes in the world: instance portals, tavern (rest) areas, quest exploration points. The scripts that run are on the server.
+server: db areatrigger_template
+evidence: client AreaTriggerRec__Read @574480; VMaNGOS format "niffffffff"; 10 fields / 40 bytes per row
+ID                 id
+MapID              uint -> Map
+X                  float
+Y                  float
+Z                  float
+Radius             float                      | Radius of a sphere trigger (yards); 0 when the trigger is a box.
+BoxLength          float
+BoxWidth           float
+BoxHeight          float
+BoxYaw             float                      | Rotation of the box around the vertical axis (radians).
+
+[AttackAnimKits]
+category: Creatures and models
+about: Which attack animation is played for each kind of weapon and hand.
+server: client
+evidence: client AttackAnimKitsRec__Read @574690; 5 fields / 20 bytes per row; column names from public 1.12 documentation, value ranges checked on the file
+ID                 id
+~ItemSubclassID    uint                       | The weapon subclass.
+~AnimTypeID        uint -> AttackAnimTypes
+~AnimFrequency     uint
+~WhichHand         uint                       | 0 main hand, 1 off hand.
+
+[AttackAnimTypes]
+category: Creatures and models
+about: The kinds of attack animation (one-hand, two-hand, bow...).
+server: client
+evidence: client AttackAnimTypesRec__Read @574800; 2 fields / 8 bytes per row
+ID                 id
+Name               string
+
+[AuctionHouse]
+category: Items
+about: The auction houses: which faction runs them, the deposit and the auction house's cut.
+server: file
+evidence: client AuctionHouseRec__Read @574920; VMaNGOS format "niiixxxxxxxxx"; 13 fields / 52 bytes per row
+ID                 id
+FactionID          uint -> Faction            | The faction that runs the auction house.
+DepositRate        uint                       | Deposit, in percent of the item's sell price.
+ConsignmentRate    uint                       | The auction house's cut of the sale, in percent.
+Name               loc
+
+[BankBagSlotPrices]
+category: Items
+about: The price of each extra bank bag slot (in copper).
+server: file
+evidence: client BankBagSlotPricesRec__Read @574c00; VMaNGOS format "ni"; 2 fields / 8 bytes per row
+ID                 id                         | The slot number.
+Cost               uint                       | Price in copper (100 copper = 1 silver).
+
+[CameraShakes]
+category: Spells
+about: Camera shakes (earthquakes, explosions) that spell effects can start.
+server: client
+evidence: client CameraShakesRec__Read @574d00; 8 fields / 32 bytes per row; column names from public 1.12 documentation, value ranges checked on the file
+ID                 id
+~ShakeType         uint                       | 0 sine, 1 sawtooth...
+~Direction         uint                       | 0 X, 1 Y, 2 Z.
+~Amplitude         float
+~Frequency         float
+~Duration          float                      | Seconds.
+~Phase             float
+~Coefficient       float
+
+[Cfg_Categories]
+category: Interface and text
+about: The realm categories (regions / languages) of the realm list.
+server: client
+evidence: client Cfg_CategoriesRec__Read @574ed0; 11 fields / 44 bytes per row
+col_0              uint                       | Unknown (1-5, not unique).
+col_1              uint                       | Unknown (realm category number).
+Name               loc
+
+[Cfg_Configs]
+category: Interface and text
+about: The realm types of the realm list (Normal, PvP, RP, RP-PvP).
+server: client
+evidence: client Cfg_ConfigsRec__Read @575170; 4 fields / 16 bytes per row; column names from public 1.12 documentation
+ID                 id
+~RealmType         uint
+~PlayerKillingAllowed uint enum(Bool)
+~Roleplaying       uint enum(Bool)
+
+[CharacterFacialHairStyles]
+category: Characters
+about: The beards, sideburns and other facial hair of each race and sex: which model geosets each style shows.
+server: file
+evidence: client CharacterFacialHairStylesRec__Read @575a80 (fields 6-8 used by CCharacterComponent_SetFacialHair @00478660 as geosets +100 / +300 / +200); VMaNGOS format "iiixxxxxx"; 9 fields / 36 bytes per row. Fields 3-5 hold uninitialized bytes (0xCCCCCCCC) in Blizzard's file.
+Race               uint enum(Race)
+Gender             uint enum(Gender)
+VariationID        uint                       | The facial hair style number (as chosen at character creation).
+col_3              int                        | Not used by the game (Blizzard's file holds left-over bytes here).
+col_4              int                        | Not used by the game.
+col_5              int                        | Not used by the game.
+Geoset100          uint                       | Geoset of group 1 (shown as 100 + value): beard.
+Geoset300          uint                       | Geoset of group 3 (300 + value): sideburns.
+Geoset200          uint                       | Geoset of group 2 (200 + value): moustache.
+
+[CharBaseInfo]
+category: Characters
+about: Which classes each race can be (one row per allowed race and class).
+server: client
+evidence: client CharBaseInfoRec__Read @5752b0 (two 1-byte fields); 2 fields / 2 bytes per row
+Race               byte enum(Race)
+Class              byte enum(Class)
+
+[CharHairGeosets]
+category: Characters
+about: The hair styles of each race and sex: which hair geoset each style shows, and whether the scalp texture shows.
+server: client
+evidence: client CharHairGeosetsRec__Read @5753b0 (read by GetHairGeoset @478540); 6 fields / 24 bytes per row
+ID                 id
+Race               uint enum(Race)
+Gender             uint enum(Gender)
+VariationID        uint                       | The hair style number.
+GeosetID           uint                       | The hair geoset of the model (0 = no hair).
+Showscalp          uint enum(Bool)            | 1: the scalp texture is drawn under the hair.
+
+[CharHairTextures]
+category: Characters
+about: Hair texture settings per race and sex (not read by the 1.12 client).
+server: client
+evidence: no record reader in WoW.exe (the 1.12 client does not load this file); 8 fields / 32 bytes per row
+ID                 id
+~Race              uint enum(Race)
+~Gender            uint enum(Gender)
+col_3              uint
+col_4              uint
+col_5              int
+col_6              int
+col_7              int
+
+[CharSections]
+category: Characters
+about: The skin colours, faces, facial hair colours, hair colours and underwear of each race and sex: the texture files the character uses.
+server: file
+label: Texture1
+evidence: client CharSectionsRec__Read @575540; VMaNGOS format "diiiiixxxi"; 10 fields / 40 bytes per row
+ID                 id
+Race               uint enum(Race)
+Gender             uint enum(Gender)
+BaseSection        uint enum(CharSection)     | 0 skin, 1 face, 2 facial hair, 3 hair, 4 underwear.
+VariationIndex     uint                       | The variation inside the section (face number, hair style...).
+ColorIndex         uint                       | The colour number inside the variation.
+Texture[3]         texture                    | Up to three texture files (skin: body and extra; face: lower and upper; hair: scalp).
+Flags              flags                      | 1: listed after the regular colours of its variation.
+
+[CharStartOutfit]
+category: Characters
+about: The items a new character starts with, per race, class and sex (also shown on the character-creation screen).
+server: client
+server-note: The items a new character really gets are given by the server (its playercreateinfo_item table).
+evidence: client CharStartOutfitRec__Read @575790 (four 1-byte fields, then three arrays of 12; CharCreate_ApplyStartOutfit @470800 matches race, class and sex and dresses the model with the display IDs and inventory types); 41 fields / 152 bytes per row
+ID                 id
+Race               byte enum(Race)
+Class              byte enum(Class)
+Gender             byte enum(Gender)
+~OutfitID          byte                       | Always 0 in 1.12.
+ItemID[12]         int => item                | The server's item entries (item_template), -1 = none.
+DisplayItemID[12]  int -> ItemDisplayInfo     | The look of each item on the character-creation screen.
+InventoryType[12]  int enum(InventoryType)    | The slot of each item.
+
+[CharVariations]
+category: Characters
+about: Texture layer settings per race and sex.
+server: client
+evidence: client CharVariationsRec__Read @575960; 6 fields / 24 bytes per row
+~Race              uint enum(Race)
+~Gender            uint enum(Gender)
+col_2              uint
+col_3              uint
+col_4              uint
+col_5              uint
+
+[ChatChannels]
+category: Interface and text
+about: The built-in chat channels (General, Trade, LocalDefense, LookingForGroup...) and their names.
+server: file
+label: Shortcut
+evidence: client ChatChannelsRec__Read @575c30; VMaNGOS format "nixssssssssxxxxxxxxxx"; 21 fields / 84 bytes per row
+ID                 id
+Flags              flags
+~FactionGroup      uint
+Name               loc                        | The channel's full name; %s is replaced by the zone name ("General - %s").
+Shortcut           loc                        | The short name.
+
+[ChatProfanity]
+category: Interface and text
+about: The words the profanity filter replaces in chat.
+server: client
+evidence: client ChatProfanityRec__Read @576080; 2 fields / 8 bytes per row
+ID                 id
+Text               string                     | A word or pattern.
+
+[ChrClasses]
+category: Characters
+about: The classes: their name, power type (mana, rage, energy) and spell family.
+server: file
+label: Name
+evidence: client ChrClassesRec__Read @5761a0; VMaNGOS format "nxxixssssssssxxi"; 17 fields / 68 bytes per row
+ID                 id
+~PlayerClass       uint                       | Always 1 (meaning not verified).
+DamageBonusStat    uint                       | 1 for Hunter and Rogue (their melee attack power comes from agility), else 0.
+DisplayPower       uint enum(PowerType)       | The power bar the class shows.
+PetNameToken       string                     | The pet name token (for hunters and warlocks).
+Name               loc
+Filename           string                     | The class's internal name (WARRIOR, MAGE...), used by the interface.
+SpellClassSet      uint                       | The spell family of the class's spells (Spell.SpellFamilyName).
+Flags              flags                      | 1: has a relic slot.
+
+[ChrRaces]
+category: Characters
+about: The playable (and some non-playable) races: their models, faction, language, starting flight points, the effects on login and resurrection, and the names of their customization options.
+server: file
+label: Name
+evidence: client ChrRacesRec__Read @576520; VMaNGOS format "niixiixxiiiiixixissssssssxxxx"; the wowdata Python layout; 29 fields / 116 bytes per row
+ID                 id
+Flags              flags                      | 0x2: no foot textures (bare feet), and more.
+FactionID          uint -> FactionTemplate    | The faction of the race's characters.
+ExplorationSoundID uint -> SoundEntries       | The sound played when the character discovers a new area.
+MaleDisplayID      uint -> CreatureDisplayInfo | The model of a male character.
+FemaleDisplayID    uint -> CreatureDisplayInfo | The model of a female character.
+ClientPrefix       string                     | Short race prefix used in file names (Hu, Or, Dw...).
+MountScale         float                      | Scale of the race on a mount.
+BaseLanguage       uint -> Languages          | 7 Common (Alliance), 1 Orcish (Horde).
+CreatureType       uint -> CreatureType       | Always 7 (humanoid).
+LoginEffectSpellID uint -> Spell
+CombatStunSpellID  uint -> Spell
+ResSicknessSpellID uint -> Spell              | The resurrection sickness spell.
+SplashSoundID      uint -> SoundEntries       | The sound of the character falling into water.
+StartingTaxiNodes  flags                      | Flight points known from the start (bit n-1 = TaxiNodes ID n).
+ClientFileString   string                     | The race's folder name (Human, Orc, Scourge...).
+CinematicSequenceID uint -> CinematicSequences | The intro movie of a new character.
+Name               loc
+FacialHairCustomization[2] string             | Names of the facial hair option at character creation (male, female).
+HairCustomization  string                     | Name of the hair option at character creation.
+
+[CinematicCamera]
+category: Interface and text
+about: The camera paths of the intro movies.
+server: client
+evidence: client CinematicCameraRec__Read @576a80; 7 fields / 28 bytes per row
+ID                 id
+Model              model                      | The camera path model (Cameras\*.mdx).
+SoundID            uint -> SoundEntries       | The voice-over.
+OriginX            float
+OriginY            float
+OriginZ            float
+OriginFacing       float
+
+[CinematicSequences]
+category: Interface and text
+about: The intro movies of new characters: the voice-over and the cameras.
+server: file
+evidence: client CinematicSequencesRec__Read @576c50; VMaNGOS format "nxxxxxxxxx"; 10 fields / 40 bytes per row
+ID                 id
+SoundID            uint -> SoundEntries
+Camera[8]          uint -> CinematicCamera
+
+
+[CreatureDisplayInfo]
+category: Creatures and models
+about: The looks of creatures (and of player races): which model, which skin textures, the size, the transparency, the sounds and the blood. A creature in the server's creature_template has up to four display IDs from this table.
+server: file
+server-note: The display ID a creature uses is chosen in the server's database (creature_template.display_id1..4); this file gives the model and its size, which the server also uses for the creature's reach.
+label: TextureVariation1
+evidence: client CreatureDisplayInfoRec__Read @576fa0; VMaNGOS format "nixifxxxxxxx"; the wowdata Python layout (the index and the 3D viewer read it); 12 fields / 48 bytes per row
+ID                 id
+ModelID            uint -> CreatureModelData  | The model (.mdx) of the creature.
+SoundID            uint -> CreatureSoundData  | The creature's sounds (attack, wound, death...); 0 = the model's sounds.
+ExtendedDisplayInfoID uint -> CreatureDisplayInfoExtra | For a humanoid NPC with a character look (race, face, hair, equipment): its row; 0 = none.
+CreatureModelScale float                      | Size of the model (1 = normal).
+CreatureModelAlpha uint                       | Transparency, 0 (invisible) to 255 (opaque).
+TextureVariation[3] texture                   | The skin texture names (without path or .blp; they are next to the model).
+SizeClass          int                        | Size class (-1 = the model's).
+BloodID            uint -> UnitBloodLevels
+NPCSoundID         uint -> NPCSounds          | The greetings and farewells of the NPC.
+
+[CreatureDisplayInfoExtra]
+category: Creatures and models
+about: The character looks of humanoid NPCs: race, sex, skin, face, hair, facial hair, the items they wear and the pre-baked texture of their body.
+server: file
+label: BakeName
+evidence: client CreatureDisplayInfoExtraRec__Read @576d70; VMaNGOS format "nixxxxxxxxxxxxxxxxx"; the wowdata Python layout (equipment order from public 1.12 documentation; the 3D viewer's NPC looks read it); 19 fields / 76 bytes per row
+ID                 id
+DisplayRaceID      uint enum(Race)
+DisplaySexID       uint enum(Gender)
+SkinID             uint                       | Skin colour number (CharSections, section 0).
+FaceID             uint                       | Face number (section 1).
+HairStyleID        uint                       | Hair style number (CharHairGeosets).
+HairColorID        uint                       | Hair colour number (section 3).
+FacialHairID       uint                       | Facial hair style number (CharacterFacialHairStyles).
+ItemHead           uint -> ItemDisplayInfo
+ItemShoulder       uint -> ItemDisplayInfo
+ItemShirt          uint -> ItemDisplayInfo
+ItemChest          uint -> ItemDisplayInfo
+ItemBelt           uint -> ItemDisplayInfo
+ItemLegs           uint -> ItemDisplayInfo
+ItemBoots          uint -> ItemDisplayInfo
+ItemWrist          uint -> ItemDisplayInfo
+ItemGloves         uint -> ItemDisplayInfo
+ItemTabard         uint -> ItemDisplayInfo
+BakeName           texture                    | The pre-baked body texture (Textures\BakedNpcTextures\...). The game draws it instead of building the skin from the items.
+
+[CreatureFamily]
+category: Creatures and models
+about: The families of hunter pets (Wolf, Cat, Bear...): their size by level, their skill lines, what food they eat and their icon.
+server: file
+label: Name
+evidence: client CreatureFamilyRec__Read @577230; VMaNGOS format "nfifiiiissssssssxx"; 18 fields / 72 bytes per row
+ID                 id
+MinScale           float                      | Size of the pet at MinScaleLevel.
+MinScaleLevel      uint
+MaxScale           float                      | Size of the pet at MaxScaleLevel.
+MaxScaleLevel      uint
+SkillLine[2]       uint -> SkillLine          | The pet's skill lines (abilities).
+PetFoodMask        flags                      | The kinds of food the pet eats (bit n-1 = ItemPetFood ID n).
+Name               loc
+IconFile           icon                       | The family's icon.
+
+[CreatureModelData]
+category: Creatures and models
+about: The creature models (.mdx files): their size, collision box, footprints, blood and sounds. A creature display (CreatureDisplayInfo) points at one of them.
+server: file
+server-note: The server uses the model's scale and collision height, and the extractor of the server tools reads this file too.
+label: ModelName
+evidence: client CreatureModelDataRec__Read @5775a0 (floats at 4, 7-9, 14-15 read by client code); VMaNGOS format "nisxfxxxxxxxxxxf"; the wowdata Python layout; 16 fields / 64 bytes per row
+ID                 id
+Flags              flags
+ModelName          model                      | The model file (Creature\<Name>\<Name>.mdx).
+SizeClass          uint
+ModelScale         float                      | Size of the model (1 = as made).
+BloodID            int -> UnitBlood           | -1 = none.
+FootprintTextureID int -> FootprintTextures   | -1 = no footprints.
+FootprintTextureLength float
+FootprintTextureWidth float
+FootprintParticleScale float
+FoleyMaterialID    uint
+FootstepShakeSize  uint                       | Camera shake of footsteps (big creatures).
+DeathThudShakeSize uint                       | Camera shake when it falls dead.
+SoundID            uint -> CreatureSoundData
+CollisionWidth     float
+CollisionHeight    float
+
+[CreatureSoundData]
+category: Sounds and music
+about: The sounds of creature models: attack shouts, wounds, death, footsteps, wings, fidgets, pet commands.
+server: client
+evidence: client CreatureSoundDataRec__Read @5778a0 (arrays of 4 at 14 and 18); 30 fields / 120 bytes per row; column names from public 1.12 documentation, value ranges checked on the file
+ID                 id
+~SoundExertionID   uint -> SoundEntries
+~SoundExertionCriticalID uint -> SoundEntries
+~SoundInjuryID     uint -> SoundEntries
+~SoundInjuryCriticalID uint -> SoundEntries
+~SoundInjuryCrushingBlowID uint -> SoundEntries
+~SoundDeathID      uint -> SoundEntries
+~SoundStunID       uint -> SoundEntries
+~SoundStandID      uint -> SoundEntries
+~SoundFootstepID   uint                       | Footstep sound kind (FootstepTerrainLookup).
+~SoundAggroID      uint -> SoundEntries
+~SoundWingFlapID   uint -> SoundEntries
+~SoundWingGlideID  uint -> SoundEntries
+~SoundAlertID      uint -> SoundEntries
+~SoundFidget[4]    uint -> SoundEntries
+~CustomAttack[4]   uint -> SoundEntries
+~NPCSoundID        uint
+~LoopSoundID       uint -> SoundEntries
+~CreatureImpactType uint
+~SoundJumpStartID  uint
+~SoundJumpEndID    uint
+~SoundPetAttackID  uint -> SoundEntries
+~SoundPetOrderID   uint -> SoundEntries
+~SoundPetDismissID uint -> SoundEntries
+
+[CreatureSpellData]
+category: Creatures and models
+about: The spell bars of pets (the spells a hunter or warlock pet has).
+server: db pet_spell_data
+evidence: client CreatureSpellDataRec__Read @577c80; VMaNGOS format "niiiixxxx"; 9 fields / 36 bytes per row
+ID                 id
+Spells[4]          uint -> Spell
+Availability[4]    uint
+
+[CreatureType]
+category: Creatures and models
+about: The creature types (Beast, Dragonkin, Demon, Humanoid...) shown in tooltips and used by spells that only affect some types.
+server: file
+label: Name
+evidence: client CreatureTypeRec__Read @577da0; VMaNGOS format "nxxxxxxxxxx"; 11 fields / 44 bytes per row
+ID                 id
+Name               loc
+Flags              flags                      | 1: no experience for killing it (critters, totems).
+
+[DeathThudLookups]
+category: Sounds and music
+about: The sound of a body hitting the ground, by size and ground type.
+server: client
+evidence: client DeathThudLookupsRec__Read @578040 (DeathHudSoundInfo_InitArrays @6231a0 reads all four values); 5 fields / 20 bytes per row
+ID                 id
+SizeClass          uint
+TerrainTypeSoundID uint -> TerrainTypeSounds
+SoundEntryID       uint -> SoundEntries
+SoundEntryIDWater  uint -> SoundEntries
+
+[DurabilityCosts]
+category: Items
+about: The repair cost of items by item level and weapon / armour kind.
+server: file
+evidence: client DurabilityCostsRec__Read @5781b0; VMaNGOS format "niiiiiiiiiiiiiiiiiiiiiiiiiiiii"; 30 fields / 120 bytes per row
+ID                 id                         | The item level.
+WeaponSubClassCost[21] uint                   | Cost factor per weapon subclass (0 axe, 1 two-hand axe, 2 bow, ...).
+ArmorSubClassCost[8] uint                     | Cost factor per armour subclass (0 misc, 1 cloth, 2 leather, 3 mail, 4 plate, ...).
+
+[DurabilityQuality]
+category: Items
+about: The repair cost factor of each item quality.
+server: file
+evidence: client DurabilityQualityRec__Read @5782d0; VMaNGOS format "nf"; 2 fields / 8 bytes per row
+ID                 id
+Data               float                      | Cost multiplier.
+
+[Emotes]
+category: Interface and text
+about: The emotes (animations and sounds of /dance, /wave...): their animation, sound and how they are shown.
+server: file
+label: EmoteSlashCommand
+evidence: client EmotesRec__Read @5783d0; VMaNGOS format "nsxiiix"; 7 fields / 28 bytes per row
+ID                 id
+EmoteSlashCommand  string                     | The internal name (ONESHOT_WAVE...).
+AnimID             uint -> AnimationData      | The animation played.
+EmoteFlags         flags
+EmoteSpecProc      uint enum(EmoteType)       | How the emote is played (the server reads it too).
+EmoteSpecProcParam uint                       | The stand state (sit, sleep, kneel...) of a stand-state emote.
+EventSoundID       uint -> SoundEntries
+
+[EmotesText]
+category: Interface and text
+about: The chat emotes (/agree, /dance...): which emote they play and the texts shown (to you, to others, with or without a target).
+server: file
+label: Name
+evidence: client EmotesTextRec__Read @578990 (an array of 16 text IDs at 3); VMaNGOS format "nxixxxxxxxxxxxxxxxx"; 19 fields / 76 bytes per row
+ID                 id
+Name               string                     | The command (AGREE, DANCE...).
+EmoteID            uint -> Emotes             | The emote (animation) played.
+EmoteText[16]      uint -> EmotesTextData     | The texts (to me, to others, with a target, without, ...); 0 = none.
+
+[EmotesTextData]
+category: Interface and text
+about: The texts of the chat emotes ("You agree.", "%s agrees with %s.").
+server: client
+label: Text
+evidence: client EmotesTextDataRec__Read @5785a0; 10 fields / 40 bytes per row
+ID                 id
+Text               loc
+
+[EmotesTextSound]
+category: Sounds and music
+about: The voice sounds of chat emotes per race and sex.
+server: client
+evidence: client EmotesTextSoundRec__Read @578820; 5 fields / 20 bytes per row; column names from public 1.12 documentation, value ranges checked on the file
+ID                 id
+EmotesTextID       uint -> EmotesText
+RaceID             uint enum(Race)
+SexID              uint enum(Gender)
+SoundID            uint -> SoundEntries
+
+[EnvironmentalDamage]
+category: Spells
+about: The visual effects of environmental damage (fatigue, drowning, falling, lava, slime, fire).
+server: client
+evidence: client EnvironmentalDamageRec__Read @578b00 (CGUnit_C_StaticInitialize @6033c0 reads both values); 3 fields / 12 bytes per row
+ID                 id
+EnumID             uint                       | Damage kind: 0 fatigue, 1 drowning, 2 falling, 3 lava, 4 slime, 5 fire.
+VisualKitID        uint -> SpellVisualKit
+
+[Exhaustion]
+category: Characters
+about: The rest (rested experience) states: how fast rest builds up in the wild and at an inn, and their names.
+server: client
+label: Name
+evidence: client ExhaustionRec__Read @578c20; 15 fields / 60 bytes per row; column names from public 1.12 documentation, value ranges checked on the file
+ID                 id
+~Xp                int
+~Factor            float                      | Experience multiplier.
+~OutdoorHours      float
+~InnHours          float
+Name               loc
+~Threshold         float
+
+[Faction]
+category: Factions and reputation
+about: The factions (Stormwind, Darkspear Trolls, Argent Dawn...) with their reputation settings per race and class, their parent faction, name and description.
+server: db faction
+label: Name
+evidence: client FactionRec__Read @579210; VMaNGOS FactionEntry (the server reads it from its faction table); 37 fields / 148 bytes per row
+ID                 id
+ReputationIndex    int                        | Position in the reputation list (-1 = no reputation).
+ReputationRaceMask[4] flags(RaceMask)         | For which races the base reputation of the same position applies.
+ReputationClassMask[4] flags(ClassMask)
+ReputationBase[4]  int                        | Starting reputation (0 = neutral, 3000 = friendly, -42000 = hated...).
+ReputationFlags[4] flags(ReputationFlags)
+ParentFactionID    uint -> Faction            | The group the faction is listed under (Alliance, Horde, Steamwheedle Cartel...).
+Name               loc
+Description        loc
+
+[FactionGroup]
+category: Factions and reputation
+about: The faction groups used by faction templates (Player, Alliance, Horde, Monster).
+server: client
+evidence: client FactionGroupRec__Read @578f40; 12 fields / 48 bytes per row
+ID                 id
+MaskID             uint                       | The bit number of the group in the masks of FactionTemplate.
+InternalName       string
+Name               loc
+
+[FactionTemplate]
+category: Factions and reputation
+about: The faction of creatures and players: who they are friendly or hostile to. Creatures use a faction template ID (creature_template.faction).
+server: db faction_template
+evidence: client FactionTemplateRec__Read @579720; VMaNGOS FactionTemplateEntry (the server reads it from its faction_template table); 14 fields / 56 bytes per row
+ID                 id
+Faction            uint -> Faction            | The faction used for reputation.
+Flags              flags(FactionTemplateFlags)
+FactionGroup       flags(FactionMask)         | The groups this template belongs to.
+FriendGroup        flags(FactionMask)         | The groups it is friendly to.
+EnemyGroup         flags(FactionMask)         | The groups it is hostile to.
+Enemies[4]         uint -> Faction            | Factions it is always hostile to.
+Friend[4]          uint -> Faction            | Factions it is always friendly to.
+
+[FootprintTextures]
+category: Creatures and models
+about: The footprint textures creatures leave on the ground.
+server: client
+label: FootstepFilePath
+evidence: client FootprintTexturesRec__Read @5798f0; 2 fields / 8 bytes per row
+ID                 id
+FootstepFilePath   texture
+
+[FootstepTerrainLookup]
+category: Sounds and music
+about: Footstep sounds by creature kind and ground type.
+server: client
+evidence: client FootstepTerrainLookupRec__Read @579a10 (SoundMgr_BuildFootstepSoundCache reads all four values); 5 fields / 20 bytes per row
+ID                 id
+CreatureFootstepID uint                       | The footstep kind (CreatureSoundData.SoundFootstepID).
+TerrainSoundID     int -> TerrainTypeSounds
+SoundID            uint -> SoundEntries
+SoundIDSplash      uint -> SoundEntries       | The sound in shallow water.
+
+[GameObjectArtKit]
+category: World and maps
+about: Alternative textures and attached models of game objects (battleground banners in their states).
+server: client
+evidence: client GameObjectArtKitRec__Read @579b80; 8 fields / 32 bytes per row; column names from public 1.12 documentation
+ID                 id
+TextureVariation[3] texture
+AttachModel[4]     model
+
+[GameObjectDisplayInfo]
+category: World and maps
+about: The models of game objects (chests, doors, mailboxes, herbs...) and their sounds. A game object in the server's gameobject_template has a display ID from this table.
+server: file
+server-note: The collision of doors and other objects on the server comes from the extracted vmaps, which the server tools make from this file and the models.
+label: ModelName
+evidence: client GameObjectDisplayInfoRec__Read @579db0 (an array of 10 sound IDs at 2); VMaNGOS format "nsxxxxxxxxxx"; 12 fields / 48 bytes per row
+ID                 id
+ModelName          model                      | The model file (World\...\*.mdx).
+Sound[10]          uint -> SoundEntries       | Sounds of the object's actions (open, close, ...).
+
+[GameTips]
+category: Interface and text
+about: The tips shown on loading screens.
+server: client
+label: Text
+evidence: client GameTipsRec__Read @579f00; 10 fields / 40 bytes per row
+ID                 id
+Text               loc
+
+[GMSurveyCurrentSurvey]
+category: Interface and text
+about: Which GM survey is shown, per language.
+server: client
+evidence: client GMSurveyCurrentSurveyRec__Read @57a180; 2 fields / 8 bytes per row
+ID                 id
+GMSurveyID         uint -> GMSurveySurveys
+
+[GMSurveyQuestions]
+category: Interface and text
+about: The questions of the GM survey.
+server: client
+label: Question
+evidence: client GMSurveyQuestionsRec__Read @57a280; 10 fields / 40 bytes per row
+ID                 id
+Question           loc
+
+[GMSurveySurveys]
+category: Interface and text
+about: The GM surveys: which questions they ask.
+server: client
+evidence: client GMSurveySurveysRec__Read @57a500 (an array of 10 question IDs); 11 fields / 44 bytes per row
+ID                 id
+Question[10]       uint -> GMSurveyQuestions
+
+[GMTicketCategory]
+category: Interface and text
+about: The categories of GM tickets.
+server: client
+label: Category
+evidence: client GMTicketCategoryRec__Read @57a600; 10 fields / 40 bytes per row
+ID                 id
+Category           loc
+
+[GroundEffectDoodad]
+category: World and maps
+about: The small models (grass, flowers, stones) the game scatters on the ground textures.
+server: client
+label: DoodadPath
+evidence: client GroundEffectDoodadRec__Read @57a880; 3 fields / 12 bytes per row
+ID                 id
+DoodadIdTag        uint
+DoodadPath         model                      | The model (World\NoDXT\Detail\*.mdx).
+
+[GroundEffectTexture]
+category: World and maps
+about: Which ground clutter (grass, flowers) grows on which ground texture, how densely, and the footstep sound.
+server: client
+evidence: client GroundEffectTextureRec__Read @57a9d0 (an array of 4 at 1); 7 fields / 28 bytes per row; column names from public 1.12 documentation
+ID                 id
+DoodadID[4]        int -> GroundEffectDoodad  | -1 = none.
+Density            uint
+~Sound             uint -> TerrainType        | The ground's footstep sound kind.
+
+[HelmetGeosetVisData]
+category: Items
+about: Which parts of a character's head (hair, facial hair, ears) a helmet hides, per race.
+server: client
+evidence: client HelmetGeosetVisDataRec__Read @57ab10 (an array of 5); 6 fields / 24 bytes per row; column names from public 1.12 documentation
+ID                 id
+~HideHair          int                        | Race mask (bit n-1 = race n) of the races whose hair is hidden.
+~HideFacial1       int
+~HideFacial2       int
+~HideFacial3       int
+~HideEars          int
+
+[ItemBagFamily]
+category: Items
+about: The special bag kinds (quivers, ammo pouches, soul bags, herb bags, enchanting bags).
+server: file
+label: Name
+evidence: client ItemBagFamilyRec__Read @57ac10; VMaNGOS format "nxxxxxxxxx"; 10 fields / 40 bytes per row
+ID                 id
+Name               loc
+
+[ItemClass]
+category: Items
+about: The item classes (Consumable, Container, Weapon, Armor...) and their names.
+server: client
+label: ClassName
+evidence: client ItemClassRec__Read @57ae90; 12 fields / 48 bytes per row; column names from public 1.12 documentation
+ClassID            id
+~SubclassMapID     uint
+~Flags             flags
+ClassName          loc
+
+[ItemDisplayInfo]
+category: Items
+about: The looks of items: the models of weapons, shields, helmets and shoulders, their textures, the inventory icon, the textures painted on the character's body for armour, the geosets they show and their glow effect. An item in the server's item_template has a display ID from this table.
+server: client
+server-note: The server does not read this file (VMaNGOS skips it); which display an item uses is set in the server's database (item_template.display_id).
+label: InventoryIcon
+evidence: client ItemDisplayInfoRec__Read @57b150 (model names, geoset groups, helmet geosets, region textures and item visual read by the character-model code @4799a0, @479d10, @478ad0, @479700); the wowdata Python layout (the index and the 3D viewer read it); 23 fields / 92 bytes per row
+ID                 id
+ModelName[2]       model                      | Model files (Item\ObjectComponents\<kind>\...): the item, or left and right shoulder.
+ModelTexture[2]    texture                    | Texture names for the two models.
+InventoryIcon      icon                       | The icon in bags and tooltips (Interface\Icons\<name>).
+GeosetGroup[3]     uint                       | Which variant of the body geosets the item shows (gloves, boots, robes...).
+Flags              flags
+SpellVisualID      uint -> SpellVisual        | A visual played on the item.
+GroupSoundIndex    uint -> ItemGroupSounds    | The sounds of picking up and putting down the item.
+HelmetGeosetVis[2] uint -> HelmetGeosetVisData | For a helmet: which head parts it hides (male, female).
+TextureArmUpper    texture                    | Body texture for the upper arms (Item\TextureComponents\ArmUpperTexture\...).
+TextureArmLower    texture
+TextureHand        texture
+TextureTorsoUpper  texture
+TextureTorsoLower  texture
+TextureLegUpper    texture
+TextureLegLower    texture
+TextureFoot        texture
+ItemVisual         uint -> ItemVisuals        | The glow / enchantment effect of the item.
+
+[ItemGroupSounds]
+category: Sounds and music
+about: The sounds of moving items (picking up, putting down) by item kind.
+server: client
+evidence: client ItemGroupSoundsRec__Read @57b550 (an array of 4); 5 fields / 20 bytes per row
+ID                 id
+~Sound[4]          uint -> SoundEntries       | Pick up, put down, and two more.
+
+[ItemPetFood]
+category: Items
+about: The kinds of pet food (Meat, Fish, Cheese, Bread, Fungus, Fruit, Raw Meat, Raw Fish).
+server: client
+label: Name
+evidence: client ItemPetFoodRec__Read @57b650; 10 fields / 40 bytes per row
+ID                 id
+Name               loc
+
+[ItemRandomProperties]
+category: Items
+about: The random "of the ..." suffixes of green items ("of the Bear", "of Agility"): which enchantments they add.
+server: file
+label: Suffix
+evidence: client ItemRandomPropertiesRec__Read @57b8d0; VMaNGOS format "nsiiixxssssssssx"; 16 fields / 64 bytes per row
+ID                 id
+Name               string                     | The internal name.
+Enchantment[5]     uint -> SpellItemEnchantment
+Suffix             loc                        | The name added to the item ("of the Bear").
+
+[ItemSet]
+category: Items
+about: The item sets (tier sets, dungeon sets): their items, the bonus spells and how many items each bonus needs.
+server: file
+label: Name
+evidence: client ItemSetRec__Read @57bba0; VMaNGOS ItemSetEntry; 45 fields / 180 bytes per row
+ID                 id
+Name               loc
+ItemID[17]         uint => item               | The items of the set (the server's item_template entries).
+SetSpellID[8]      uint -> Spell              | The set bonuses.
+SetThreshold[8]    uint                       | How many items each bonus needs.
+RequiredSkill      uint -> SkillLine
+RequiredSkillRank  uint
+
+[ItemSubClass]
+category: Items
+about: The item subclasses (one-hand axes, cloth, bows...): names, proficiencies and weapon animations.
+server: client
+label: DisplayName
+evidence: client ItemSubClassRec__Read @57c170; 28 fields / 112 bytes per row; column names from public 1.12 documentation, value ranges checked on the file
+ClassID            int enum(ItemClass)
+SubClassID         int
+~PrerequisiteProficiency int
+~PostrequisiteProficiency int
+~Flags             flags
+~DisplayFlags      uint
+~WeaponParrySeq    uint
+~WeaponReadySeq    uint
+~WeaponAttackSeq   uint
+~WeaponSwingSize   uint
+DisplayName        loc
+VerboseName        loc
+
+[ItemSubClassMask]
+category: Items
+about: Names for groups of item subclasses (used in spell requirements).
+server: client
+label: Name
+evidence: client ItemSubClassMaskRec__Read @57bed0; 11 fields / 44 bytes per row
+ClassID            uint enum(ItemClass)
+Mask               flags
+Name               loc
+
+[ItemVisualEffects]
+category: Items
+about: The models of item glows and enchantment effects.
+server: client
+label: Model
+evidence: client ItemVisualEffectsRec__Read @57c6e0; 2 fields / 8 bytes per row
+ID                 id
+Model              model
+
+[ItemVisuals]
+category: Items
+about: The glow effects of items (enchantments): which effect models are attached where.
+server: client
+evidence: client ItemVisualsRec__Read @57c800 (an array of 5); 6 fields / 24 bytes per row. Some values in Blizzard's file are left-over bytes.
+ID                 id
+Slot[5]            uint -> ItemVisualEffects
+
+[Languages]
+category: Interface and text
+about: The languages (Common, Orcish, Darnassian...).
+server: client
+label: Name
+evidence: client LanguagesRec__Read @57ca50; 10 fields / 40 bytes per row
+ID                 id
+Name               loc
+
+[LanguageWords]
+category: Interface and text
+about: The made-up words a language shows to players who do not speak it.
+server: client
+label: Word
+evidence: client LanguageWordsRec__Read @57c900; 3 fields / 12 bytes per row
+ID                 id
+LanguageID         uint -> Languages
+Word               string
+
+[LFGDungeons]
+category: World and maps
+about: The dungeons and zones of the looking-for-group tool with their level ranges.
+server: client
+label: Name
+evidence: client LfgDungeonsRec__Read @57ccd0; 14 fields / 56 bytes per row; column names from public 1.12 documentation
+ID                 id
+Name               loc
+MinLevel           uint
+MaxLevel           uint
+~TypeID            uint                       | 1 dungeon, 2 raid, 4 zone, 5 ...
+~Faction           int                        | -1 both, 0 Horde, 1 Alliance.
+
+[Light]
+category: Lighting and sky
+about: The light zones of the world: where each sky and light setting applies (a sphere with a falloff), and the light parameters for clear, storm, underwater... A map's default light is the row at 0,0,0.
+server: client
+evidence: client LightRec__Read @589220 (LightRec_ConvertCoordinates @6d5fb0 converts the position and falloff); 12 fields / 48 bytes per row
+ID                 id
+ContinentID        uint -> Map
+X                  float                      | Position in game units x 36 (the client divides by 36).
+Y                  float
+Z                  float
+FalloffStart       float
+FalloffEnd         float
+LightParamsID[5]   uint -> LightParams        | Parameters for: clear weather, underwater, sunset?, other, death.
+
+[LightFloatBand]
+category: Lighting and sky
+about: Light values over the day (fog distance, glow...): up to 16 keys of time and value.
+server: client
+evidence: client LightFloatBandRec__Read @588db0 (two arrays of 16); 34 fields / 136 bytes per row. Unused keys hold left-over bytes in Blizzard's file.
+ID                 id                         | (LightParams ID x 6) - 5 + n.
+Num                uint                       | How many keys are used.
+Time[16]           int                        | Time of day in half-minutes (0 to 2880).
+Data[16]           float
+
+[LightIntBand]
+category: Lighting and sky
+about: Light colours over the day (sky, fog, ambient, water...): up to 16 keys of time and colour.
+server: client
+evidence: client LightIntBandRec__Read @588ef0 (two arrays of 16); 34 fields / 136 bytes per row. Unused keys hold left-over bytes in Blizzard's file.
+ID                 id                         | (LightParams ID x 18) - 17 + n.
+Num                uint                       | How many keys are used.
+Time[16]           int                        | Time of day in half-minutes (0 to 2880).
+Data[16]           int                        | Colour as 0xRRGGBB.
+
+[LightParams]
+category: Lighting and sky
+about: A set of light parameters (sky box, glow, water transparency) used by Light.
+server: client
+evidence: client LightParamsRec__Read @589030; 9 fields / 36 bytes per row; column names from public 1.12 documentation, checked on the file (the link resolves, 1 is 0/1, 4-8 are decimal numbers from 0 to 1)
+ID                 id
+HighlightSky       uint enum(Bool)
+LightSkyboxID      uint -> LightSkybox        | A special sky (stars...), 0 = none.
+col_3              uint                       | Unknown (0 in every row).
+Glow               float                      | Strength of the bloom glow, 0 to 1.
+WaterShallowAlpha  float                      | Transparency of shallow water, 0 to 1.
+WaterDeepAlpha     float
+OceanShallowAlpha  float
+OceanDeepAlpha     float
+
+[LightSkybox]
+category: Lighting and sky
+about: Sky box models (stars, special skies).
+server: client
+label: Name
+evidence: client LightSkyboxRec__Read @5893f0; 2 fields / 8 bytes per row
+ID                 id
+Name               model
+
+[LiquidType]
+category: World and maps
+about: The liquid types (water, ocean, magma, slime) and the spell they cast on you (lava damage).
+server: client
+server-note: The server's terrain files (made by "Update server maps") store the liquid of each spot.
+label: Name
+evidence: client LiquidTypeRec__Read @57cfd0; 4 fields / 16 bytes per row
+ID                 id
+Name               string
+~Type              uint                       | 0 water, 1 ocean, 2 magma, 3 slime.
+~SpellID           uint -> Spell              | The spell the liquid casts (lava, slime).
+
+[LoadingScreens]
+category: Interface and text
+about: The loading screen pictures of maps.
+server: client
+label: Name
+evidence: client LoadingScreensRec__Read @57d140; 3 fields / 12 bytes per row
+ID                 id
+Name               string
+FileName           texture                    | The picture (Interface\Glues\LoadingScreens\...).
+
+[LoadingScreenTaxiSplines]
+category: Interface and text
+about: The flight lines drawn on the loading screen while you fly to another continent.
+server: client
+evidence: client LoadingScreenTaxiSplinesRec__Read @57d2a0 (two arrays of 8); 19 fields / 76 bytes per row
+ID                 id
+PathID             uint -> TaxiPath
+LocX[8]            float
+LocY[8]            float
+LegIndex           uint
+
+[Lock]
+category: World and maps
+about: The locks of chests, doors, herbs and veins: what opens them (a key item, or a skill like lockpicking, herbalism or mining, and the skill value needed).
+server: file
+evidence: client LockRec__Read @57d410; VMaNGOS format "niiiiiiiiiiiiiiiiiiiiiiiiixxxxxxxx"; the "Used in game" lock list reads it; 33 fields / 132 bytes per row
+ID                 id
+Type[8]            uint enum(LockKeyType)     | 1: a key item opens it (Index = the item); 2: a skill opens it (Index = LockType).
+Index[8]           uint                       | The key item (server item entry) or the LockType ID.
+Skill[8]           uint                       | The skill value needed.
+Action[8]          uint
+
+[LockType]
+category: World and maps
+about: The kinds of locks (Lockpicking, Herbalism, Mining, Fishing...): their names, the verb shown and the cursor.
+server: client
+label: Name
+evidence: client LockTypeRec__Read @57d580; 29 fields / 116 bytes per row
+ID                 id
+Name               loc
+ResourceName       loc
+Verb               loc
+CursorName         string
+
+
+[MailTemplate]
+category: Interface and text
+about: The texts of letters the game sends (from NPCs, auctions...).
+server: db mail_text_template
+label: Body
+evidence: client MailTemplateRec__Read @57dbb0; VMaNGOS format "nxxxxxxxxx"; 10 fields / 40 bytes per row
+ID                 id
+Body               loc
+
+[Map]
+category: World and maps
+about: The maps: continents, dungeons, raids and battlegrounds: their folder (World\Maps\<Directory>), kind, name, levels, players, loading screen and battleground texts.
+server: db map_template
+server-note: The map and collision extractors of the server tools also read Map.dbc from the game's archives: after adding a map, build the release patch and run "Update server maps".
+label: MapName
+evidence: client MapRec__Read @57de30 (fields 2, 13, 15, 39-41 read by named client functions: Script_IsInInstance, NetHandler_SMSG_BATTLEFIELD_LIST, Battlefield_SendJoin, Script_GetBattlefieldMapIconScale); VMaNGOS format "nxixssssssssxxxxxxxixxxxxxxxxxxxxxxxxxixxx"; 42 fields / 168 bytes per row
+ID                 id
+Directory          string                     | The folder of the map's files: World\Maps\<Directory>\.
+InstanceType       uint enum(InstanceType)
+PVP                uint enum(Bool)
+MapName            loc
+MinLevel           uint                       | Lowest level (battleground brackets start here).
+MaxLevel           uint
+MaxPlayers         uint                       | Largest group that may enter.
+col_16             int
+col_17             float
+col_18             float
+AreaTableID        uint -> AreaTable          | The area of the map (for instances).
+MapDescription0    loc                        | Battleground description (Horde).
+MapDescription1    loc                        | Battleground description (Alliance).
+LoadingScreenID    uint -> LoadingScreens
+BracketLevelRange  uint                       | Battleground brackets: levels per bracket.
+GroupJoin          uint enum(Bool)            | A battleground group may join as a group.
+IconScale          float                      | Size of the battleground icon on the world map.
+
+[Material]
+category: Sounds and music
+about: The materials of items (metal, wood, cloth...) for their sounds.
+server: client
+evidence: client MaterialRec__Read @57e680; 3 fields / 12 bytes per row
+ID                 id
+~Flags             flags
+~FoleySoundID      uint -> SoundEntries
+
+[NameGen]
+category: Characters
+about: The parts of random character names (the Random button at character creation).
+server: client
+label: Name
+evidence: client NameGenRec__Read @57e7a0 (NameGen_LoadForRace @475480 reads race and sex); 4 fields / 16 bytes per row
+ID                 id
+Name               string
+RaceID             uint enum(Race)
+Sex                uint enum(Gender)
+
+[NamesProfanity]
+category: Interface and text
+about: Words that are not allowed in character and guild names.
+server: file
+label: Name
+evidence: client NamesProfanityRec__Read @57ea10; VMaNGOS format "ds"; 2 fields / 8 bytes per row
+ID                 id
+Name               string                     | A pattern (emacs regular expression).
+
+[NamesReserved]
+category: Interface and text
+about: Names that players cannot use (NPC and Blizzard names).
+server: file
+label: Name
+evidence: client NamesReservedRec__Read @57eb30; VMaNGOS format "ds"; 2 fields / 8 bytes per row
+ID                 id
+Name               string                     | A pattern (emacs regular expression).
+
+[NPCSounds]
+category: Sounds and music
+about: The voice lines of NPCs (greeting, farewell, annoyed).
+server: client
+evidence: client NPCSoundsRec__Read @57e910 (an array of 4); 5 fields / 20 bytes per row
+ID                 id
+~GreetingSoundID   uint -> SoundEntries
+~FarewellSoundID   int -> SoundEntries
+~PissedSoundID     uint -> SoundEntries
+col_4              uint
+
+[Package]
+category: Interface and text
+about: The gift wrapping of mail packages.
+server: client
+label: Name
+evidence: client PackageRec__Read @57ec50 (Script_GetPackageInfo @4ae450 reads the cost); 12 fields / 48 bytes per row
+ID                 id
+Icon               icon
+Cost               uint                       | In copper.
+Name               loc
+
+[PageTextMaterial]
+category: Interface and text
+about: The backgrounds of books and letters (Parchment, Stone, Marble...).
+server: client
+label: Name
+evidence: client PageTextMaterialRec__Read @57ef20; 2 fields / 8 bytes per row
+ID                 id
+Name               string
+
+[PaperDollItemFrame]
+category: Interface and text
+about: The equipment slots of the character window and their empty-slot pictures.
+server: client
+label: ItemButtonName
+evidence: client PaperDollItemFrameRec__Read @57f040; 3 fields / 12 bytes per row
+ItemButtonName     string
+SlotIcon           texture
+SlotNumber         uint
+
+[PetLoyalty]
+category: Characters
+about: The loyalty levels of hunter pets.
+server: client
+label: Name
+evidence: client PetLoyaltyRec__Read @57f1a0; 10 fields / 40 bytes per row
+ID                 id
+Name               loc
+
+[PetPersonality]
+category: Characters
+about: The happiness levels of hunter pets and their effect on damage.
+server: client
+label: Name
+evidence: client PetPersonalityRec__Read @57f420 (three arrays of 3); 19 fields / 76 bytes per row
+ID                 id
+Name               loc
+~HappinessThreshold[3] uint
+~HappinessDamage[3] float
+~DamageModifier[3] float
+
+[QuestInfo]
+category: Interface and text
+about: The quest kinds (Group, PvP, Raid, Dungeon...).
+server: client
+label: InfoName
+evidence: client QuestInfoRec__Read @57f700; 10 fields / 40 bytes per row
+ID                 id
+InfoName           loc
+
+[QuestSort]
+category: Interface and text
+about: The quest log headers for class and profession quests (Warrior, Cooking, Seasonal...).
+server: file
+label: SortName
+evidence: client QuestSortRec__Read @57f980; VMaNGOS format "nxxxxxxxxx"; 10 fields / 40 bytes per row
+ID                 id
+SortName           loc
+
+[Resistances]
+category: Spells
+about: The magic schools as shown in the interface (Physical, Holy, Fire...) and the sound when a spell is resisted.
+server: client
+label: Name
+evidence: client ResistancesRec__Read @57fc00; 12 fields / 48 bytes per row
+ID                 id
+~Flags             flags
+~FizzleSoundID     uint -> SoundEntries
+Name               loc
+
+[ServerMessages]
+category: Interface and text
+about: The server announcements the client knows ("Shutdown in %s"...).
+server: client
+label: Text
+evidence: client ServerMessagesRec__Read @57fec0; 10 fields / 40 bytes per row
+ID                 id
+Text               loc
+
+[SheatheSoundLookups]
+category: Sounds and music
+about: The sounds of drawing and sheathing weapons.
+server: client
+evidence: client SheatheSoundLookupsRec__Read @580140; 7 fields / 28 bytes per row; column names from public 1.12 documentation
+ID                 id
+~ClassID           uint enum(ItemClass)
+~SubclassID        uint
+~Material          uint -> Material
+~CheckMaterial     uint enum(Bool)
+~SheatheSound      uint -> SoundEntries
+~UnsheatheSound    uint -> SoundEntries
+
+[SkillCostsData]
+category: Skills and talents
+about: The training costs of skills.
+server: client
+evidence: client SkillCostsDataRec__Read @5802f0 (an array of 3); 5 fields / 20 bytes per row
+ID                 id
+~SkillCostsID      uint
+~Cost[3]           uint
+
+[SkillLine]
+category: Skills and talents
+about: The skills (weapon skills, professions, languages, class specializations): their names, category and icon.
+server: file
+label: DisplayName
+evidence: client SkillLineRec__Read @580940; VMaNGOS format "nixssssssssxxxxxxxxxxi"; 22 fields / 88 bytes per row
+ID                 id
+CategoryID         int -> SkillLineCategory   | -1 = none.
+SkillCostsID       uint
+DisplayName        loc
+Description        loc
+SpellIconID        uint -> SpellIcon
+
+[SkillLineAbility]
+category: Skills and talents
+about: Which spells belong to which skill (the recipes of a profession, the abilities of a class tree), for which races and classes, and the skill values at which a recipe turns yellow, green and grey.
+server: db skill_line_ability
+evidence: client SkillLineAbilityRec__Read @580410; VMaNGOS format "niiiixxiiiiixxi"; the "Used in game" skill list reads it; 15 fields / 60 bytes per row
+ID                 id
+SkillLine          uint -> SkillLine
+Spell              uint -> Spell
+RaceMask           flags(RaceMask)            | 0 = every race.
+ClassMask          flags(ClassMask)           | 0 = every class.
+ExcludeRace        flags(RaceMask)
+ExcludeClass       flags(ClassMask)
+MinSkillLineRank   uint                       | Skill value needed to learn it.
+SupercededBySpell  uint -> Spell              | The next rank.
+AcquireMethod      uint enum(LearnOnGetSkill)
+TrivialSkillLineRankHigh uint                 | Skill value at which the recipe turns grey.
+TrivialSkillLineRankLow uint                  | Skill value at which the recipe turns green.
+~CharacterPoints[2] uint
+ReqTrainPoints     uint                       | Training points a pet needs.
+
+[SkillLineCategory]
+category: Skills and talents
+about: The groups of the skill window (Attributes, Weapon Skills, Class Skills, Armor Proficiencies, Languages, Professions...).
+server: client
+label: Name
+evidence: client SkillLineCategoryRec__Read @5806a0; 11 fields / 44 bytes per row
+ID                 id
+Name               loc
+SortIndex          uint
+
+[SkillRaceClassInfo]
+category: Skills and talents
+about: Which races and classes have a skill, from which level, and how it behaves (always maximal, can be unlearned...).
+server: file
+evidence: client SkillRaceClassInfoRec__Read @580dc0; VMaNGOS format "diiiiiix"; 8 fields / 32 bytes per row
+ID                 id
+SkillID            uint -> SkillLine
+RaceMask           flags(RaceMask)
+ClassMask          flags(ClassMask)
+Flags              flags(SkillRaceClassFlags)
+MinLevel           uint
+SkillTierID        uint -> SkillTiers
+SkillCostIndex     uint -> SkillCostsData
+
+[SkillTiers]
+category: Skills and talents
+about: The tiers of profession skills (Apprentice 75, Journeyman 150, Expert 225, Artisan 300) and their training costs.
+server: file
+evidence: client SkillTiersRec__Read @580f90; VMaNGOS format "niiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"; 33 fields / 132 bytes per row
+ID                 id
+Cost[16]           uint                       | Training cost of each tier, in copper.
+Value[16]          uint                       | Maximum skill value of each tier.
+
+[SoundAmbience]
+category: Sounds and music
+about: The ambient sound loops of areas (day and night).
+server: client
+evidence: client SoundAmbienceRec__Read @5810b0 (an array of 2); 3 fields / 12 bytes per row
+ID                 id
+DaySoundID         uint -> SoundEntries
+NightSoundID       uint -> SoundEntries
+
+[SoundEntries]
+category: Sounds and music
+about: Every sound of the game: its files (one is picked at random), folder, volume and how far it can be heard. Everything else refers to sounds by these IDs.
+server: db sound_entries
+label: Name
+evidence: client SoundEntriesRec__Read @5811b0 (string fixups of 2-12 and 23); 29 fields / 116 bytes per row; column names from public 1.12 documentation, value ranges checked on the file
+ID                 id
+SoundType          uint
+Name               string                     | The sound's name.
+File[10]           path                       | Sound files (.wav / .mp3) in DirectoryBase; one is picked at random.
+Freq[10]           uint                       | How often each file is picked.
+DirectoryBase      path                       | The folder of the files (Sound\Creature\Boar\...).
+Volume             float                      | 0 to 1.
+Flags              flags
+MinDistance        float
+DistanceCutoff     float                      | Beyond this distance the sound is not heard.
+EAXDef             uint
+
+[SoundProviderPreferences]
+category: Sounds and music
+about: Reverb (EAX) presets of areas: caves, halls, underwater...
+server: client
+label: Description
+evidence: client SoundProviderPreferencesRec__Read @5815a0; 24 fields / 96 bytes per row; column names from public 1.12 documentation, value ranges checked on the file
+ID                 id
+Description        string
+~Flags             flags
+~EAXEnvironmentSelection uint
+~EAXDecayTime      float
+~EAX2EnvironmentSize float
+~EAX2EnvironmentDiffusion float
+~EAX2Room          int
+~EAX2RoomHF        int
+~EAX2DecayHFRatio  float
+~EAX2Reflections   int
+~EAX2ReflectionsDelay float
+~EAX2Reverb        int
+~EAX2ReverbDelay   float
+~EAX2RoomRolloff   float
+~EAX2AirAbsorption float
+~EAX3RoomLF        int
+~EAX3DecayLFRatio  float
+~EAX3EchoTime      float
+~EAX3EchoDepth     float
+~EAX3ModulationTime float
+~EAX3ModulationDepth float
+~EAX3HFReference   float
+~EAX3LFReference   float
+
+[SoundSamplePreferences]
+category: Sounds and music
+about: Sound sample settings.
+server: client
+evidence: client SoundSamplePreferencesRec__Read @5819a0; 17 fields / 68 bytes per row
+ID                 id
+col_1              uint
+col_2              uint
+col_3              uint
+col_4              uint
+col_5              uint
+col_6              float
+col_7              uint
+col_8              float
+col_9              float
+col_10             uint
+col_11             float
+col_12             uint
+col_13             float
+col_14             float
+col_15             float
+col_16             uint
+
+[SoundWaterType]
+category: Sounds and music
+about: The sounds of moving in water.
+server: client
+evidence: client SoundWaterTypeRec__Read @581c90; 4 fields / 16 bytes per row
+ID                 id
+LiquidType         uint                       | 0 water, 1 ocean, 2 magma, 3 slime.
+FluidSpeed         uint
+SoundID            uint -> SoundEntries
+
+[SpamMessages]
+category: Interface and text
+about: Patterns of spam messages the chat filter catches.
+server: client
+label: Text
+evidence: client SpamMessagesRec__Read @581dd0; 2 fields / 8 bytes per row
+ID                 id
+Text               string
+
+
+[Spell]
+category: Spells
+about: Every spell, ability, aura, item use and profession recipe: school, costs, cast time, cooldowns, range, the three effects (damage, auras, summons, created items...), the visual, the icon, the name, rank, description and tooltip.
+server: db spell_template
+server-note: VMaNGOS computes spells from its spell_template table: an edit of the file changes what the game shows (names, icons, tooltips, visuals, cast bars), not what the spell does on the server. Never copy the game's Spell.dbc over the server's own copy.
+label: Name
+evidence: client SpellRec__Read @583750 (the SpellRec struct names every field with the client code that reads it: Spell_C_GetSpellPowerCost, Spell_C_CheckTotemsAndReagents, Spell_C_GetSpellEffectPointsRange, Spell_C_BeginTargetSelection, Script_GetSpellTexture ...); VMaNGOS SpellEntry order; located on the file (Fireball 133: visual 67 at 115, icon 117, name 120, rank 129); 173 fields / 692 bytes per row
+ID                 id
+School             uint enum(SpellSchool)
+Category           uint -> SpellCategory      | Cooldown category: spells of a category share a cooldown.
+CastUI             uint                       | Not used.
+Dispel             uint -> SpellDispelType    | Magic, Curse, Disease, Poison...
+Mechanic           uint -> SpellMechanic      | Stun, Root, Fear, Polymorph...
+Attributes         flags(SpellAttributes)
+AttributesEx       flags(SpellAttributesEx)
+AttributesEx2      flags(SpellAttributesEx2)
+AttributesEx3      flags(SpellAttributesEx3)
+AttributesEx4      flags(SpellAttributesEx4)
+Stances            flags                      | Shapeshift forms the spell needs (bit n-1 = SpellShapeshiftForm ID n).
+StancesNot         flags                      | Forms in which the spell cannot be cast.
+Targets            flags(SpellCastTargetFlags)
+TargetCreatureType flags(CreatureTypeMask)    | Creature types the spell can target (0 = any).
+RequiresSpellFocus uint -> SpellFocusObject   | An object that must be near (an anvil, a forge, a campfire).
+CasterAuraState    uint enum(AuraState)
+TargetAuraState    uint enum(AuraState)
+CastingTimeIndex   uint -> SpellCastTimes     | The cast time.
+RecoveryTime       uint                       | Cooldown in milliseconds.
+CategoryRecoveryTime uint                     | Cooldown of the category in milliseconds.
+InterruptFlags     flags(SpellInterruptFlags)
+AuraInterruptFlags flags(AuraInterruptFlags)  | What removes the aura (moving, taking damage...).
+ChannelInterruptFlags flags(AuraInterruptFlags)
+ProcFlags          flags(ProcFlags)           | What triggers a proc aura.
+ProcChance         uint                       | Chance in percent.
+ProcCharges        uint
+MaxLevel           uint
+BaseLevel          uint
+SpellLevel         uint
+DurationIndex      uint -> SpellDuration      | How long the aura lasts.
+PowerType          int enum(PowerType)
+ManaCost           uint
+ManaCostPerLevel   uint
+ManaPerSecond      uint
+ManaPerSecondPerLevel uint
+RangeIndex         uint -> SpellRange
+Speed              float                      | Speed of the projectile (yards per second).
+ModalNextSpell     uint -> Spell
+StackAmount        uint                       | How many times the aura stacks.
+Totem[2]           uint => item               | Tools that must be in the bags (server item entries).
+Reagent[8]         int => item                | Reagents (server item entries).
+ReagentCount[8]    uint
+EquippedItemClass  int enum(ItemClass)        | -1 = no item needed.
+EquippedItemSubClassMask int flags            | Item subclasses that must be equipped.
+EquippedItemInventoryTypeMask int flags
+Effect[3]          uint enum(SpellEffect)     | What each of the three effects does.
+EffectDieSides[3]  int                        | Random part of the effect's value.
+EffectBaseDice[3]  uint
+EffectDicePerLevel[3] int
+EffectRealPointsPerLevel[3] float
+EffectBasePoints[3] int                       | The effect's value minus 1 (the game adds 1 and the dice).
+EffectMechanic[3]  uint -> SpellMechanic
+EffectImplicitTargetA[3] uint enum(SpellTarget)
+EffectImplicitTargetB[3] uint enum(SpellTarget)
+EffectRadiusIndex[3] uint -> SpellRadius
+EffectAura[3]      uint enum(AuraType)        | For "Apply aura" effects: the aura.
+EffectAuraPeriod[3] uint                      | Time between ticks of a periodic aura, in milliseconds.
+EffectMultipleValue[3] float
+EffectChainTargets[3] uint
+EffectItemType[3]  uint => item               | Item created by "Create item" (server item entry); a class mask for some auras.
+EffectMiscValue[3] int                        | Depends on the effect (the summoned creature, the skill, the school mask...).
+EffectTriggerSpell[3] uint -> Spell
+EffectPointsPerCombo[3] float
+SpellVisual        uint -> SpellVisual        | The spell's visual effects (cast, missile, impact).
+SpellVisual2       uint -> SpellVisual        | Not used.
+SpellIconID        uint -> SpellIcon          | The icon in the spell book, the action bar and buff frames.
+ActiveIconID       uint -> SpellIcon          | The icon while active (shapeshift forms).
+SpellPriority      uint
+Name               loc
+NameSubtext        loc                        | The rank text ("Rank 2").
+Description        loc                        | The spell book tooltip ($s1 = effect 1's value, $d = duration...).
+AuraDescription    loc                        | The tooltip of the buff or debuff.
+ManaCostPct        uint                       | Cost in percent of base mana.
+StartRecoveryCategory uint                    | Global cooldown category.
+StartRecoveryTime  uint                       | Global cooldown in milliseconds.
+MaxTargetLevel     uint
+SpellClassSet      uint enum(SpellFamily)     | The class the spell belongs to (for talents that modify it).
+SpellClassMask[2]  flags                      | Which spells of the class talents can modify (64 bits).
+MaxTargets         uint
+DefenseType        uint enum(DamageClass)
+PreventionType     uint enum(PreventionType)
+StanceBarOrder     int
+EffectChainAmplitude[3] float                 | Damage multiplier for each chain jump.
+MinFactionID       uint -> Faction            | Reputation needed to use it.
+MinReputation      uint enum(ReputationRank)
+RequiredAuraVision uint
+
+[SpellCastTimes]
+category: Spells
+about: The cast times spells refer to (instant, 1.5 s, 3 s...).
+server: file
+evidence: client SpellCastTimesRec__Read @581ef0 (Spell_C_GetSpellCastTimeMs @6e3340 reads it); VMaNGOS format; 4 fields / 16 bytes per row
+ID                 id
+Base               int                        | Cast time in milliseconds.
+PerLevel           int                        | Change per level, in milliseconds.
+Minimum            int                        | The shortest cast time.
+
+[SpellCategory]
+category: Spells
+about: Spell cooldown categories (spells of a category share their cooldown).
+server: file
+evidence: client SpellCategoryRec__Read @582030; VMaNGOS format "ni"; 2 fields / 8 bytes per row
+ID                 id
+Flags              flags
+
+[SpellChainEffects]
+category: Spells
+about: The look of chain effects (Chain Lightning, Drain Life beams).
+server: client
+label: Texture
+evidence: client SpellChainEffectsRec__Read @582130 (SpellVisuals_CreateChainLightning and LightningObject_InitBolts read 5-7); 8 fields / 32 bytes per row
+ID                 id
+~AvgSegLen         float
+~Width             float
+~NoiseScale        float
+~TexCoordScale     float
+SegDuration        int                        | Milliseconds each segment is shown.
+SegDelay           int                        | Milliseconds between segments.
+Texture            texture
+
+[SpellDispelType]
+category: Spells
+about: The dispel types (Magic, Curse, Disease, Poison) and their names.
+server: client
+label: Name
+evidence: client SpellDispelTypeRec__Read @582320; 12 fields / 48 bytes per row
+ID                 id
+Name               loc
+~ImmunityPossible  uint enum(Bool)
+InternalName       string
+
+[SpellDuration]
+category: Spells
+about: The durations auras refer to (30 s, 10 min...).
+server: file
+evidence: client SpellDurationRec__Read @5825f0; VMaNGOS format "niii"; 4 fields / 16 bytes per row
+ID                 id
+Duration           int                        | Milliseconds (-1 = until cancelled).
+DurationPerLevel   int
+MaxDuration        int
+
+[SpellEffectCameraShakes]
+category: Spells
+about: The camera shakes a spell visual starts.
+server: client
+evidence: client SpellEffectCameraShakesRec__Read @582730 (SpellVisuals_PlayCameraShakes @511d40); 4 fields / 16 bytes per row
+ID                 id
+CameraShake[3]     uint -> CameraShakes
+
+[SpellFocusObject]
+category: Spells
+about: The objects some spells need nearby (Anvil, Forge, Campfire, Moonwell...).
+server: file
+label: Name
+evidence: client SpellFocusObjectRec__Read @582830; VMaNGOS format "nxxxxxxxxx"; 10 fields / 40 bytes per row
+ID                 id
+Name               loc
+
+[SpellIcon]
+category: Spells
+about: The icons of spells, buffs and talents: one row per icon file (Interface\Icons\...). Spell.SpellIconID refers to these rows.
+server: client
+label: TextureFilename
+evidence: client SpellIconRec__Read @582ab0 (field 1 gets the string fixup); the "Used in game" icon list reads it; 2 fields / 8 bytes per row
+ID                 id
+TextureFilename    icon                       | The icon file without ".blp", e.g. Interface\Icons\Spell_Fire_FlameBolt.
+
+[SpellItemEnchantment]
+category: Spells
+about: Enchantments on items (enchanting, poisons, weapon oils, random suffixes): what they add and the glow they show.
+server: file
+label: Name
+evidence: client SpellItemEnchantmentRec__Read @582bd0; VMaNGOS format "niiiiiixxxiiissssssssxii"; 24 fields / 96 bytes per row
+ID                 id
+Effect[3]          uint enum(EnchantmentType)
+EffectPointsMin[3] int                        | The amount (damage, resistance, stat).
+EffectPointsMax[3] int
+EffectArg[3]       uint                       | The spell (for spell enchantments), the school (resistance) or the stat.
+Name               loc                        | The text shown on the item.
+ItemVisual         int -> ItemVisuals         | The glow (-1 or 0 = none).
+Flags              uint
+
+[SpellMechanic]
+category: Spells
+about: The names of spell mechanics (Stunned, Rooted, Polymorphed...).
+server: client
+label: StateName
+evidence: client SpellMechanicRec__Read @582f10; 10 fields / 40 bytes per row
+ID                 id
+StateName          loc
+
+[SpellRadius]
+category: Spells
+about: The radiuses of area spells (5, 8, 10, 30 yards...).
+server: file
+evidence: client SpellRadiusRec__Read @583190 (Spell_C_GetPendingSpellRadius @6e6350); VMaNGOS format "nfxx"; 4 fields / 16 bytes per row
+ID                 id
+Radius             float                      | Yards.
+RadiusPerLevel     float
+RadiusMax          float
+
+[SpellRange]
+category: Spells
+about: The ranges of spells (melee, 30 yards, unlimited...).
+server: file
+label: DisplayName
+evidence: client SpellRangeRec__Read @5832d0; VMaNGOS format "nffxxxxxxxxxxxxxxxxxxx"; 22 fields / 88 bytes per row
+ID                 id
+RangeMin           float                      | Yards.
+RangeMax           float                      | Yards.
+Flags              flags
+DisplayName        loc
+DisplayNameShort   loc
+
+[SpellShapeshiftForm]
+category: Spells
+about: The shapeshift forms and stances (Bear Form, Battle Stance, Stealth...).
+server: file
+label: Name
+evidence: client SpellShapeshiftFormRec__Read @584ce0; VMaNGOS SpellShapeshiftFormEntry; 14 fields / 56 bytes per row
+ID                 id
+BonusActionBar     uint                       | Which action bar page the form shows.
+Name               loc
+Flags              flags
+CreatureType       int -> CreatureType        | The creature type in the form (0 = humanoid).
+AttackIconID       uint -> SpellIcon
+
+[SpellVisual]
+category: Spells
+about: The visual effects of a spell: the kits played while casting, at the cast, on impact and while the aura is active, the missile, its attachment point and the effect of persistent areas.
+server: file
+evidence: client SpellVisualRec__Read @585490 (the SpellVisualRec struct names fields 1-7, 9 and 11-13 with the client code that plays them: Spell_C_StartCastVisuals, Spell_C_HandleSpellGo, Missile_C, CGDynamicObject_C_CreateSpellEffects; CGUnit_C_BuildSpellVisualForSpell copies 8, 10 and 14 with the missile; the missile plays field 10 as a looping sound; Spell_C_SpawnGoMissiles tests bit 1 of field 15); fields 10 and 14 checked on the file: every value is a SoundEntries ID; VMaNGOS format "niiiiiiiiiiiiiii"; 16 fields / 64 bytes per row
+ID                 id
+PrecastKit         uint -> SpellVisualKit     | Played while casting.
+CastKit            uint -> SpellVisualKit     | Played when the cast finishes.
+ImpactKit          uint -> SpellVisualKit     | Played on every target hit.
+StateKit           uint -> SpellVisualKit     | Played on the target while the aura is active.
+ChannelKit         uint -> SpellVisualKit     | Played while channelling.
+HasMissile         uint enum(Bool)
+MissileModel       uint -> SpellVisualEffectName | The projectile.
+MissilePathType    uint                       | How the missile flies (0 straight; 2 is used by 17 visuals).
+MissileDestinationAttachment uint             | Where the missile hits the target (an attachment point).
+MissileSound       int -> SoundEntries        | Looping sound of the missile while it flies.
+HasAreaEffect      uint enum(Bool)
+AreaModel          uint -> SpellVisualEffectName | The model of a persistent area (CGDynamicObject_C_GetSpellEffectRecord: "SPELLEFFECTNOAREAEFFECT" when HasAreaEffect is 0).
+AreaKit            uint -> SpellVisualKit     | The kit of a persistent area (Blizzard, Consecration).
+AnimEventSoundID   int -> SoundEntries        | Sound of the missile (copied with the missile from a weapon's visual).
+Flags              flags                      | 1: area spells send a missile to each target.
+
+[SpellVisualEffectName]
+category: Spells
+about: The models of spell effects (fire balls, glows, impacts) used by spell visual kits and missiles.
+server: client
+label: Name
+evidence: client SpellVisualEffectNameRec__Read @584fe0; the index's spell effect list reads it; 5 fields / 20 bytes per row
+ID                 id
+Name               string
+FileName           model                      | The effect model (Spells\*.mdx).
+col_3              uint                       | Unknown (0, 1, 4, 5, 6, 10 or 11; not read by the client code found so far).
+AreaEffectSize     float                      | The model's radius for a persistent area: the area is scaled to its radius divided by this (CGDynamicObject_C @5d53xx).
+
+[SpellVisualKit]
+category: Spells
+about: A set of spell effects played together: the animation of the caster, effect models at the head, chest, feet, hands and weapons, a sound, a camera shake and special effects (tints, screen effects).
+server: client
+evidence: client SpellVisualKitRec__Read @585180 (the SpellVisualKitRec struct; CGUnit_C_PlaySpellVisualKit spawns fields 3-11 at the attachments 0x14 Head, 0x22 Chest, 0x13 Base, 0x15 / 0x16 spell hands, 0x11 Breath, 0x17-0x19 Special; CGUnit_C_PlaySpellVisualKit reads the animation, the effect name IDs, the sound, the camera shake and the special effects); the index's spell effect list reads 3-12; 35 fields / 140 bytes per row
+ID                 id
+~KitType           uint
+AnimID             int -> AnimationData       | Animation of the unit (-1 = none).
+HeadEffect         int -> SpellVisualEffectName | Spawned at the Head attachment (20).
+ChestEffect        int -> SpellVisualEffectName | At the Chest attachment (34).
+BaseEffect         int -> SpellVisualEffectName | At the Base (feet) attachment (19).
+LeftHandEffect     int -> SpellVisualEffectName | At the left spell hand (21).
+RightHandEffect    int -> SpellVisualEffectName | At the right spell hand (22).
+BreathEffect       int -> SpellVisualEffectName | At the Breath attachment (17).
+SpecialEffect[3]   int -> SpellVisualEffectName | At the Special 1-3 attachments (23-25).
+WorldEffect        int -> SpellVisualEffectName | Placed at the unit's position instead of an attachment.
+SoundID            int -> SoundEntries
+ShakeID            int -> SpellEffectCameraShakes
+CharProc[4]        int                        | Special effect kinds (tint, screen tint, fade, area object...).
+CharParamZero[4]   float
+CharParamOne[4]    float
+~CharParamTwo[4]   uint                       | Third parameter of each special effect (not verified).
+~CharParamThree[4] uint                       | Fourth parameter of each special effect (not verified).
+
+[SpellVisualPrecastTransitions]
+category: Spells
+about: Animations between casting phases (not read by the 1.12 client).
+server: client
+evidence: no record reader in WoW.exe (the 1.12 client does not load this file); 3 fields / 12 bytes per row
+ID                 id
+~PrecastLoadAnimName string
+~PrecastHoldAnimName string
+
+[StableSlotPrices]
+category: Characters
+about: The price of each extra stable slot for hunter pets.
+server: file
+evidence: client StableSlotPricesRec__Read @585760; VMaNGOS format "ni"; 2 fields / 8 bytes per row
+ID                 id
+Cost               uint                       | In copper.
+
+[Startup_Strings]
+category: Interface and text
+about: Messages of the login screens.
+server: client
+label: Name
+evidence: client Startup_StringsRec__Read @456820; 11 fields / 44 bytes per row
+ID                 id
+Name               string
+Message            loc
+
+[Stationery]
+category: Interface and text
+about: The letter paper kinds of mail.
+server: client
+label: Texture
+evidence: client StationeryRec__Read @585860 (MailInfo reads the item); 4 fields / 16 bytes per row
+ID                 id
+ItemID             uint => item
+Texture            texture
+Flags              flags
+
+[StringLookups]
+category: Interface and text
+about: File paths the game looks up by number.
+server: client
+label: String
+evidence: client StringLookupsRec__Read @5859d0; 2 fields / 8 bytes per row
+ID                 id
+String             path
+
+[Talent]
+category: Skills and talents
+about: The talents: their tree and position, the spell of each rank and what must be learned first.
+server: file
+evidence: client TalentRec__Read @585af0; VMaNGOS format "niiiiiiiixxxxixxixxxi"; 21 fields / 84 bytes per row
+ID                 id
+TabID              uint -> TalentTab          | The talent tree.
+TierID             uint                       | The row (0 = top).
+ColumnIndex        uint
+SpellRank[9]       uint -> Spell              | The spell of each rank.
+PrereqTalent[3]    uint -> Talent             | Talents that must be learned first.
+PrereqRank[3]      uint                       | The rank they need (0 = rank 1).
+Flags              flags
+RequiredSpellID    uint -> Spell
+
+[TalentTab]
+category: Skills and talents
+about: The talent trees (Arms, Fury, Protection...): name, icon, class and background picture.
+server: file
+label: Name
+evidence: client TalentTabRec__Read @585ce0; VMaNGOS format "nxxxxxxxxxxxiix"; 15 fields / 60 bytes per row
+ID                 id
+Name               loc
+SpellIconID        uint -> SpellIcon
+RaceMask           flags(RaceMask)
+ClassMask          flags(ClassMask)
+OrderIndex         uint                       | 0, 1 or 2: the position of the tree.
+BackgroundFile     string                     | The tree's background picture (Interface\TalentFrame\<name>).
+
+[TaxiNodes]
+category: World and maps
+about: The flight points: where each flight master's node is, its name and the mounts used by the Horde and the Alliance.
+server: db taxi_nodes
+label: Name
+evidence: client TaxiNodesRec__Read @586010 (string fixup of 5-12); VMaNGOS format "nifffssssssssxii"; 16 fields / 64 bytes per row
+ID                 id
+ContinentID        uint -> Map
+X                  float
+Y                  float
+Z                  float
+Name               loc
+MountCreatureID[2] uint => creature           | The flying mount (server creature entries): Horde, Alliance.
+
+[TaxiPath]
+category: World and maps
+about: The flight routes between two flight points and their price.
+server: file
+evidence: client TaxiPathRec__Read @586520; VMaNGOS format "niii"; 4 fields / 16 bytes per row
+ID                 id
+FromTaxiNode       uint -> TaxiNodes
+ToTaxiNode         uint -> TaxiNodes
+Cost               uint                       | In copper.
+
+[TaxiPathNode]
+category: World and maps
+about: The points of each flight route (the path the mount flies).
+server: file
+evidence: client TaxiPathNodeRec__Read @586330; VMaNGOS format "diiifffii"; 9 fields / 36 bytes per row
+ID                 id
+PathID             uint -> TaxiPath
+NodeIndex          uint                       | Order of the point in the route (0 = first).
+ContinentID        uint -> Map
+LocX               float
+LocY               float
+LocZ               float
+Flags              uint enum(TaxiNodeFlag)
+Delay              uint                       | Seconds to wait here.
+
+[TerrainType]
+category: World and maps
+about: Ground kinds (dirt, grass, stone, snow...) for footstep sounds and dust.
+server: client
+label: TerrainDesc
+evidence: client TerrainTypeRec__Read @586660; 6 fields / 24 bytes per row; column names from public 1.12 documentation
+TerrainID          id
+TerrainDesc        string
+~FootstepSprayRun  uint
+~FootstepSprayWalk uint
+SoundID            uint -> TerrainTypeSounds
+~Flags             flags
+
+[TerrainTypeSounds]
+category: Sounds and music
+about: Ground kinds for sounds (only IDs).
+server: client
+evidence: client TerrainTypeSoundsRec__Read @586810; 1 field / 4 bytes per row
+ID                 id
+
+[TransportAnimation]
+category: World and maps
+about: The routes of zeppelins, boats and elevators over time.
+server: file
+evidence: client TransportAnimationRec__Read @5868f0 (GameObjTransport_InterpolatePosition @5f6280 reads all values); VMaNGOS format "diifffx"; 7 fields / 28 bytes per row
+ID                 id
+TransportID        uint => gameobject         | The transport (server game object entry).
+TimeIndex          uint                       | Milliseconds from the start of the route.
+PosX               float
+PosY               float
+PosZ               float
+SequenceID         uint -> AnimationData      | The animation played.
+
+[UISoundLookups]
+category: Sounds and music
+about: The interface sounds (clicks, opening windows...).
+server: client
+label: SoundName
+evidence: client UISoundLookupsRec__Read @586aa0; 3 fields / 12 bytes per row
+ID                 id
+SoundID            uint -> SoundEntries
+SoundName          string
+
+[UnitBlood]
+category: Creatures and models
+about: Blood splashes of creatures.
+server: client
+evidence: client UnitBloodRec__Read @586cf0; 10 fields / 40 bytes per row; column names from public 1.12 documentation
+ID                 id
+~CombatBloodSpurtFront[2] uint
+~CombatBloodSpurtBack[2] uint
+GroundBlood[5]     texture
+
+[UnitBloodLevels]
+category: Creatures and models
+about: Blood amounts by violence setting.
+server: client
+evidence: client UnitBloodLevelsRec__Read @586bf0 (an array of 3); 4 fields / 16 bytes per row
+ID                 id
+~Violencelevel[3]  uint
+
+[VideoHardware]
+category: Other
+about: Default video settings per graphics card.
+server: client
+evidence: client VideoHardwareRec__Read @689aa0; 22 fields / 88 bytes per row
+ID                 id
+~VendorID          uint                       | The card maker (0x10DE NVIDIA, 0x1002 ATI...).
+~DeviceID          uint
+col_3              uint
+col_4              uint
+col_5              uint
+col_6              uint
+col_7              uint
+col_8              uint
+col_9              uint
+col_10             uint
+col_11             uint
+col_12             uint
+col_13             uint
+col_14             uint
+col_15             uint
+col_16             uint
+col_17             uint
+col_18             string
+col_19             string
+col_20             uint
+col_21             uint
+
+[VocalUISounds]
+category: Sounds and music
+about: The voice lines of characters for interface errors ("I can't do that yet", "Not enough mana").
+server: client
+evidence: client VocalUISoundsRec__Read @586f10 (two arrays of 2); 7 fields / 28 bytes per row
+ID                 id
+~VocalUIEnum       uint
+RaceID             uint enum(Race)
+~NormalSoundID[2]  int -> SoundEntries        | Male, female.
+~PissedSoundID[2]  int -> SoundEntries        | Male, female.
+
+[WeaponImpactSounds]
+category: Sounds and music
+about: The sounds of weapons hitting.
+server: client
+evidence: client WeaponImpactSoundsRec__Read @587450 (two arrays of 10); 23 fields / 92 bytes per row
+ID                 id
+~WeaponSubClassID  uint
+~ParrySoundType    uint
+~ImpactSoundID[10] uint -> SoundEntries
+~CritImpactSoundID[10] uint -> SoundEntries
+
+[WeaponSwingSounds2]
+category: Sounds and music
+about: The sounds of weapon swings.
+server: client
+evidence: client WeaponSwingSounds2Rec__Read @5875c0; 4 fields / 16 bytes per row
+ID                 id
+~SwingType         uint
+~Crit              uint enum(Bool)
+SoundID            uint -> SoundEntries
+
+[WMOAreaTable]
+category: World and maps
+about: The names, music and sounds of places inside buildings and caves (each group of a WMO model can be its own place).
+server: file
+label: AreaName
+evidence: client WMOAreaTableRec__Read @587080; VMaNGOS format "niiixxxxxiixxxxxxxxx"; 20 fields / 80 bytes per row
+ID                 id
+WMOID              uint                       | The building model's ID (stored in the root .wmo).
+NameSetID          uint                       | The name set (doodad set) of the placement.
+WMOGroupID         int                        | The group of the model (-1 = the whole model).
+SoundProviderPref  int -> SoundProviderPreferences
+SoundProviderPrefUnderwater uint -> SoundProviderPreferences
+AmbienceID         int -> SoundAmbience
+ZoneMusic          int -> ZoneMusic
+IntroSound         uint -> ZoneIntroMusicTable
+Flags              flags                      | Indoor / outdoor.
+AreaTableID        uint -> AreaTable          | The area (subzone) it belongs to.
+AreaName           loc
+
+[WorldMapArea]
+category: World and maps
+about: The zone maps of the world map: which area each map shows and the world coordinates of its edges.
+server: file
+label: AreaName
+evidence: client WorldMapAreaRec__Read @587700 (floats read by WorldMap_GetMapInfo); VMaNGOS format "xinxffff"; 8 fields / 32 bytes per row
+ID                 id
+MapID              uint -> Map
+AreaID             uint -> AreaTable          | 0 = the whole continent.
+AreaName           string                     | The internal name (folder of the map pictures in Interface\WorldMap\).
+LocLeft            float
+LocRight           float
+LocTop             float
+LocBottom          float
+
+[WorldMapContinent]
+category: World and maps
+about: The continents of the world map: the tile range shown and the offset and scale of the map pictures.
+server: client
+evidence: client WorldMapContinentRec__Read @5878f0 (WorldMap_Initialize and TaxiMap_Open @4db710 read every field); 13 fields / 52 bytes per row
+ID                 id
+MapID              uint -> Map
+LeftBoundary       int
+RightBoundary      int
+TopBoundary        int
+BottomBoundary     int
+OffsetX            float
+OffsetY            float
+Scale              float
+TaxiMinX           float
+TaxiMinY           float
+TaxiMaxX           float
+TaxiMaxY           float
+
+[WorldMapOverlay]
+category: World and maps
+about: The overlays of the world map that appear when you explore an area.
+server: client
+label: TextureName
+evidence: client WorldMapOverlayRec__Read @587b60; VMaNGOS format "nxiiiixxxxxxxxxxx"; 17 fields / 68 bytes per row; column names from public 1.12 documentation
+ID                 id
+MapAreaID          uint -> WorldMapArea
+AreaID[4]          uint -> AreaTable          | Exploring one of these areas shows the overlay.
+~MapPointX         uint
+~MapPointY         uint
+TextureName        string                     | The overlay picture (Interface\WorldMap\<zone>\<name>).
+~TextureWidth      uint
+~TextureHeight     uint
+~OffsetX           uint
+~OffsetY           uint
+~HitRectTop        uint
+~HitRectLeft       uint
+~HitRectBottom     uint
+~HitRectRight      uint
+
+[WorldSafeLocs]
+category: World and maps
+about: The graveyards and other safe locations (where ghosts appear).
+server: file
+label: AreaName
+evidence: client WorldSafeLocsRec__Read @587e10; VMaNGOS format "nifffxxxxxxxxx"; 14 fields / 56 bytes per row
+ID                 id
+Continent          uint -> Map
+LocX               float
+LocY               float
+LocZ               float
+AreaName           loc
+
+[WorldStateUI]
+category: Interface and text
+about: The world state displays (battleground scores, towers, capture bars).
+server: client
+evidence: client WorldStateUIRec__Read @588110; 39 fields / 156 bytes per row; column names from public 1.12 documentation, value ranges checked on the file
+ID                 id
+MapID              uint -> Map
+AreaID             uint -> AreaTable
+Icon               texture
+String             loc
+Tooltip            loc
+~Faction           int
+StateVariable      uint
+~Type              uint
+DynamicIcon        texture
+DynamicTooltip     loc
+ExtendedUI         string
+ExtendedUIStateVariable[3] uint
+
+[WowError_Strings]
+category: Interface and text
+about: Error message names and texts.
+server: client
+label: Description
+evidence: no record reader in WoW.exe (read by the interface code); 11 fields / 44 bytes per row
+ID                 id
+Name               string
+Description        loc
+
+[ZoneIntroMusicTable]
+category: Sounds and music
+about: The short music played when you enter an area.
+server: client
+label: Name
+evidence: client ZoneIntroMusicTableRec__Read @5888b0; 5 fields / 20 bytes per row; column names from public 1.12 documentation
+ID                 id
+Name               string
+SoundID            uint -> SoundEntries
+~Priority          uint
+~MinDelayMinutes   uint
+
+[ZoneMusic]
+category: Sounds and music
+about: The music of areas: the music for day and night and the silence between pieces.
+server: client
+label: SetName
+evidence: client ZoneMusicRec__Read @588a40 (three arrays of 2); 8 fields / 32 bytes per row; column names from public 1.12 documentation
+ID                 id
+SetName            string
+SilenceIntervalMin[2] uint                    | Milliseconds (day, night).
+SilenceIntervalMax[2] uint
+Sounds[2]          uint -> SoundEntries       | Day, night.
+
+# ---------------------------------------------------------------------------------------------- spell values
+# The names of the spell effects, auras, targets and attribute bits follow the constant names of the server (VMaNGOS);
+# only the names are used.
+
+@enum SpellFamily
+  0 = Generic
+  1 = Events
+  3 = Mage
+  4 = Warrior
+  5 = Warlock
+  6 = Priest
+  7 = Druid
+  8 = Rogue
+  9 = Hunter
+  10 = Paladin
+  11 = Shaman
+  12 = Unknown (12)
+  13 = Potion
+
+@flags SpellCastTargetFlags
+  0x0 = Self
+  0x2 = Unit
+  0x10 = Item
+  0x20 = Source location
+  0x40 = Destination location
+  0x80 = Object (unknown)
+  0x100 = Unit (unknown)
+  0x200 = PvP corpse
+  0x400 = Unit corpse
+  0x800 = Object
+  0x1000 = Trade item
+  0x2000 = Text
+  0x4000 = Opening an object or lock
+  0x8000 = Corpse
+
+@flags CreatureTypeMask
+  0x1 = Beast
+  0x2 = Dragonkin
+  0x4 = Demon
+  0x8 = Elemental
+  0x10 = Giant
+  0x20 = Undead
+  0x40 = Humanoid
+  0x80 = Critter
+  0x100 = Mechanical
+  0x200 = Not specified
+  0x400 = Totem
+
+@enum ReputationRank
+  0 = Hated
+  1 = Hostile
+  2 = Unfriendly
+  3 = Neutral
+  4 = Friendly
+  5 = Honored
+  6 = Revered
+  7 = Exalted
+
+@enum SpellEffect
+  0 = None
+  1 = Instakill
+  2 = School damage
+  3 = Dummy
+  4 = Portal teleport
+  5 = Teleport units
+  6 = Apply aura
+  7 = Environmental damage
+  8 = Power drain
+  9 = Health leech
+  10 = Heal
+  11 = Bind
+  12 = Portal
+  13 = Ritual base
+  14 = Ritual specialize
+  15 = Ritual activate portal
+  16 = Quest complete
+  17 = Weapon damage noschool
+  18 = Resurrect
+  19 = Add extra attacks
+  20 = Dodge
+  21 = Evade
+  22 = Parry
+  23 = Block
+  24 = Create item
+  25 = Weapon
+  26 = Defense
+  27 = Persistent area aura
+  28 = Summon
+  29 = Leap
+  30 = Energize
+  31 = Weapon percent damage
+  32 = Trigger missile
+  33 = Open lock
+  34 = Summon change item
+  35 = Apply area aura party
+  36 = Learn spell
+  37 = Spell defense
+  38 = Dispel
+  39 = Language
+  40 = Dual wield
+  41 = Summon wild
+  42 = Summon guardian
+  43 = Teleport units face caster
+  44 = Skill step
+  45 = Add honor
+  46 = Spawn
+  47 = Trade skill
+  48 = Stealth
+  49 = Detect
+  50 = Trans door
+  51 = Force critical hit
+  52 = Guarantee hit
+  53 = Enchant item
+  54 = Enchant item temporary
+  55 = Tamecreature
+  56 = Summon pet
+  57 = Learn pet spell
+  58 = Weapon damage
+  59 = Open lock item
+  60 = Proficiency
+  61 = Send event
+  62 = Power burn
+  63 = Threat
+  64 = Trigger spell
+  65 = Health funnel
+  66 = Power funnel
+  67 = Heal max health
+  68 = Interrupt cast
+  69 = Distract
+  70 = Pull
+  71 = Pickpocket
+  72 = Add farsight
+  73 = Summon possessed
+  74 = Summon totem
+  75 = Heal mechanical
+  76 = Summon object wild
+  77 = Script effect
+  78 = Attack
+  79 = Sanctuary
+  80 = Add combo points
+  81 = Create house
+  82 = Bind sight
+  83 = Duel
+  84 = Stuck
+  85 = Summon player
+  86 = Activate object
+  87 = Summon totem slot1
+  88 = Summon totem slot2
+  89 = Summon totem slot3
+  90 = Summon totem slot4
+  91 = Threat all
+  92 = Enchant held item
+  93 = Summon phantasm
+  94 = Self resurrect
+  95 = Skinning
+  96 = Charge
+  97 = Summon critter
+  98 = Knock back
+  99 = Disenchant
+  100 = Inebriate
+  101 = Feed pet
+  102 = Dismiss pet
+  103 = Reputation
+  104 = Summon object slot1
+  105 = Summon object slot2
+  106 = Summon object slot3
+  107 = Summon object slot4
+  108 = Dispel mechanic
+  109 = Summon dead pet
+  110 = Destroy all totems
+  111 = Durability damage
+  112 = Summon demon
+  113 = Resurrect new
+  114 = Attack me
+  115 = Durability damage pct
+  116 = Skin player corpse
+  117 = Spirit heal
+  118 = Skill
+  119 = Apply area aura pet
+  120 = Teleport graveyard
+  121 = Normalized weapon dmg
+  122 = Unused 122
+  123 = Send taxi
+  124 = Player pull
+  125 = Modify threat percent
+  126 = Unused 126
+  127 = Unused 127
+  128 = Apply area aura friend
+  129 = Apply area aura enemy
+  130 = Despawn object
+@enum AuraType
+  0 = None
+  1 = Bind sight
+  2 = Mod possess
+  3 = Periodic damage
+  4 = Dummy
+  5 = Mod confuse
+  6 = Mod charm
+  7 = Mod fear
+  8 = Periodic heal
+  9 = Mod attackspeed
+  10 = Mod threat
+  11 = Mod taunt
+  12 = Mod stun
+  13 = Mod damage done
+  14 = Mod damage taken
+  15 = Damage shield
+  16 = Mod stealth
+  17 = Mod stealth detect
+  18 = Mod invisibility
+  19 = Mod invisibility detection
+  20 = Obs mod health
+  21 = Obs mod mana
+  22 = Mod resistance
+  23 = Periodic trigger spell
+  24 = Periodic energize
+  25 = Mod pacify
+  26 = Mod root
+  27 = Mod silence
+  28 = Reflect spells
+  29 = Mod stat
+  30 = Mod skill
+  31 = Mod increase speed
+  32 = Mod increase mounted speed
+  33 = Mod decrease speed
+  34 = Mod increase health
+  35 = Mod increase energy
+  36 = Mod shapeshift
+  37 = Effect immunity
+  38 = State immunity
+  39 = School immunity
+  40 = Damage immunity
+  41 = Dispel immunity
+  42 = Proc trigger spell
+  43 = Proc trigger damage
+  44 = Track creatures
+  45 = Track resources
+  46 = Mod parry skill
+  47 = Mod parry percent
+  48 = Mod dodge skill
+  49 = Mod dodge percent
+  50 = Mod block skill
+  51 = Mod block percent
+  52 = Mod crit percent
+  53 = Periodic leech
+  54 = Mod hit chance
+  55 = Mod spell hit chance
+  56 = Transform
+  57 = Mod spell crit chance
+  58 = Mod increase swim speed
+  59 = Mod damage done creature
+  60 = Mod pacify silence
+  61 = Mod scale
+  62 = Periodic health funnel
+  63 = Periodic mana funnel
+  64 = Periodic mana leech
+  65 = Mod casting speed not stack
+  66 = Feign death
+  67 = Mod disarm
+  68 = Mod stalked
+  69 = School absorb
+  70 = Extra attacks
+  71 = Mod spell crit chance school
+  72 = Mod power cost school pct
+  73 = Mod power cost school
+  74 = Reflect spells school
+  75 = Mod language
+  76 = Far sight
+  77 = Mechanic immunity
+  78 = Mounted
+  79 = Mod damage percent done
+  80 = Mod percent stat
+  81 = Split damage pct
+  82 = Water breathing
+  83 = Mod base resistance
+  84 = Mod regen
+  85 = Mod power regen
+  86 = Channel death item
+  87 = Mod damage percent taken
+  88 = Mod health regen percent
+  89 = Periodic damage percent
+  90 = Mod resist chance
+  91 = Mod detect range
+  92 = Prevents fleeing
+  93 = Mod unattackable
+  94 = Interrupt regen
+  95 = Ghost
+  96 = Spell magnet
+  97 = Mana shield
+  98 = Mod skill talent
+  99 = Mod attack power
+  100 = Auras visible
+  101 = Mod resistance pct
+  102 = Mod melee attack power versus
+  103 = Mod total threat
+  104 = Water walk
+  105 = Feather fall
+  106 = Hover
+  107 = Add flat modifier
+  108 = Add pct modifier
+  109 = Add target trigger
+  110 = Mod power regen percent
+  111 = Add caster hit trigger
+  112 = Override class scripts
+  113 = Mod ranged damage taken
+  114 = Mod ranged damage taken pct
+  115 = Mod healing
+  116 = Mod regen during combat
+  117 = Mod mechanic resistance
+  118 = Mod healing pct
+  119 = Share pet tracking
+  120 = Untrackable
+  121 = Empathy
+  122 = Mod offhand damage pct
+  123 = Mod target resistance
+  124 = Mod ranged attack power
+  125 = Mod melee damage taken
+  126 = Mod melee damage taken pct
+  127 = Ranged attack power attacker bonus
+  128 = Mod possess pet
+  129 = Mod speed always
+  130 = Mod mounted speed always
+  131 = Mod ranged attack power versus
+  132 = Mod increase energy percent
+  133 = Mod increase health percent
+  134 = Mod mana regen interrupt
+  135 = Mod healing done
+  136 = Mod healing done percent
+  137 = Mod total stat percentage
+  138 = Mod melee haste
+  139 = Force reaction
+  140 = Mod ranged haste
+  141 = Mod ranged ammo haste
+  142 = Mod base resistance pct
+  143 = Mod resistance exclusive
+  144 = Safe fall
+  145 = Charisma
+  146 = Persuaded
+  147 = Mechanic immunity mask
+  148 = Retain combo points
+  149 = Resist pushback
+  150 = Mod shield blockvalue pct
+  151 = Track stealthed
+  152 = Mod detected range
+  153 = Split damage flat
+  154 = Mod stealth level
+  155 = Mod water breathing
+  156 = Mod reputation gain
+  157 = Pet damage multi
+  158 = Mod shield blockvalue
+  159 = No pvp credit
+  160 = Mod aoe avoidance
+  161 = Mod health regen in combat
+  162 = Power burn mana
+  163 = Mod crit damage bonus
+  164 = Unused 164
+  165 = Melee attack power attacker bonus
+  166 = Mod attack power pct
+  167 = Mod ranged attack power pct
+  168 = Mod damage done versus
+  169 = Mod crit percent versus
+  170 = Detect amore
+  171 = Mod speed not stack
+  172 = Mod mounted speed not stack
+  173 = Allow champion spells
+  174 = Mod spell damage of stat percent
+  175 = Mod spell healing of stat percent
+  176 = Spirit of redemption
+  177 = Aoe charm
+  178 = Mod debuff resistance
+  179 = Mod attacker spell crit chance
+  180 = Mod flat spell damage versus
+  181 = Mod flat spell crit damage versus
+  182 = Mod resistance of stat percent
+  183 = Mod critical threat
+  184 = Mod attacker melee hit chance
+  185 = Mod attacker ranged hit chance
+  186 = Mod attacker spell hit chance
+  187 = Mod attacker melee crit chance
+  188 = Mod attacker ranged crit chance
+  189 = Mod rating
+  190 = Mod faction reputation gain
+  191 = Use normal movement speed
+  192 = Aura spell
+  193 = Total auras
+@enum SpellTarget
+  0 = None
+  1 = Unit caster
+  2 = Unit enemy near caster
+  3 = Unit friend near caster
+  4 = Unit near caster
+  5 = Unit caster pet
+  6 = Unit enemy
+  7 = Enum units script aoe at src loc
+  8 = Enum units script aoe at dest loc
+  9 = Location caster home bind
+  10 = Location caster divine bind nyi
+  11 = Player nyi
+  12 = Player near caster nyi
+  13 = Player enemy nyi
+  14 = Player friend nyi
+  15 = Enum units enemy aoe at src loc
+  16 = Enum units enemy aoe at dest loc
+  17 = Location database
+  18 = Location caster dest
+  19 = Unk 19
+  20 = Enum units party within caster range
+  21 = Unit friend
+  22 = Location caster src
+  23 = Gameobject
+  24 = Enum units enemy in cone 24
+  25 = Unit
+  26 = Locked
+  27 = Unit caster master
+  28 = Enum units enemy aoe at dynobj loc
+  29 = Enum units friend aoe at dynobj loc
+  30 = Enum units friend aoe at src loc
+  31 = Enum units friend aoe at dest loc
+  32 = Location unit minion position
+  33 = Enum units party aoe at src loc
+  34 = Enum units party aoe at dest loc
+  35 = Unit party
+  36 = Enum units enemy within caster range
+  37 = Unit friend and party
+  38 = Unit script near caster
+  39 = Location caster fishing spot
+  40 = Gameobject script near caster
+  41 = Location caster front right
+  42 = Location caster back right
+  43 = Location caster back left
+  44 = Location caster front left
+  45 = Unit friend chain heal
+  46 = Location script near caster
+  47 = Location caster front
+  48 = Location caster back
+  49 = Location caster left
+  50 = Location caster right
+  51 = Enum gameobjects script aoe at src loc
+  52 = Enum gameobjects script aoe at dest loc
+  53 = Location caster target position
+  54 = Enum units enemy in cone 54
+  55 = Location caster front leap
+  56 = Enum units raid within caster range
+  57 = Unit raid
+  58 = Unit raid near caster
+  59 = Enum units friend in cone
+  60 = Enum units script in cone 60
+  61 = Unit raid and class
+  62 = Player raid nyi
+  63 = Location unit position
+@flags SpellAttributes
+  0x1 = Proc failure burns charge
+  0x2 = Uses ranged slot
+  0x4 = On next swing no damage
+  0x8 = Need exotic ammo
+  0x10 = Is ability
+  0x20 = Is tradeskill
+  0x40 = Passive
+  0x80 = Do not display
+  0x100 = Do not log
+  0x200 = Held item only
+  0x400 = On next swing
+  0x800 = Wearer casts proc trigger
+  0x1000 = Daytime only
+  0x2000 = Night only
+  0x4000 = Only indoors
+  0x8000 = Only outdoors
+  0x10000 = Not shapeshift
+  0x20000 = Only stealthed
+  0x40000 = Do not sheath
+  0x80000 = Scales with creature level
+  0x100000 = Cancels auto attack combat
+  0x200000 = No active defense
+  0x400000 = Track target in cast player only
+  0x800000 = Allow cast while dead
+  0x1000000 = Allow while mounted
+  0x2000000 = Cooldown on event
+  0x4000000 = Aura is debuff
+  0x8000000 = Allow while sitting
+  0x10000000 = Not in combat only peaceful
+  0x20000000 = No immunities
+  0x40000000 = Heartbeat resist
+  0x80000000 = No aura cancel
+@flags SpellAttributesEx
+  0x1 = Dismiss pet first
+  0x2 = Use all mana
+  0x4 = Is channeled
+  0x8 = No redirection
+  0x10 = No skill increase
+  0x20 = Allow while stealthed
+  0x40 = Is self channeled
+  0x80 = No reflection
+  0x100 = Only peaceful targets
+  0x200 = Initiates combat
+  0x400 = No threat
+  0x800 = Aura unique
+  0x1000 = Failure breaks stealth
+  0x2000 = Toggle farsight
+  0x4000 = Track target in channel
+  0x8000 = Immunity purges effect
+  0x10000 = Immunity to hostile and friendly effects
+  0x20000 = No autocast ai
+  0x40000 = Prevents anim
+  0x80000 = Exclude caster
+  0x100000 = Finishing move damage
+  0x200000 = Threat only on miss
+  0x400000 = Finishing move duration
+  0x800000 = Ignore caster and target restrictions
+  0x1000000 = Special skillup
+  0x2000000 = Unk25
+  0x4000000 = Require all targets
+  0x8000000 = Discount power on miss
+  0x10000000 = No aura icon
+  0x20000000 = Name in channel bar
+  0x40000000 = Combo on block
+  0x80000000 = Cast when learned
+@flags SpellAttributesEx2
+  0x1 = Allow dead target
+  0x2 = No shapeshift ui
+  0x4 = Ignore line of sight
+  0x8 = Allow low level buff
+  0x10 = Use shapeshift bar
+  0x20 = Auto repeat
+  0x40 = Cannot cast on tapped
+  0x80 = Do not report spell failure
+  0x100 = Unk8
+  0x200 = Unk9
+  0x400 = Special taming flag
+  0x800 = No target per second costs
+  0x1000 = Chain from caster
+  0x2000 = Enchant own item only
+  0x4000 = Allow while invisible
+  0x8000 = Enable after parry
+  0x10000 = No active pets
+  0x20000 = Do not reset combat timers
+  0x40000 = Req dead pet
+  0x80000 = Allow while not shapeshifted
+  0x100000 = Initiate combat post cast
+  0x200000 = Fail on all targets immune
+  0x400000 = No initial threat
+  0x800000 = Proc cooldown on failure
+  0x1000000 = Item cast with owner skill
+  0x2000000 = Dont block mana regen
+  0x4000000 = No school immunities
+  0x8000000 = Ignore weaponskill
+  0x10000000 = Not an action
+  0x20000000 = Cant crit
+  0x40000000 = Active threat
+  0x80000000 = Retain item cast
+@flags SpellAttributesEx3
+  0x1 = Pvp enabling
+  0x2 = No proc equip requirement
+  0x4 = No casting bar text
+  0x8 = Completely blocked
+  0x10 = No res timer
+  0x20 = No durability loss
+  0x40 = No avoidance
+  0x80 = Dot stacking rule
+  0x100 = Only on player
+  0x200 = Not a proc
+  0x400 = Requires main hand weapon
+  0x800 = Only battlegrounds
+  0x1000 = Only on ghosts
+  0x2000 = Hide channel bar
+  0x4000 = Hide in raid filter
+  0x8000 = Normal ranged attack
+  0x10000 = Suppress caster procs
+  0x20000 = Suppress target procs
+  0x40000 = Always hit
+  0x80000 = Instant target procs
+  0x100000 = Allow aura while dead
+  0x200000 = Only proc outdoors
+  0x400000 = Casting cancels autorepeat
+  0x800000 = No damage history
+  0x1000000 = Requires offhand weapon
+  0x2000000 = Treat as periodic
+  0x4000000 = Can proc from procs
+  0x8000000 = Only proc on caster
+  0x10000000 = Ignore caster and target restrictions
+  0x20000000 = Ignore caster modifiers
+  0x40000000 = Do not display range
+  0x80000000 = Not on aoe immune
+@flags SpellAttributesEx4
+  0x1 = Ignore resistances
+  0x2 = Class trigger only on target
+  0x4 = Aura expires offline
+  0x8 = No helpful threat
+  0x10 = No harmful threat
+  0x20 = Allow client targeting
+  0x40 = Cannot be stolen
+  0x80 = Can cast while casting
+  0x100 = Ignore damage taken modifiers
+  0x200 = Combat feedback when usable
+@flags SpellInterruptFlags
+  0x1 = Movement
+  0x2 = Damage pushback
+  0x4 = Stun
+  0x8 = Combat
+  0x10 = Damage cancels
+@flags AuraInterruptFlags
+  0x1 = Aura interrupt hostile action received cancels
+  0x2 = Aura interrupt damage cancels
+  0x4 = Aura interrupt action cancels
+  0x8 = Aura interrupt moving cancels
+  0x10 = Aura interrupt turning cancels
+  0x20 = Aura interrupt anim cancels
+  0x40 = Aura interrupt dismount cancels
+  0x80 = Aura interrupt under water cancels
+  0x100 = Aura interrupt above water cancels
+  0x200 = Aura interrupt sheathing cancels
+  0x400 = Aura interrupt interacting cancels
+  0x800 = Aura interrupt looting cancels
+  0x1000 = Aura interrupt attacking cancels
+  0x2000 = Aura interrupt item use cancels
+  0x4000 = Aura interrupt damage channel duration
+  0x8000 = Aura interrupt shapeshifting cancels
+  0x10000 = Aura interrupt action cancels late
+  0x20000 = Aura interrupt mount cancels
+  0x40000 = Aura interrupt standing cancels
+  0x80000 = Aura interrupt leave world cancels
+  0x100000 = Aura interrupt stealth invis cancels
+  0x200000 = Aura interrupt invulnerability buff cancels
+  0x400000 = Aura interrupt enter world cancels
+@flags ProcFlags
+  0x0 = None
+  0x1 = Heartbeat
+  0x2 = Kill
+  0x4 = Deal melee swing
+  0x8 = Take melee swing
+  0x10 = Deal melee ability
+  0x20 = Take melee ability
+  0x40 = Deal ranged attack
+  0x80 = Take ranged attack
+  0x100 = Deal ranged ability
+  0x200 = Take ranged ability
+  0x400 = Deal helpful ability
+  0x800 = Take helpful ability
+  0x1000 = Deal harmful ability
+  0x2000 = Take harmful ability
+  0x4000 = Deal helpful spell
+  0x8000 = Take helpful spell
+  0x10000 = Deal harmful spell
+  0x20000 = Take harmful spell
+  0x40000 = Deal harmful periodic
+  0x80000 = Take harmful periodic
+  0x100000 = Taken any damage
+  0x200000 = On trap activation
+  0x400000 = Main hand weapon swing
+  0x800000 = Off hand weapon swing
+@enum DamageClass
+  0 = None
+  1 = Magic
+  2 = Melee
+  3 = Ranged
+@enum PreventionType
+  0 = None
+  1 = Silence
+  2 = Pacify
+@enum AuraState
+  1 = Defense
+  2 = Healthless 20 percent
+  3 = Berserking
+  4 = Frozen
+  5 = Judgement
+  7 = Hunter parry
+  8 = Rogue attack from stealth
+  9 = Healthless 15 percent
+  10 = Healthless 10 percent
+  11 = Healthless 5 percent
+

@@ -1,0 +1,68 @@
+<Window x:Class="WoWDataStudio.Views.TerrainExportWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="clr-namespace:WoWDataStudio.Controls"
+        xmlns:s="clr-namespace:WoWDataStudio.Services"
+        s:Manual.Topic="terrain-in-blender"
+        Title="Open terrain in Blender" Width="1000" Height="760" MinWidth="760" MinHeight="560"
+        Style="{StaticResource AppWindow}" WindowStartupLocation="CenterOwner">
+    <!-- "Open terrain in Blender": the tile picker (docs\manual\terrain-in-blender.md). DataContext = TerrainExportViewModel. -->
+    <DockPanel Margin="16" Background="{StaticResource WindowBg}">
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <TextBlock Style="{StaticResource H1}" FontSize="22"><Run Text="Open terrain in Blender: " /><Run Text="{Binding Map.Name, Mode=OneWay}" /></TextBlock>
+            <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,0"
+                       Text="Pick the tiles to edit together. Take the neighbours of the tile along when you work near its edges: details you add at an edge can then be matched to the neighbouring tile's edge." />
+            <Border Background="{StaticResource WarnSoft}" CornerRadius="5" Padding="10,6" Margin="0,8,0,0">
+                <TextBlock TextWrapping="Wrap" Foreground="{StaticResource Warn}"
+                           Text="Only heights come back from Blender: the game's ground is a fixed grid (145 vertices per chunk). Raise and lower the ground (sculpt, proportional editing, move along Z). Adding or deleting vertices, or moving them sideways, cannot be imported: the import puts them back on the grid and tells you what it ignored." />
+            </Border>
+        </StackPanel>
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Bottom">
+                <Button Content="Cancel" IsCancel="True" MinWidth="100" Margin="0,0,8,0" />
+                <Button Content="Export only" MinWidth="120" Margin="0,0,8,0" Click="ExportOnly_Click" ToolTip="Write the package without starting Blender." />
+                <Button x:Name="OpenButton" Content="Export and open in Blender" MinWidth="210" Style="{StaticResource PrimaryButton}" Click="Open_Click" IsEnabled="{Binding BlenderFound}"
+                        ToolTipService.ShowOnDisabled="True" ToolTip="{Binding BlenderText}" />
+            </StackPanel>
+            <TextBlock Text="{Binding BlenderText}" Foreground="{StaticResource TextMuted}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,16,0" />
+        </DockPanel>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="14" />
+                <ColumnDefinition Width="330" />
+            </Grid.ColumnDefinitions>
+            <Border Style="{StaticResource Card}" Padding="0">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Bottom" Margin="10,6" TextWrapping="Wrap" Foreground="{StaticResource TextMuted}" FontSize="11"
+                               Text="Click tiles to add or remove them (the blue tile always goes). Light blue: the tiles that go to Blender. Mouse wheel: zoom. Right-drag: move." />
+                    <c:MinimapView x:Name="Picker" Source="{Binding Overview}" Cell="{Binding Cell}" OriginX="{Binding OriginX}" OriginY="{Binding OriginY}" Tiles="{Binding Tiles}"
+                                   Selected="{Binding Center, Mode=OneWay}" Highlight="{Binding ChosenPoints}" />
+                </DockPanel>
+            </Border>
+            <StackPanel Grid.Column="2">
+                <TextBlock Text="TILES" Style="{StaticResource H3}" FontSize="11" Margin="0,0,0,6" />
+                <WrapPanel>
+                    <Button Content="1 x 1" Command="{Binding PresetCommand}" CommandParameter="1" Padding="12,4" Margin="0,0,6,6" ToolTip="Only the selected tile." />
+                    <Button Content="3 x 3" Command="{Binding PresetCommand}" CommandParameter="3" Padding="12,4" Margin="0,0,6,6" ToolTip="The selected tile and the 8 around it." />
+                    <Button Content="5 x 5" Command="{Binding PresetCommand}" CommandParameter="5" Padding="12,4" Margin="0,0,6,6" ToolTip="The selected tile and two rings of neighbours (25 tiles, slower in Blender)." />
+                </WrapPanel>
+                <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Margin="0,4,0,12" />
+                <TextBlock Text="IN BLENDER" Style="{StaticResource H3}" FontSize="11" Margin="0,0,0,6" />
+                <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextMuted}" FontSize="12" Margin="0,0,0,8"
+                           Text="Every tile is its own object (Tile 32_48...) in its own collection, with its own colour and a label. Its edge vertices are in the vertex groups EDGE_N, EDGE_E, EDGE_S and EDGE_W. The ground textures are blended as in the game (Material Preview)." />
+                <TextBlock Text="{Binding GroundText}" TextWrapping="Wrap" Foreground="{StaticResource TextMuted}" FontSize="12" Margin="0,0,0,8" />
+                <CheckBox Content="Doodads and buildings as references" IsChecked="{Binding IncludeReferences}" Margin="0,0,0,4"
+                          ToolTip="Trees, rocks and buildings placed as simple grey meshes for context (linked copies). They are not imported back: moving them in Blender changes nothing." />
+                <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="20,0,0,12" Text="For looking only: they are ignored when you import the terrain back." />
+                <TextBlock Text="FOLDER" Style="{StaticResource H3}" FontSize="11" Margin="0,0,0,6" />
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Browse..." Command="{Binding BrowseFolderCommand}" Padding="8,3" Margin="6,0,0,0" />
+                    <TextBox Text="{Binding Folder, UpdateSourceTrigger=PropertyChanged}" />
+                </DockPanel>
+                <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,4,0,0"
+                           Text="A new folder is made inside it for this package (wowdata_terrain.json, the tiles, the textures)." />
+            </StackPanel>
+        </Grid>
+    </DockPanel>
+</Window>

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>WoWData.Core</RootNamespace>
+    <Authors>WoWDataTool</Authors>
+    <Description>WoW 1.12 client data: MPQ read/write, DBC, BLP, M2 read/write, search index (C# port of the wowdata Python reference).</Description>
+  </PropertyGroup>
+
+  <!-- 0.7.0: the DBC layouts of the 1.12.1 client (DBC editor), a readable text file -->
+  <ItemGroup>
+    <EmbeddedResource Include="Dbc\Layouts\dbc_layouts_5875.txt" LogicalName="WoWData.Core.Dbc.Layouts.dbc_layouts_5875.txt" />
+    <!-- 0.9.0: what the tables of the VMaNGOS world database mean (Server data tab) -->
+    <EmbeddedResource Include="ServerData\Layouts\server_layouts_vmangos.txt" LogicalName="WoWData.Core.ServerData.Layouts.server_layouts_vmangos.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.10" />
+    <PackageReference Include="MySqlConnector" Version="2.3.7" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+  </ItemGroup>
+
+</Project>

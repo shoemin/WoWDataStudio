@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- 0.8.0: the command line of WoW Data Studio (wds.exe). It shares WoWData.Core with the desktop app and must never
+       reference WPF (CONTRIBUTING.md). The version comes from app\Directory.Build.props, like the app's. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>false</UseWPF>
+    <UseWindowsForms>false</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>wds</AssemblyName>
+    <RootNamespace>WoWData.Cli</RootNamespace>
+    <Description>WoW Data Studio command line: every feature of the app as a command, for scripts and automation.</Description>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WoWData.Core\WoWData.Core.csproj" />
+  </ItemGroup>
+
+  <!-- the Blender add-on and the scripts "models open" / "models addon" run (bin\blender_addon), as for the app -->
+  <ItemGroup>
+    <None Include="..\..\blender_addon\wowdata_blender\*.py" Link="blender_addon\wowdata_blender\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="..\..\blender_addon\studio\*.py" Link="blender_addon\studio\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="wds_prompt.cmd" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
