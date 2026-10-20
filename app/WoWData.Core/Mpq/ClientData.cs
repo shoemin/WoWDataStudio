@@ -5,6 +5,9 @@ namespace WoWData.Core.Mpq;
 public enum SourceKind { Archive, Loose, Deleted, Hidden }
 
 /// <summary>Where a file was found.</summary>
+/// <summary>The archive set of a Data folder: 1.x split archives, or the common/locale archives of TBC 2.4.3 and WotLK 3.3.5a.</summary>
+public enum ArchiveLayout { Split, TBC, WotLK }
+
 public sealed record FileSource(SourceKind Kind, string Name, MpqArchive? Archive = null, string? LoosePath = null)
 {
     public override string ToString() => $"{Kind.ToString().ToLowerInvariant()}:{Name}";
@@ -80,9 +83,34 @@ public sealed class ClientData : IDisposable
         return p;
     }
 
-    /// <summary>Archive file names in the client's lookup order (highest priority first).</summary>
+    /// <summary>
+    /// Which archive set a Data folder has: the 1.x split archives (model.MPQ, texture.MPQ, ...) or the TBC/WotLK
+    /// common/locale archives. Read from the folder, like the clients do: TBC 2.4.3 tests for common.MPQ (0x402540);
+    /// WotLK's base-archive table has the lichking archives.
+    /// </summary>
+    public static ArchiveLayout DetectLayout(string dataDir)
+    {
+        if (FindCase(dataDir, "common.MPQ") == null) return ArchiveLayout.Split;
+        return FindCase(dataDir, "lichking.MPQ") != null ? ArchiveLayout.WotLK : ArchiveLayout.TBC;
+    }
+
+    /// <summary>The locale folder of a TBC/WotLK Data folder (enUS, enGB, ...): the one holding locale-&lt;loc&gt;.MPQ.</summary>
+    public static string? DetectLocale(string dataDir)
+    {
+        foreach (var d in Directory.EnumerateDirectories(dataDir).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+        {
+            var loc = System.IO.Path.GetFileName(d);
+            if (LocaleRe.IsMatch(loc) && FindCase(d, $"locale-{loc}.MPQ") != null) return loc;
+        }
+        return null;
+    }
+
+    /// <summary>Archive file names in the client's lookup order (highest priority first). TBC/WotLK names of locale
+    /// archives are relative to the Data folder (<c>enUS\patch-enUS.MPQ</c>).</summary>
     public static List<string> ClientArchiveOrder(string dataDir)
     {
+        var layout = DetectLayout(dataDir);
+        if (layout != ArchiveLayout.Split) return ExpansionArchiveOrder(dataDir, layout);
         var patches = Directory.EnumerateFiles(dataDir).Select(System.IO.Path.GetFileName).Where(n => n != null && PatchRe.IsMatch(n)).Cast<string>().ToList();
         // Python: sorted(key=str.lower, reverse=True)
         patches.Sort((a, b) => string.CompareOrdinal(b.ToLowerInvariant(), a.ToLowerInvariant()));
@@ -97,6 +125,61 @@ public sealed class ClientData : IDisposable
         }
         return outList;
     }
+
+    /// <summary>
+    /// TBC 2.4.3 / WotLK 3.3.5a mount order, read from each Wow.exe (patch-list builder 0x405260 / 0x405AB0, mount
+    /// function 0x4054E0 / 0x405DD0; docs\research\MPQ_ERA_DELTA.md section 1) and confirmed by the data:
+    ///   1. every Data\patch-?.MPQ and Data\&lt;loc&gt;\patch-&lt;loc&gt;-?.MPQ (one character), sorted by full path, descending,
+    ///      case-insensitive (comparator -strnicmp), the first wins;
+    ///   2. the exact names: TBC &lt;loc&gt;\patch-&lt;loc&gt;.MPQ then patch.MPQ, WotLK patch.MPQ then &lt;loc&gt;\patch-&lt;loc&gt;.MPQ;
+    ///   3. the base archives in table order (earlier entries win).
+    /// base-&lt;loc&gt;.MPQ, backup-&lt;loc&gt;.MPQ and the streaming archives are never mounted.
+    /// </summary>
+    private static List<string> ExpansionArchiveOrder(string dataDir, ArchiveLayout layout)
+    {
+        var loc = DetectLocale(dataDir);
+        var patches = new List<string>();
+        foreach (var f in Directory.EnumerateFiles(dataDir))
+        {
+            var n = System.IO.Path.GetFileName(f);
+            if (PatchRe.IsMatch(n)) patches.Add(n);
+        }
+        if (loc != null)
+        {
+            var locRe = new Regex($@"^patch-{Regex.Escape(loc)}-[^.]\.mpq$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            foreach (var f in Directory.EnumerateFiles(System.IO.Path.Combine(dataDir, loc)))
+            {
+                var n = System.IO.Path.GetFileName(f);
+                if (locRe.IsMatch(n)) patches.Add(loc + "\\" + n);
+            }
+        }
+        patches.Sort((a, b) => string.CompareOrdinal(b.ToLowerInvariant(), a.ToLowerInvariant()));
+        var order = new List<string>(patches);
+        string L(string n) => loc == null ? n : loc + "\\" + n.Replace("<loc>", loc);
+        if (layout == ArchiveLayout.TBC) { if (loc != null) order.Add(L("patch-<loc>.MPQ")); order.Add("patch.MPQ"); }
+        else { order.Add("patch.MPQ"); if (loc != null) order.Add(L("patch-<loc>.MPQ")); }
+        if (layout == ArchiveLayout.TBC) order.AddRange(new[] { "expansion.MPQ", "common.MPQ" });
+        else order.AddRange(new[] { "expansion.MPQ", "lichking.MPQ", "common.MPQ", "common-2.MPQ" });
+        if (loc != null)
+        {
+            var locs = layout == ArchiveLayout.TBC
+                ? new[] { "locale-<loc>.MPQ", "speech-<loc>.MPQ", "expansion-locale-<loc>.MPQ", "expansion-speech-<loc>.MPQ" }
+                : new[] { "locale-<loc>.MPQ", "speech-<loc>.MPQ", "expansion-locale-<loc>.MPQ", "lichking-locale-<loc>.MPQ",
+                          "expansion-speech-<loc>.MPQ", "lichking-speech-<loc>.MPQ" };
+            order.AddRange(locs.Select(L));
+        }
+        var outList = new List<string>();
+        foreach (var n in order)
+        {
+            var dir = System.IO.Path.GetDirectoryName(n);
+            var real = FindCase(string.IsNullOrEmpty(dir) ? dataDir : System.IO.Path.Combine(dataDir, dir), System.IO.Path.GetFileName(n));
+            if (real != null && !outList.Contains(string.IsNullOrEmpty(dir) ? real : dir + "\\" + real, StringComparer.OrdinalIgnoreCase))
+                outList.Add(string.IsNullOrEmpty(dir) ? real : dir + "\\" + real);
+        }
+        return outList;
+    }
+
+    private static readonly Regex LocaleRe = new(@"^[a-z]{2}[A-Z]{2}$", RegexOptions.CultureInvariant);
 
     private static string? FindCase(string dir, string name)
     {
