@@ -141,6 +141,13 @@ public static class ScreenshotRunner
                 Log(Failures.Count == 0 ? "ALL STEPS OK" : "FAILURES:" + string.Join("", Failures.Select(f => Environment.NewLine + "  " + f)));
                 return Failures.Count == 0 ? 0 : 1;
             }
+            if (Environment.GetEnvironmentVariable("WDS_SCREENSHOT_ONLY") == "versions")
+            {
+                // developers: only the Other versions pictures (137-140), from the copies in WDS_SCREENSHOT_OTHER_CLIENTS
+                await VersionScreenshots.RunAsync(win, b, outDir);
+                Log(Failures.Count == 0 ? "ALL STEPS OK" : "FAILURES:" + string.Join("", Failures.Select(f => Environment.NewLine + "  " + f)));
+                return Failures.Count == 0 ? 0 : 1;
+            }
             if (Environment.GetEnvironmentVariable("WDS_SCREENSHOT_ONLY") == "tables")
             {
                 // developers: only the Data tables pictures (83-94), for a quick look at that tab
@@ -312,6 +319,10 @@ public static class ScreenshotRunner
             // 22. 0.13.0: the Quest chains tab, against a throwaway MySQL server with the quest-chain supplement
             // (QuestScreenshots.cs)
             await QuestScreenshots.RunAsync(win, b, outDir);
+
+            // 23. 0.14.0: the Other versions tab, from client copies named by WDS_SCREENSHOT_OTHER_CLIENTS (skipped
+            // without them; VersionScreenshots.cs)
+            await VersionScreenshots.RunAsync(win, b, outDir);
 
             Log(Failures.Count == 0 ? "ALL STEPS OK" : "FAILURES:\n  " + string.Join("\n  ", Failures));
             return Failures.Count == 0 ? 0 : 1;

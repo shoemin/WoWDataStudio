@@ -25,6 +25,13 @@ recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
     16 languages per text from TBC on; raw `col_N` columns where none is known yet); **Compare across versions**
     (one row side by side, columns matched by name).
   * Commands: `wds versions find`, `info`, `files`, `extract`, `tables`, `rows`, `compare`. Tests: `OtherVersionsTests`.
+  * Named columns for 73 tables of 2.4.3 (`dbc_layouts_8606.txt`) and 54 of 3.3.5a (`dbc_layouts_12340.txt`): maps and
+    areas, lights, sounds, liquids, world map, flight paths, creature / item / object displays, characters, classes,
+    races, factions, skills, talents, spells. Evidence per table in the file: columns matched by value with 1.12 (and
+    2.4.3) on rows with the same ID (most 95-100%), texts checked as valid strings in every row and language, links
+    resolving for at least 95% of the values (the few below are named in the hint with their rate), names of new
+    columns from public format descriptions marked `~` unless the file proves them. A column keeps its 1.12 name when it
+    holds the same thing. The 3.3.5a layouts were measured on Blizzard's archives (without the server's patch-7.mpq).
 * **MPQ reader: the archives of TBC 2.4.3 and WotLK 3.3.5a.** bzip2-compressed sectors are read (our own decoder,
   `Mpq\Bzip2.cs`, written from the bzip2 format description; every block's CRC is checked), and so are files packed with a
   smaller sector size than their archive's header says (WotLK `backup-enUS.MPQ`). Measured on the copies in

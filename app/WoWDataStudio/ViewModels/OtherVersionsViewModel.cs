@@ -107,13 +107,16 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
     {
         _session.Settings.OtherClientsBlizzardOnly = value;
         SaveSettings();
-        if (SelectedClient != null) _ = OpenClientAsync(SelectedClient);
+        if (SelectedClient != null) Opening = OpenClientAsync(SelectedClient);
     }
 
     partial void OnSelectedClientChanged(ClientRow? value)
     {
-        if (value != null) _ = OpenClientAsync(value);
+        if (value != null) Opening = OpenClientAsync(value);
     }
+
+    /// <summary>The opening of the selected client (the screenshots wait for it).</summary>
+    public Task Opening { get; private set; } = Task.CompletedTask;
 
     partial void OnSelectedFileChanged(VersionFileRow? value) => ShowPreview(value);
 

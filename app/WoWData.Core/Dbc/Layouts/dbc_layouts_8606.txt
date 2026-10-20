@@ -1,0 +1,1391 @@
+# WoW Data Studio: the DBC layouts of the World of Warcraft 2.4.3 client (The Burning Crusade, build 8606).
+#
+# Experimental, read-only: used by the "other versions" reader (Versions\OtherClients.cs). The format is the one of
+# dbc_layouts_5875.txt (1.12.1); see the header there. In short, one [Table] section per DBFilesClient\<Table>.dbc:
+#   category:     where the table is listed in the editor
+#   about:        what the table controls in the game, in plain words
+#   server:       always "client" here (we have no 2.4.3 server)
+#   label:        the column that names a row in links (default: the first named text column)
+#   evidence:     how the layout was established
+# Then one line per column, in file order:
+#   Name[N]  [storage] [semantic] [-> LinkedTable] [| hint]
+#   storage:  int  uint  float  string  loc (16 languages + a flags field = 17 fields)  byte  ushort
+#   semantic: id  bool  enum(Name)  flags(Name)  flags  icon  texture  model  path
+#   Name[3] makes Name1, Name2, Name3. A "~" before the name: the meaning is a best guess (shown as not verified).
+#   col_N: an unknown column (N = its field index), shown as stored.
+#
+# Evidence (every table was measured on the enGB 2.4.3.8606 client, the winning copy of each file in the client's own
+# archive order; scratch probes in the session's scratchpad\layouts_8606):
+#   * value matching against 1.12.1: for each column of the verified 1.12 layout (dbc_layouts_5875.txt), the 2.4.3
+#     field that holds the same value on the rows with the same ID (text compared as text). Rates are given per table;
+#     "nd" = the rate on the rows where the 1.12 value is not the column's most common value (so a column that is
+#     mostly 0 or -1 cannot match by accident). A localized string grows from 9 to 17 fields, so every column after
+#     one moves by 8;
+#   * the file itself: which fields are string offsets (and what the text says), float bit patterns, value ranges,
+#     and links that resolve to the IDs of the linked table (the rates are in each evidence line);
+#   * format knowledge: names of columns new in 2.4.3 follow the public descriptions of the format (wowdev); such a
+#     name is plain only when the file confirms it (a link that resolves, text that says it, a box whose minimum is
+#     below its maximum), otherwise it starts with "~".
+# Localized strings: the English text of this enGB client is in slot 0 of the 16 (the slots of the other languages
+# are empty), as in 1.12.
+
+@build 8606 2.4.3
+@locales 16
+
+# ---------------------------------------------------------------------------------------------- named values
+
+@enum Bool
+  0 = No
+  1 = Yes
+
+@enum Gender
+  0 = Male
+  1 = Female
+
+# Races 10-18: their names from this client's ChrRaces.dbc.
+@enum Race
+  0 = None
+  1 = Human
+  2 = Orc
+  3 = Dwarf
+  4 = Night Elf
+  5 = Undead
+  6 = Tauren
+  7 = Gnome
+  8 = Troll
+  9 = Goblin
+  10 = Blood Elf
+  11 = Draenei
+  12 = Fel Orc
+  13 = Naga
+  14 = Broken
+  15 = Skeleton
+  18 = Forest Troll
+
+@flags RaceMask
+  0x1 = Human
+  0x2 = Orc
+  0x4 = Dwarf
+  0x8 = Night Elf
+  0x10 = Undead
+  0x20 = Tauren
+  0x40 = Gnome
+  0x80 = Troll
+  0x100 = Goblin
+  0x200 = Blood Elf
+  0x400 = Draenei
+
+@enum Class
+  0 = None
+  1 = Warrior
+  2 = Paladin
+  3 = Hunter
+  4 = Rogue
+  5 = Priest
+  7 = Shaman
+  8 = Mage
+  9 = Warlock
+  11 = Druid
+
+@flags ClassMask
+  0x1 = Warrior
+  0x2 = Paladin
+  0x4 = Hunter
+  0x8 = Rogue
+  0x10 = Priest
+  0x40 = Shaman
+  0x80 = Mage
+  0x100 = Warlock
+  0x400 = Druid
+
+# 2.4.3 stores a school mask (bit n = school n) instead of the 1.12 school number.
+@flags SpellSchoolMask
+  0x1 = Physical
+  0x2 = Holy
+  0x4 = Fire
+  0x8 = Nature
+  0x10 = Frost
+  0x20 = Shadow
+  0x40 = Arcane
+
+@enum PowerType
+  -2 = Health
+  0 = Mana
+  1 = Rage
+  2 = Focus
+  3 = Energy
+  4 = Happiness
+
+# 4 = Arena: the three arenas (559, 562, 572) are the only maps of type 4.
+@enum InstanceType
+  0 = Open world
+  1 = Dungeon
+  2 = Raid
+  3 = Battleground
+  4 = Arena
+
+# 1 = The Burning Crusade: set on Outland (530), its dungeons and raids, Karazhan, Zul'Aman, the Caverns of Time.
+@enum Expansion
+  0 = World of Warcraft (classic)
+  1 = The Burning Crusade
+
+@enum CharSection
+  0 = Skin
+  1 = Face
+  2 = Facial hair
+  3 = Hair
+  4 = Underwear
+
+@flags FactionMask
+  0x1 = Player
+  0x2 = Alliance
+  0x4 = Horde
+  0x8 = Monster
+
+@flags FactionTemplateFlags
+  0x1 = Responds to calls for help
+  0x2 = Broadcasts to enemies (low)
+  0x4 = Broadcasts to enemies (medium)
+  0x8 = Broadcasts to enemies (high)
+  0x10 = Searches for enemies (low)
+  0x20 = Searches for enemies (medium)
+  0x40 = Searches for enemies (high)
+  0x80 = Searches for friends (low)
+  0x100 = Searches for friends (medium)
+  0x200 = Searches for friends (high)
+  0x400 = Flees from calls for help
+  0x800 = Assists players (PvP flagged)
+  0x1000 = Attacks PvP-active players
+
+@flags ReputationFlags
+  0x1 = Visible
+  0x2 = At war
+  0x4 = Hidden
+  0x8 = Invisible (forced)
+  0x10 = Peace (forced)
+
+# Bits up to 0x200 as in 1.12. The others are named after the areas that have them in this client.
+@flags AreaFlags
+  0x1 = Snow
+  0x2 = Unknown (0x2)
+  0x4 = Development map
+  0x8 = Slave capital
+  0x10 = Unknown (0x10)
+  0x20 = Slave capital (2)
+  0x40 = Duels allowed
+  0x80 = Arena
+  0x100 = Capital city
+  0x200 = City
+  0x400 = Outland (every Outland area)
+  0x800 = Sanctuary (only Shattrath City)
+  0x1000 = Unknown (0x1000: the Tempest Keep instances)
+  0x4000 = Unknown (0x4000: Outland zones and battlegrounds)
+  0x10000 = Arena instance (only the three arenas)
+
+@flags AreaTeam
+  0x2 = Alliance
+  0x4 = Horde
+
+@enum LearnOnGetSkill
+  0 = No
+  1 = When the profession is learned
+  2 = When the race or class skill is learned
+
+@enum TaxiNodeFlag
+  0 = Normal
+  1 = Teleport (map change)
+  2 = Stop (wait here)
+
+@enum SpellFamily
+  0 = Generic
+  1 = Events
+  3 = Mage
+  4 = Warrior
+  5 = Warlock
+  6 = Priest
+  7 = Druid
+  8 = Rogue
+  9 = Hunter
+  10 = Paladin
+  11 = Shaman
+  12 = Unknown (12)
+  13 = Potion
+
+@enum ReputationRank
+  0 = Hated
+  1 = Hostile
+  2 = Unfriendly
+  3 = Neutral
+  4 = Friendly
+  5 = Honored
+  6 = Revered
+  7 = Exalted
+
+@enum DamageClass
+  0 = None
+  1 = Magic
+  2 = Melee
+  3 = Ranged
+
+@enum PreventionType
+  0 = None
+  1 = Silence
+  2 = Pacify
+
+# ---------------------------------------------------------------------------------------------- world and maps
+
+[Map]
+category: World and maps
+about: The maps: continents, dungeons, raids, battlegrounds and arenas: their folder (World\Maps\<Directory>), kind, name, loading screen, battleground texts, the entrance a ghost is sent to, the raid and heroic reset times and the expansion.
+server: client
+label: MapName
+evidence: 125 fields / 500 bytes per row. Value match with 1.12 on 44 shared IDs: ID, Directory, InstanceType, PVP 100%, MapName 98%, MinLevel/MaxLevel/MaxPlayers 100/93/100% (1.12 fields 13-15 -> 21-23), 1.12 col_16-18 -> 24-26 100%, AreaTableID 98%, LoadingScreenID 98%, BracketLevelRange 98%, GroupJoin 100%, IconScale 100%. The battleground descriptions are at 28 (AV: "Crush the Alliance!") and 45 ("Defend yourself from the onslaught of the Horde!"). New fields read from the file: 83 holds "Heroic Difficulty requires ..." exactly on the 17 maps with a heroic mode; 117 is -1 or a map ID (0, 1, 530) and 118/119 the coordinates of the instance's entrance on it (Shadowfang Keep: map 0 at -231, 1572); 120 is 604800 / 432000 / 259200 / 86400 (7, 5, 3, 1 days) on raids only; 121 is 86400 on exactly the heroic dungeons; 124 is 1 on Outland, its instances, Karazhan, Zul'Aman, Hyjal and the Caverns of Time. Names of 117-124 from wowdev.
+ID                 id
+Directory          string                     | The folder of the map's files: World\Maps\<Directory>\.
+InstanceType       uint enum(InstanceType)
+PVP                uint enum(Bool)            | 1 on the battlegrounds.
+MapName            loc
+MinLevel           uint                       | Lowest level (battleground brackets start here; 0 on dungeons in 2.4.3).
+MaxLevel           uint
+MaxPlayers         uint                       | Largest group that may enter (battlegrounds; 0 on dungeons in 2.4.3).
+col_24             int                        | Unknown (-1, or 0 on a few maps); 1.12 col_16.
+col_25             float                      | Unknown; 1.12 col_17.
+col_26             float                      | Unknown; 1.12 col_18.
+AreaTableID        uint -> AreaTable          | The area of the map (for instances).
+MapDescription0    loc                        | Battleground description (Horde).
+MapDescription1    loc                        | Battleground description (Alliance).
+LoadingScreenID    uint -> LoadingScreens
+BracketLevelRange  uint                       | Battleground and arena brackets: levels per bracket (10 or 5).
+GroupJoin          uint enum(Bool)            | A battleground group may join as a group.
+IconScale          float                      | Size of the battleground icon on the world map.
+col_66             loc                        | Unknown text (empty in every row).
+HeroicRequirementText loc                     | Shown when a group cannot enter the heroic mode ("Heroic Difficulty requires the Key of Time.").
+col_100            loc                        | Unknown text (empty in every row).
+CorpseMapID        int -> Map                 | The map of the instance's entrance (-1 = none): where a ghost who died inside is sent.
+CorpseX            float                      | The entrance's position on that map.
+CorpseY            float
+ResetTimeRaid      uint                       | Seconds between raid resets (604800 = 7 days); 0 = not a raid.
+ResetTimeHeroic    uint                       | Seconds between heroic resets (86400 = 1 day); 0 = no heroic mode.
+col_122            uint                       | Unknown (0 in every row).
+~TimeOfDayOverride int                        | -1 in every row (a fixed time of day; -1 = none).
+ExpansionID        uint enum(Expansion)       | The expansion the map belongs to.
+
+[AreaTable]
+category: World and maps
+about: Every zone and subzone: its name, map, parent zone, music, ambient sounds, exploration bit and PvP faction. The game shows the name when you enter it; maps store these IDs per terrain chunk.
+server: client
+label: AreaName
+evidence: 35 fields / 140 bytes per row. Value match with 1.12 on 1,081 shared IDs: fields 0-10 at the same index (MapID 97%, Flags 97%, AmbienceID 98%, the others 100%), AreaName 99%, FactionGroupMask 1.12 field 20 -> 28 100%. LiquidType[4] at 29-32: the only values are Hyjal Summit 61 "Hyjal Past - Water" and Serpentshrine Cavern 41 "Coilfang Raid - Water" in slot 1 (water) and Naxxramas 21 "Naxxramas - Slime" in slot 4 (slime). Links: MapID 99.9% (1,150 of 1,151), ParentAreaID 100%, sound provider 100%, AmbienceID 100%, ZoneMusic 100%, IntroSound 97.7%. 33 is -500 (or -5000) and 34 a number from 0 to 1 in every row; names from wowdev.
+ID                 id
+MapID              uint -> Map                | The map (continent or instance) the area is on.
+ParentAreaID       uint -> AreaTable          | For a subzone: the zone it belongs to (0 = it is a zone itself).
+AreaBit            uint                       | The exploration bit: which bit of the explored-areas mask this area sets (unique).
+Flags              flags(AreaFlags)
+SoundProviderPref  uint -> SoundProviderPreferences | Sound reverb preset outside water.
+SoundProviderPrefUnderwater uint -> SoundProviderPreferences | Sound reverb preset under water.
+AmbienceID         uint -> SoundAmbience      | Ambient sounds (day / night) of the area.
+ZoneMusic          uint -> ZoneMusic          | The music played in the area.
+IntroSound         uint -> ZoneIntroMusicTable | The short music played when you enter the area.
+ExplorationLevel   int                        | The level used for the exploration experience (-1 none).
+AreaName           loc                        | The name shown when you enter the area and on the map.
+FactionGroupMask   flags(AreaTeam)            | Which side owns the area for PvP: 2 Alliance, 4 Horde, 0 contested.
+LiquidType[4]      uint -> LiquidType         | Liquid type used instead of water, ocean, magma and slime in this area (0 = the normal one).
+~MinElevation      float                      | -500 in nearly every row (-5000 in a few).
+~AmbientMultiplier float                      | A number from 0 to 1.
+
+[WMOAreaTable]
+category: World and maps
+about: The names, music and sounds of places inside buildings and caves (each group of a WMO model can be its own place).
+server: client
+label: AreaName
+evidence: 28 fields / 112 bytes per row. Value match with 1.12 on 11,464 shared IDs: fields 0-10 at the same index (100%, except SoundProviderPref 99%, AmbienceID 89%, ZoneMusic 99%), AreaName 100%. Flags (9) is 0 in every row of 2.4.3.
+ID                 id
+WMOID              uint                       | The building model's ID (stored in the root .wmo).
+NameSetID          uint                       | The name set (doodad set) of the placement.
+WMOGroupID         int                        | The group of the model (-1 = the whole model).
+SoundProviderPref  int -> SoundProviderPreferences
+SoundProviderPrefUnderwater uint -> SoundProviderPreferences
+AmbienceID         int -> SoundAmbience
+ZoneMusic          int -> ZoneMusic
+IntroSound         int -> ZoneIntroMusicTable | Resolves for 134 of 147 values (91%; 1.12: 81%): the others (65, 66, 71, 75, 77) are missing from ZoneIntroMusicTable, as in AreaTable.
+Flags              flags                      | Indoor / outdoor (0 in every row of 2.4.3).
+AreaTableID        uint -> AreaTable          | The area (subzone) it belongs to.
+AreaName           loc
+
+[LoadingScreens]
+category: Interface and text
+about: The loading screen pictures of maps.
+server: client
+label: Name
+evidence: 3 fields / 12 bytes per row, the same as 1.12: value match on 40 shared IDs 100% for all three columns; field 2 holds Interface\Glues\LoadingScreens\*.blp paths.
+ID                 id
+Name               string
+FileName           texture                    | The picture (Interface\Glues\LoadingScreens\...).
+
+[LiquidType]
+category: World and maps
+about: The liquid types (water, ocean, magma, slime, and the special waters of a few raids) and the spell they cast on you.
+server: client
+label: Name
+evidence: 4 fields / 16 bytes per row, the same as 1.12: value match on the 5 shared IDs 100% for all four columns; the 2 new rows are 41 "Coilfang Raid - Water" and 61 "Hyjal Past - Water".
+ID                 id
+Name               string
+~Type              uint                       | 3 water and ocean, 0 magma, 2 slime (the values of this file).
+~SpellID           uint -> Spell              | The spell the liquid casts (0 = none). Spell 37025 (Coilfang Raid water) is not in the client's Spell.dbc.
+
+[AreaTrigger]
+category: World and maps
+about: Invisible trigger spheres and boxes in the world: instance portals, tavern (rest) areas, quest exploration points.
+server: client
+evidence: 10 fields / 40 bytes per row, the same as 1.12: value match on 427 shared IDs, every column 99-100%.
+ID                 id
+MapID              uint -> Map
+X                  float
+Y                  float
+Z                  float
+Radius             float                      | Radius of a sphere trigger (yards); 0 when the trigger is a box.
+BoxLength          float
+BoxWidth           float
+BoxHeight          float
+BoxYaw             float                      | Rotation of the box around the vertical axis (radians).
+
+[AreaPOI]
+category: World and maps
+about: Points of interest drawn on the world map (cities, battleground flags, towers) with their icon, name and description.
+server: client
+evidence: 45 fields / 180 bytes per row. Value match with 1.12 on 339 shared IDs: fields 0-9 at the same index (97-100%, AreaID 82%), Name 99% (at 10), Description 1.12 field 19 -> 27 100%, WorldStateID 1.12 field 28 -> 44 100%. The names of the 1.12 layout are kept, including its best guesses.
+ID                 id
+~Importance        uint                       | Which point wins when two overlap (higher = more important).
+~Icon              uint                       | The icon drawn on the map (an index into the POI icon texture).
+~FactionID         uint -> FactionTemplate
+~X                 float
+~Y                 float
+~Z                 float
+~ContinentID       uint -> Map                | The map the point is on.
+~Flags             flags
+~AreaID            int -> AreaTable           | The zone the point belongs to (-1 none).
+Name               loc                        | The name shown on the map.
+Description        loc                        | The text of the tooltip.
+~WorldStateID      uint                       | A world state that changes the icon (battleground flags and towers).
+
+[WorldMapArea]
+category: World and maps
+about: The zone maps of the world map: which area each map shows, the world coordinates of its edges and the continent it is shown on.
+server: client
+label: AreaName
+evidence: 9 fields / 36 bytes per row. Value match with 1.12 on 51 shared IDs: fields 0-7 at the same index (98-100%). Field 8 is -1, except 0 on Eversong Woods, Ghostlands, Silvermoon City and the Isle of Quel'Danas and 1 on Azuremyst Isle, Bloodmyst Isle and The Exodar: Outland-map (530) zones shown on the Eastern Kingdoms and Kalimdor maps; name from wowdev.
+ID                 id
+MapID              uint -> Map
+AreaID             uint -> AreaTable          | 0 = the whole continent.
+AreaName           string                     | The internal name (folder of the map pictures in Interface\WorldMap\).
+LocLeft            float
+LocRight           float
+LocTop             float
+LocBottom          float
+DisplayMapID       int                        | The continent map the zone is drawn on (a Map ID; -1 = its own map).
+
+[WorldMapOverlay]
+category: World and maps
+about: The overlays of the world map that appear when you explore an area.
+server: client
+label: TextureName
+evidence: 17 fields / 68 bytes per row, the same as 1.12: value match on 526 shared IDs, every column 99-100%. The names of the 1.12 layout are kept, including its best guesses.
+ID                 id
+MapAreaID          uint -> WorldMapArea
+AreaID[4]          uint -> AreaTable          | Exploring one of these areas shows the overlay.
+~MapPointX         uint
+~MapPointY         uint
+TextureName        string                     | The overlay picture (Interface\WorldMap\<zone>\<name>).
+~TextureWidth      uint
+~TextureHeight     uint
+~OffsetX           uint
+~OffsetY           uint
+~HitRectTop        uint
+~HitRectLeft       uint
+~HitRectBottom     uint
+~HitRectRight      uint
+
+[WorldMapContinent]
+category: World and maps
+about: The continents of the world map: the tile range shown and the offset and scale of the map pictures.
+server: client
+evidence: 13 fields / 52 bytes per row, the same shape as 1.12; ID and MapID match on the 2 shared rows (the boundaries and offsets of Kalimdor were adjusted); the new row 3 is map 530 (Outland). Value ranges as in 1.12 (four tile numbers, then floats).
+ID                 id
+MapID              uint -> Map
+LeftBoundary       int
+RightBoundary      int
+TopBoundary        int
+BottomBoundary     int
+OffsetX            float
+OffsetY            float
+Scale              float
+TaxiMinX           float
+TaxiMinY           float
+TaxiMaxX           float
+TaxiMaxY           float
+
+[WorldSafeLocs]
+category: World and maps
+about: The graveyards and other safe locations (where ghosts appear).
+server: client
+label: AreaName
+evidence: 22 fields / 88 bytes per row: the 1.12 columns with the name grown to 17 fields; value match on 122 shared IDs: Continent 100%, LocX/Y/Z 98-100%, AreaName 99%.
+ID                 id
+Continent          uint -> Map
+LocX               float
+LocY               float
+LocZ               float
+AreaName           loc
+
+[GroundEffectTexture]
+category: World and maps
+about: Which ground clutter (grass, flowers) grows on which ground texture, how densely, and the footstep sound.
+server: client
+evidence: 7 fields / 28 bytes per row, the same as 1.12: value match on 12,742 shared IDs, every column 100%. The doodad links resolve for only 86-90% of the values (738 of 851, 746 of 865, 747 of 861, 762 of 848; 1.12: 88%), and about as well against GroundEffectDoodad's DoodadIdTag column (93%), so which column they point at is not settled: "~".
+ID                 id
+~DoodadID[4]       int -> GroundEffectDoodad  | -1 = none. 86-90% of the values are GroundEffectDoodad IDs (the rest point at doodads missing from the file).
+Density            uint
+~Sound             uint -> TerrainType        | The ground's footstep sound kind.
+
+[GroundEffectDoodad]
+category: World and maps
+about: The small models (grass, flowers, stones) the game scatters on the ground textures.
+server: client
+label: DoodadPath
+evidence: 3 fields / 12 bytes per row, the same as 1.12: value match on 443 shared IDs 100% for all three columns.
+ID                 id
+DoodadIdTag        uint
+DoodadPath         model                      | The model (World\NoDXT\Detail\*.mdx).
+
+[TerrainType]
+category: World and maps
+about: Ground kinds (dirt, grass, stone, snow...) for footstep sounds and dust.
+server: client
+label: TerrainDesc
+evidence: 6 fields / 24 bytes per row, the same as 1.12: value match on the 11 shared IDs 100% for every column.
+TerrainID          id
+TerrainDesc        string
+~FootstepSprayRun  uint
+~FootstepSprayWalk uint
+SoundID            uint -> TerrainTypeSounds
+~Flags             flags
+
+[TerrainTypeSounds]
+category: Sounds and music
+about: Ground kinds for sounds (only IDs).
+server: client
+evidence: 1 field / 4 bytes per row, the same 9 IDs as 1.12.
+ID                 id
+
+[TaxiNodes]
+category: World and maps
+about: The flight points: where each flight master's node is, its name and the mounts used by the Horde and the Alliance.
+server: client
+label: Name
+evidence: 24 fields / 96 bytes per row. Value match with 1.12 on 85 shared IDs: ContinentID 100%, X/Y/Z 98-99%, Name 89% (renamed nodes), MountCreatureID 1.12 fields 14-15 -> 22-23 99%. ContinentID resolves for 140 of 143 non-zero values (the three others are leftover numbers on test nodes).
+ID                 id
+ContinentID        uint -> Map
+X                  float
+Y                  float
+Z                  float
+Name               loc
+MountCreatureID[2] uint                       | The flying mount (creature entries of the server): Horde, Alliance.
+
+[TaxiPath]
+category: World and maps
+about: The flight routes between two flight points and their price.
+server: client
+evidence: 4 fields / 16 bytes per row, the same as 1.12: value match on 286 shared IDs, every column 98-100%.
+ID                 id
+FromTaxiNode       uint -> TaxiNodes
+ToTaxiNode         uint -> TaxiNodes
+Cost               uint                       | In copper.
+
+[TaxiPathNode]
+category: World and maps
+about: The points of each flight route (the path the mount flies).
+server: client
+evidence: 11 fields / 44 bytes per row. Value match with 1.12 on 8,718 shared IDs: fields 0-8 at the same index (PathID, NodeIndex, ContinentID, Flags, Delay 100%; the positions 83-84%, the routes were redrawn). Fields 9 and 10 are new: 0 on all but a few dozen points, values up to 16593; names from wowdev.
+ID                 id
+PathID             uint -> TaxiPath
+NodeIndex          uint                       | Order of the point in the route (0 = first).
+ContinentID        uint -> Map
+LocX               float
+LocY               float
+LocZ               float
+Flags              uint enum(TaxiNodeFlag)
+Delay              uint                       | Seconds to wait here.
+~ArrivalEventID    uint                       | A server event started when the mount arrives here.
+~DepartureEventID  uint                       | A server event started when the mount leaves here.
+
+# ---------------------------------------------------------------------------------------------- lighting and sky
+
+[Light]
+category: Lighting and sky
+about: The light zones of the world: where each sky and light setting applies (a sphere with a falloff), and the light parameters for clear, storm, underwater... A map's default light is the row at 0,0,0.
+server: client
+evidence: 12 fields / 48 bytes per row, the same as 1.12: value match on 374 shared IDs: ContinentID, position, falloff, LightParamsID 1, 2 and 5 100%; LightParamsID 3 and 4 84% / 57% (re-pointed in 2.4.3).
+ID                 id
+ContinentID        uint -> Map
+X                  float                      | Position in game units x 36 (the client divides by 36).
+Y                  float
+Z                  float
+FalloffStart       float
+FalloffEnd         float
+LightParamsID[5]   uint -> LightParams        | Parameters for: clear weather, underwater, sunset?, other, death.
+
+[LightParams]
+category: Lighting and sky
+about: A set of light parameters (sky box, glow, water transparency) used by Light.
+server: client
+evidence: 9 fields / 36 bytes per row, the same as 1.12: value match on 426 shared IDs 100% for every column.
+ID                 id
+HighlightSky       uint enum(Bool)
+LightSkyboxID      uint -> LightSkybox        | A special sky (stars...), 0 = none.
+col_3              uint                       | Unknown (0 in every row).
+Glow               float                      | Strength of the bloom glow, 0 to 1.
+WaterShallowAlpha  float                      | Transparency of shallow water, 0 to 1.
+WaterDeepAlpha     float
+OceanShallowAlpha  float
+OceanDeepAlpha     float
+
+[LightIntBand]
+category: Lighting and sky
+about: Light colours over the day (sky, fog, ambient, water...): up to 16 keys of time and colour.
+server: client
+evidence: 34 fields / 136 bytes per row, the same as 1.12: 10,476 rows = 18 per LightParams row (582 x 18); value match on 7,668 shared IDs: ID and Num 100%, Data1 87% (many colours were retuned); times 0-2880, colours 0xRRGGBB. Unused keys hold left-over bytes in Blizzard's file.
+ID                 id                         | (LightParams ID x 18) - 17 + n.
+Num                uint                       | How many keys are used.
+Time[16]           int                        | Time of day in half-minutes (0 to 2880).
+Data[16]           int                        | Colour as 0xRRGGBB.
+
+[LightFloatBand]
+category: Lighting and sky
+about: Light values over the day (fog distance, glow...): up to 16 keys of time and value.
+server: client
+evidence: 34 fields / 136 bytes per row, the same as 1.12: 3,492 rows = 6 per LightParams row (582 x 6); value match on 2,556 shared IDs 100% for every used key. Unused keys hold left-over bytes in Blizzard's file.
+ID                 id                         | (LightParams ID x 6) - 5 + n.
+Num                uint                       | How many keys are used.
+Time[16]           int                        | Time of day in half-minutes (0 to 2880).
+Data[16]           float
+
+[LightSkybox]
+category: Lighting and sky
+about: Sky box models (stars, special skies).
+server: client
+label: Name
+evidence: 3 fields / 12 bytes per row: ID and Name match 1.12 on the 6 shared IDs (100%); field 2 is new (1 on the Stratholme sky only, 0 elsewhere); name from wowdev.
+ID                 id
+Name               model
+~Flags             flags
+
+# ---------------------------------------------------------------------------------------------- sounds and music
+
+[ZoneMusic]
+category: Sounds and music
+about: The music of areas: the music for day and night and the silence between pieces.
+server: client
+label: SetName
+evidence: 8 fields / 32 bytes per row, the same as 1.12: value match on 98 shared IDs 100% for every column.
+ID                 id
+SetName            string
+SilenceIntervalMin[2] uint                    | Milliseconds (day, night).
+SilenceIntervalMax[2] uint
+Sounds[2]          uint -> SoundEntries       | Day, night.
+
+[ZoneIntroMusicTable]
+category: Sounds and music
+about: The short music played when you enter an area.
+server: client
+label: Name
+evidence: 5 fields / 20 bytes per row, the same as 1.12: value match on 43 shared IDs 100% for every column.
+ID                 id
+Name               string
+SoundID            uint -> SoundEntries
+~Priority          uint
+~MinDelayMinutes   uint
+
+[SoundAmbience]
+category: Sounds and music
+about: The ambient sound loops of areas (day and night).
+server: client
+evidence: 3 fields / 12 bytes per row, the same as 1.12: value match on 68 shared IDs 100% for every column.
+ID                 id
+DaySoundID         uint -> SoundEntries
+NightSoundID       uint -> SoundEntries
+
+[SoundEntries]
+category: Sounds and music
+about: Every sound of the game: its files (one is picked at random), folder, volume and how far it can be heard. Everything else refers to sounds by these IDs.
+server: client
+label: Name
+evidence: 29 fields / 116 bytes per row, the same as 1.12: value match on 4,592 shared IDs: 100% for every column except Volume 93% and Flags 40% (the flag values changed: 0, 512 or 1024 in 2.4.3); fields 2-12 and 23 are text (names, .wav/.mp3 files, Sound\... folders).
+ID                 id
+SoundType          uint
+Name               string                     | The sound's name.
+File[10]           path                       | Sound files (.wav / .mp3) in DirectoryBase; one is picked at random.
+Freq[10]           uint                       | How often each file is picked.
+DirectoryBase      path                       | The folder of the files (Sound\Creature\Boar\...).
+Volume             float                      | 0 to 1.
+Flags              flags
+MinDistance        float
+DistanceCutoff     float                      | Beyond this distance the sound is not heard.
+EAXDef             uint
+
+# ---------------------------------------------------------------------------------------------- creatures and models
+
+[CreatureDisplayInfo]
+category: Creatures and models
+about: The looks of creatures (and of player races): which model, which skin textures, the size, the transparency, the portrait, the sounds and the blood.
+server: client
+label: TextureVariation1
+evidence: 14 fields / 56 bytes per row. Value match with 1.12 on 10,530 shared IDs: fields 0-8 at the same index (100%, TextureVariation 91-100%), SizeClass, BloodID, NPCSoundID 1.12 fields 9-11 -> 10-12 100%. New field 9 is text on 13 rows, icon names (Spell_Shadow_GatherShadows, INV_Cask_04...); new field 13 resolves 100% (606 of 606) to ParticleColor; names from wowdev. Links: ModelID 100%, ExtendedDisplayInfoID 100.0% (11,152 of 11,155), NPCSoundID 100%, BloodID 100%.
+ID                 id
+ModelID            uint -> CreatureModelData  | The model (.mdx) of the creature.
+SoundID            uint                       | The creature's sounds (a CreatureSoundData ID; 0 = the model's sounds).
+ExtendedDisplayInfoID uint -> CreatureDisplayInfoExtra | For a humanoid NPC with a character look (race, face, hair, equipment): its row; 0 = none.
+CreatureModelScale float                      | Size of the model (1 = normal).
+CreatureModelAlpha uint                       | Transparency, 0 (invisible) to 255 (opaque).
+TextureVariation[3] texture                   | The skin texture names (without path or .blp; they are next to the model).
+~PortraitTextureName icon                     | An icon used as the unit's portrait (13 rows).
+SizeClass          int                        | Size class (-1 = the model's).
+BloodID            uint -> UnitBloodLevels
+NPCSoundID         uint -> NPCSounds          | The greetings and farewells of the NPC.
+~ParticleColorID   uint -> ParticleColor      | Colours for the model's particles.
+
+[CreatureModelData]
+category: Creatures and models
+about: The creature models (.mdx files): their size, collision box, bounding box, footprints, blood and sounds. A creature display (CreatureDisplayInfo) points at one of them.
+server: client
+label: ModelName
+evidence: 24 fields / 96 bytes per row. Value match with 1.12 on 424 shared IDs: fields 0-15 at the same index (97-100%, CollisionWidth/Height 87%). New fields 16-23 are floats; 17-19 is at most 20-22 on 719 of 720 rows with a box (a bounding box: minimum, maximum); 16 and 23 from wowdev. Links: BloodID and FootprintTextureID 100%.
+ID                 id
+Flags              flags
+ModelName          model                      | The model file (Creature\<Name>\<Name>.mdx).
+SizeClass          uint
+ModelScale         float                      | Size of the model (1 = as made).
+BloodID            int -> UnitBlood           | -1 = none.
+FootprintTextureID int -> FootprintTextures   | -1 = no footprints.
+FootprintTextureLength float
+FootprintTextureWidth float
+FootprintParticleScale float
+FoleyMaterialID    uint
+FootstepShakeSize  uint                       | Camera shake of footsteps (big creatures).
+DeathThudShakeSize uint                       | Camera shake when it falls dead.
+SoundID            uint                       | The model's sounds (a CreatureSoundData ID).
+CollisionWidth     float
+CollisionHeight    float
+~MountHeight       float
+GeoBoxMinX         float                      | The model's bounding box: lowest corner.
+GeoBoxMinY         float
+GeoBoxMinZ         float
+GeoBoxMaxX         float                      | Highest corner.
+GeoBoxMaxY         float
+GeoBoxMaxZ         float
+~WorldEffectScale  float
+
+[CreatureDisplayInfoExtra]
+category: Creatures and models
+about: The character looks of humanoid NPCs: race, sex, skin, face, hair, facial hair, the items they wear and the pre-baked texture of their body.
+server: client
+label: BakeName
+evidence: 21 fields / 84 bytes per row. Value match with 1.12 on 6,939 shared IDs: fields 0-17 at the same index (98-100%), BakeName 1.12 field 18 -> 20 91% (the textures were re-baked). New field 18 resolves 100% (397 of 397) to ItemDisplayInfo, like the other ten item columns (each 100%): an eleventh item slot (cape, from wowdev); field 19 is 0 or 1. Race values up to 18 (the NPC races of ChrRaces).
+ID                 id
+DisplayRaceID      uint enum(Race)
+DisplaySexID       uint enum(Gender)
+SkinID             uint                       | Skin colour number (CharSections, section 0).
+FaceID             uint                       | Face number (section 1).
+HairStyleID        uint                       | Hair style number (CharHairGeosets).
+HairColorID        uint                       | Hair colour number (section 3).
+FacialHairID       uint                       | Facial hair style number (CharacterFacialHairStyles).
+ItemHead           uint -> ItemDisplayInfo
+ItemShoulder       uint -> ItemDisplayInfo
+ItemShirt          uint -> ItemDisplayInfo
+ItemChest          uint -> ItemDisplayInfo
+ItemBelt           uint -> ItemDisplayInfo
+ItemLegs           uint -> ItemDisplayInfo
+ItemBoots          uint -> ItemDisplayInfo
+ItemWrist          uint -> ItemDisplayInfo
+ItemGloves         uint -> ItemDisplayInfo
+ItemTabard         uint -> ItemDisplayInfo
+~ItemCape          uint -> ItemDisplayInfo
+~Flags             flags                      | 0 or 1.
+BakeName           texture                    | The pre-baked body texture (Textures\BakedNpcTextures\...). The game draws it instead of building the skin from the items.
+
+[ItemDisplayInfo]
+category: Items
+about: The looks of items: the models of weapons, shields, helmets and shoulders, their textures, the inventory icon, the textures painted on the character's body for armour, the geosets they show and their glow effect.
+server: client
+label: InventoryIcon
+evidence: 25 fields / 100 bytes per row. Value match with 1.12 on 29,604 shared IDs: fields 0-5 at the same index (100%), 1.12 fields 6-22 -> 7-23 (100% each). New field 6 is text on 2 rows (a second icon: INV_Scroll_06 next to INV_Scroll_04); new field 24 resolves 100% (73 of 73) to ParticleColor; names from wowdev. Links: SpellVisualID, GroupSoundIndex, ItemVisual 100%.
+ID                 id
+ModelName[2]       model                      | Model files (Item\ObjectComponents\<kind>\...): the item, or left and right shoulder.
+ModelTexture[2]    texture                    | Texture names for the two models.
+InventoryIcon      icon                       | The icon in bags and tooltips (Interface\Icons\<name>).
+~InventoryIcon2    icon                       | A second icon (2 rows).
+GeosetGroup[3]     uint                       | Which variant of the body geosets the item shows (gloves, boots, robes...).
+Flags              flags
+SpellVisualID      uint -> SpellVisual        | A visual played on the item.
+GroupSoundIndex    uint -> ItemGroupSounds    | The sounds of picking up and putting down the item.
+HelmetGeosetVis[2] uint                       | For a helmet: which head parts it hides (male, female; HelmetGeosetVisData IDs).
+TextureArmUpper    texture                    | Body texture for the upper arms (Item\TextureComponents\ArmUpperTexture\...).
+TextureArmLower    texture
+TextureHand        texture
+TextureTorsoUpper  texture
+TextureTorsoLower  texture
+TextureLegUpper    texture
+TextureLegLower    texture
+TextureFoot        texture
+ItemVisual         uint -> ItemVisuals        | The glow / enchantment effect of the item.
+~ParticleColorID   uint -> ParticleColor
+
+[GameObjectDisplayInfo]
+category: World and maps
+about: The models of game objects (chests, doors, mailboxes, herbs...), their sounds and their bounding box.
+server: client
+label: ModelName
+evidence: 18 fields / 72 bytes per row. Value match with 1.12 on 1,638 shared IDs: fields 0-11 at the same index (99-100%). New fields 12-17 are floats; 12-14 is at most 15-17 on all 2,194 rows with a box (a bounding box: minimum, maximum; names from wowdev).
+ID                 id
+ModelName          model                      | The model file (World\...\*.mdx).
+Sound[10]          uint -> SoundEntries       | Sounds of the object's actions (open, close, ...).
+GeoBoxMinX         float                      | The model's bounding box: lowest corner.
+GeoBoxMinY         float
+GeoBoxMinZ         float
+GeoBoxMaxX         float                      | Highest corner.
+GeoBoxMaxY         float
+GeoBoxMaxZ         float
+
+[CharSections]
+category: Characters
+about: The skin colours, faces, facial hair colours, hair colours and underwear of each race and sex: the texture files the character uses.
+server: client
+label: Texture1
+evidence: 10 fields / 40 bytes per row, the same as 1.12: value match on 3,551 shared IDs 100% for every column.
+ID                 id
+Race               uint enum(Race)
+Gender             uint enum(Gender)
+BaseSection        uint enum(CharSection)     | 0 skin, 1 face, 2 facial hair, 3 hair, 4 underwear.
+VariationIndex     uint                       | The variation inside the section (face number, hair style...).
+ColorIndex         uint                       | The colour number inside the variation.
+Texture[3]         texture                    | Up to three texture files (skin: body and extra; face: lower and upper; hair: scalp).
+Flags              flags                      | 1: listed after the regular colours of its variation.
+
+[ChrClasses]
+category: Characters
+about: The classes: their name, power type (mana, rage, energy) and spell family.
+server: client
+label: Name
+evidence: 58 fields / 232 bytes per row. Value match with 1.12 on the 9 classes: DamageBonusStat 1.12 field 2 -> 1, DisplayPower 3 -> 2, PetNameToken 4 -> 3 (PET / DEMON), Name 5 -> 4, Filename 14 -> 55, SpellClassSet 15 -> 56 (all 100%). Fields 21-37 and 38-54 are two more texts, empty in English (female and male forms, wowdev); 57 is new (values 2-11; name from wowdev). The 1.12 field 1 (always 1) is gone.
+ID                 id
+DamageBonusStat    uint                       | 1 for Hunter and Rogue (their melee attack power comes from agility), else 0.
+DisplayPower       uint enum(PowerType)       | The power bar the class shows.
+PetNameToken       string                     | The pet name token (for hunters and warlocks).
+Name               loc
+~NameFemale        loc                        | Empty in English.
+~NameMale          loc                        | Empty in English.
+Filename           string                     | The class's internal name (WARRIOR, MAGE...), used by the interface.
+SpellClassSet      uint enum(SpellFamily)     | The spell family of the class's spells (Spell.SpellClassSet).
+~Flags             flags
+
+[ChrRaces]
+category: Characters
+about: The playable (and some non-playable) races: their models, faction, language, the resurrection sickness spell, intro movie, the names of their customization options and the expansion they need.
+server: client
+label: Name
+evidence: 69 fields / 276 bytes per row. Value match with 1.12 on the 9 shared races: fields 0-9 at the same index (100%, the display IDs and prefix 89%: Gnome and Troll got new models), ResSicknessSpellID 1.12 field 12 -> 10, SplashSoundID 13 -> 11, ClientFileString 15 -> 12, CinematicSequenceID 16 -> 13, Name 17 -> 14, the customization texts 26-28 -> 65-67 (all 100%). The 1.12 fields 10, 11 and 14 (login effect, combat stun, starting flight points) are gone. Fields 31-47 and 48-64 are two more texts, empty in English (female and male forms, wowdev); 68 is 1 for Blood Elf and Draenei only.
+ID                 id
+Flags              flags                      | 0x2: no foot textures (bare feet), and more.
+FactionID          uint -> FactionTemplate    | The faction of the race's characters.
+ExplorationSoundID uint -> SoundEntries       | The sound played when the character discovers a new area.
+MaleDisplayID      uint -> CreatureDisplayInfo | The model of a male character.
+FemaleDisplayID    uint -> CreatureDisplayInfo | The model of a female character.
+ClientPrefix       string                     | Short race prefix used in file names (Hu, Or, Dw...).
+MountScale         float                      | Scale of the race on a mount.
+BaseLanguage       uint -> Languages          | 7 Common (Alliance), 1 Orcish (Horde).
+CreatureType       uint -> CreatureType       | Always 7 (humanoid).
+ResSicknessSpellID uint -> Spell              | The resurrection sickness spell.
+SplashSoundID      uint -> SoundEntries       | The sound of the character falling into water.
+ClientFileString   string                     | The race's folder name (Human, Orc, Scourge, BloodElf...).
+CinematicSequenceID uint -> CinematicSequences | The intro movie of a new character.
+Name               loc
+~NameFemale        loc                        | Empty in English.
+~NameMale          loc                        | Empty in English.
+FacialHairCustomization[2] string             | Names of the facial hair option at character creation (male, female).
+HairCustomization  string                     | Name of the hair option at character creation.
+RequiredExpansion  uint enum(Expansion)       | 1 for Blood Elf and Draenei.
+
+# ---------------------------------------------------------------------------------------------- factions
+
+[Faction]
+category: Factions and reputation
+about: The factions (Stormwind, The Aldor, Cenarion Expedition...) with their reputation settings per race and class, their parent faction, name and description.
+server: client
+label: Name
+evidence: 53 fields / 212 bytes per row. Value match with 1.12 on 190 shared IDs: fields 0-18 at the same index (ReputationIndex, base reputations, parent 99-100%; the race masks 7-99%: they gained the Blood Elf and Draenei bits), Name 100% (at 19), Description 1.12 field 28 -> 36 94%.
+ID                 id
+ReputationIndex    int                        | Position in the reputation list (-1 = no reputation).
+ReputationRaceMask[4] flags(RaceMask)         | For which races the base reputation of the same position applies.
+ReputationClassMask[4] flags(ClassMask)
+ReputationBase[4]  int                        | Starting reputation (0 = neutral, 3000 = friendly, -42000 = hated...).
+ReputationFlags[4] flags(ReputationFlags)
+ParentFactionID    uint -> Faction            | The group the faction is listed under (Alliance, Horde, Shattrath City...).
+Name               loc
+Description        loc
+
+[FactionTemplate]
+category: Factions and reputation
+about: The faction of creatures and players: who they are friendly or hostile to. Creatures use a faction template ID.
+server: client
+evidence: 14 fields / 56 bytes per row, the same as 1.12: value match on 314 shared IDs, every column 97-100%.
+ID                 id
+Faction            uint -> Faction            | The faction used for reputation.
+Flags              flags(FactionTemplateFlags)
+FactionGroup       flags(FactionMask)         | The groups this template belongs to.
+FriendGroup        flags(FactionMask)         | The groups it is friendly to.
+EnemyGroup         flags(FactionMask)         | The groups it is hostile to.
+Enemies[4]         uint -> Faction            | Factions it is always hostile to.
+Friend[4]          uint -> Faction            | Factions it is always friendly to.
+
+# ---------------------------------------------------------------------------------------------- skills and talents
+
+[SkillLine]
+category: Skills and talents
+about: The skills (weapon skills, professions, languages, class specializations): their names, category and icon.
+server: client
+label: DisplayName
+evidence: 38 fields / 152 bytes per row. Value match with 1.12 on 123 shared IDs: CategoryID 100%, DisplayName 100% (at 3), Description 1.12 field 12 -> 20 97%, SpellIconID 1.12 field 21 -> 37 98%.
+ID                 id
+CategoryID         int -> SkillLineCategory   | -1 = none.
+SkillCostsID       uint
+DisplayName        loc
+Description        loc
+SpellIconID        uint -> SpellIcon
+
+[SkillLineAbility]
+category: Skills and talents
+about: Which spells belong to which skill (the recipes of a profession, the abilities of a class tree), for which races and classes, and the skill values at which a recipe turns yellow, green and grey.
+server: client
+evidence: 15 fields / 60 bytes per row, the same as 1.12: value match on 4,780 shared IDs, every column 98-100% except RaceMask 87% (masks gained the Blood Elf and Draenei bits).
+ID                 id
+SkillLine          uint -> SkillLine
+Spell              uint -> Spell
+RaceMask           flags(RaceMask)            | 0 = every race.
+ClassMask          flags(ClassMask)           | 0 = every class.
+ExcludeRace        flags(RaceMask)
+ExcludeClass       flags(ClassMask)
+MinSkillLineRank   uint                       | Skill value needed to learn it.
+SupercededBySpell  uint -> Spell              | The next rank.
+AcquireMethod      uint enum(LearnOnGetSkill)
+TrivialSkillLineRankHigh uint                 | Skill value at which the recipe turns grey.
+TrivialSkillLineRankLow uint                  | Skill value at which the recipe turns green.
+~CharacterPoints[2] uint
+ReqTrainPoints     uint                       | Training points a pet needs.
+
+[Talent]
+category: Skills and talents
+about: The talents: their tree and position, the spell of each rank and what must be learned first.
+server: client
+evidence: 21 fields / 84 bytes per row, the same as 1.12: value match on 425 shared IDs, every column 95-100% (some talents were reworked in 2.4.3).
+ID                 id
+TabID              uint -> TalentTab          | The talent tree.
+TierID             uint                       | The row (0 = top).
+ColumnIndex        uint
+SpellRank[9]       uint -> Spell              | The spell of each rank.
+PrereqTalent[3]    uint -> Talent             | Talents that must be learned first.
+PrereqRank[3]      uint                       | The rank they need (0 = rank 1).
+Flags              flags
+RequiredSpellID    uint -> Spell
+
+[TalentTab]
+category: Skills and talents
+about: The talent trees (Arms, Fury, Protection...): name, icon, class and background picture.
+server: client
+label: Name
+evidence: 23 fields / 92 bytes per row. Value match with 1.12 on the 27 trees: Name 100% (at 1), SpellIconID 1.12 field 10 -> 18, ClassMask 12 -> 20, BackgroundFile 14 -> 22 (100%), OrderIndex 13 -> 21 96%. RaceMask (19) is 2047 in every row (all 11 races; 1.12 had 511).
+ID                 id
+Name               loc
+SpellIconID        uint -> SpellIcon
+RaceMask           flags(RaceMask)
+ClassMask          flags(ClassMask)
+OrderIndex         uint                       | 0, 1 or 2: the position of the tree.
+BackgroundFile     string                     | The tree's background picture (Interface\TalentFrame\<name>).
+
+# ---------------------------------------------------------------------------------------------- spells
+
+[Spell]
+category: Spells
+about: Every spell, ability, aura, item use and profession recipe: school, costs, cast time, cooldowns, range, the three effects (damage, auras, summons, created items...), the visual, the icon, the name, rank, description and tooltip.
+server: client
+label: Name
+evidence: 216 fields / 864 bytes per row. Value match with 1.12 on 14,841 shared IDs (rate on all rows / "nd"): Category 1.12 field 2 -> 1 (100/97%), CastUI 3 -> 2, Dispel 4 -> 3, Mechanic 5 -> 4, Attributes-AttributesEx4 6-10 -> 5-9 (89-99%), Stances, StancesNot, Targets, TargetCreatureType, RequiresSpellFocus 11-15 -> 12-16, CasterAuraState/TargetAuraState 16-17 -> 18-19, CastingTimeIndex .. StackAmount 18-39 -> 22-43 (96-100%), Totem 40-41 -> 44-45 (many tools moved to TotemCategory), reagents 42-57 -> 46-61 (100%), the item requirement 58-60 -> 62-64, the effect arrays 61-108 -> 65-112 (95-100%), EffectTriggerSpell .. SpellPriority 109-119 -> 116-126, Name 120 -> 127 (98%), Rank 129 -> 144 (99%), Description 138 -> 161 (81%, reworded), tooltip 147 -> 178 (91%), 156-169 -> 195-208 (99-100%), RequiredAuraVision 172 -> 211. Field 215 equals 1 << (the 1.12 school) on 14,740 of 14,842 shared rows (a school mask). New: 212-213 resolve 100% to TotemCategory (950 and 160 values), 214 resolves 100% to AreaTable (182 values); the other new fields (10, 11, 17, 20, 21, 113-115) named from wowdev. MinFactionID/MinReputation (209-210) are 0 in every row. The 1.12 School (field 1) is gone. Links: EffectTriggerSpell resolves for only 92.9 / 90.3 / 78.6% (the 2.4.3 client's Spell.dbc leaves out many server-side spells; the name is certain from the value match); the other links 98-100%.
+ID                 id
+Category           uint -> SpellCategory      | Cooldown category: spells of a category share a cooldown.
+CastUI             uint                       | Not used.
+Dispel             uint                       | Magic, Curse, Disease, Poison... (a SpellDispelType ID).
+Mechanic           uint -> SpellMechanic      | Stun, Root, Fear, Polymorph...
+Attributes         flags
+AttributesEx       flags
+AttributesEx2      flags
+AttributesEx3      flags
+AttributesEx4      flags
+~AttributesEx5     flags
+~AttributesEx6     flags
+Stances            flags                      | Shapeshift forms the spell needs (bit n-1 = SpellShapeshiftForm ID n).
+StancesNot         flags                      | Forms in which the spell cannot be cast.
+Targets            flags
+TargetCreatureType flags                      | Creature types the spell can target (0 = any; bit n-1 = CreatureType ID n).
+RequiresSpellFocus uint -> SpellFocusObject   | An object that must be near (an anvil, a forge, a campfire).
+~FacingCasterFlags flags
+CasterAuraState    uint
+TargetAuraState    uint
+~CasterAuraStateNot uint
+~TargetAuraStateNot uint
+CastingTimeIndex   uint -> SpellCastTimes     | The cast time.
+RecoveryTime       uint                       | Cooldown in milliseconds.
+CategoryRecoveryTime uint                     | Cooldown of the category in milliseconds.
+InterruptFlags     flags
+AuraInterruptFlags flags                      | What removes the aura (moving, taking damage...).
+ChannelInterruptFlags flags
+ProcFlags          flags                      | What triggers a proc aura.
+ProcChance         uint                       | Chance in percent.
+ProcCharges        uint
+MaxLevel           uint
+BaseLevel          uint
+SpellLevel         uint
+DurationIndex      uint -> SpellDuration      | How long the aura lasts.
+PowerType          int enum(PowerType)
+ManaCost           uint
+ManaCostPerLevel   uint
+ManaPerSecond      uint
+ManaPerSecondPerLevel uint
+RangeIndex         uint -> SpellRange
+Speed              float                      | Speed of the projectile (yards per second).
+ModalNextSpell     uint -> Spell
+StackAmount        uint                       | How many times the aura stacks.
+Totem[2]           uint                       | Tools that must be in the bags (item entries).
+Reagent[8]         int                        | Reagents (item entries).
+ReagentCount[8]    uint
+EquippedItemClass  int                        | -1 = no item needed (an item class).
+EquippedItemSubClassMask int flags            | Item subclasses that must be equipped.
+EquippedItemInventoryTypeMask int flags
+Effect[3]          uint                       | What each of the three effects does (the effect numbers of 1.12, and new ones).
+EffectDieSides[3]  int                        | Random part of the effect's value.
+EffectBaseDice[3]  uint
+EffectDicePerLevel[3] int
+EffectRealPointsPerLevel[3] float
+EffectBasePoints[3] int                       | The effect's value minus 1 (the game adds 1 and the dice).
+EffectMechanic[3]  uint -> SpellMechanic
+EffectImplicitTargetA[3] uint
+EffectImplicitTargetB[3] uint
+EffectRadiusIndex[3] uint -> SpellRadius
+EffectAura[3]      uint                       | For "Apply aura" effects: the aura number.
+EffectAuraPeriod[3] uint                      | Time between ticks of a periodic aura, in milliseconds.
+EffectMultipleValue[3] float
+EffectChainTargets[3] uint
+EffectItemType[3]  uint                       | Item created by "Create item" (item entry); a class mask for some auras.
+EffectMiscValue[3] int                        | Depends on the effect (the summoned creature, the skill, the school mask...).
+~EffectMiscValueB[3] int                      | A second value for some effects.
+EffectTriggerSpell[3] uint -> Spell         | The spell the effect casts. 79-93% resolve: the rest are spells the 2.4.3 client's Spell.dbc leaves out (1.12: 99.7%).
+EffectPointsPerCombo[3] float
+SpellVisual        uint -> SpellVisual        | The spell's visual effects (cast, missile, impact).
+SpellVisual2       uint -> SpellVisual        | Used by one spell.
+SpellIconID        uint -> SpellIcon          | The icon in the spell book, the action bar and buff frames.
+ActiveIconID       uint -> SpellIcon          | The icon while active (shapeshift forms).
+SpellPriority      uint
+Name               loc
+NameSubtext        loc                        | The rank text ("Rank 2").
+Description        loc                        | The spell book tooltip ($s1 = effect 1's value, $d = duration...).
+AuraDescription    loc                        | The tooltip of the buff or debuff.
+ManaCostPct        uint                       | Cost in percent of base mana.
+StartRecoveryCategory uint                    | Global cooldown category.
+StartRecoveryTime  uint                       | Global cooldown in milliseconds.
+MaxTargetLevel     uint
+SpellClassSet      uint enum(SpellFamily)     | The class the spell belongs to (for talents that modify it).
+SpellClassMask[2]  flags                      | Which spells of the class talents can modify (64 bits).
+MaxTargets         uint
+DefenseType        uint enum(DamageClass)
+PreventionType     uint enum(PreventionType)
+StanceBarOrder     int
+EffectChainAmplitude[3] float                 | Damage multiplier for each chain jump.
+MinFactionID       uint -> Faction            | Reputation needed to use it (0 in every row).
+MinReputation      uint enum(ReputationRank)
+RequiredAuraVision uint
+TotemCategory[2]   uint -> TotemCategory      | Tool kinds that must be in the bags (any tool of the kind).
+AreaID             uint -> AreaTable          | The area where the spell can be cast (0 = anywhere).
+SchoolMask         flags(SpellSchoolMask)     | The spell's school(s).
+
+[SpellIcon]
+category: Spells
+about: The icons of spells, buffs and talents: one row per icon file (Interface\Icons\...). Spell.SpellIconID refers to these rows.
+server: client
+label: TextureFilename
+evidence: 2 fields / 8 bytes per row, the same as 1.12: value match on 1,033 shared IDs 100%; field 1 is Interface\Icons\... text in every row.
+ID                 id
+TextureFilename    icon                       | The icon file without ".blp", e.g. Interface\Icons\Spell_Fire_FlameBolt.
+
+[SpellVisual]
+category: Spells
+about: The visual effects of a spell: the kits played while casting, at the cast, on impact and while the aura is active, the missile and how it flies, and the kits of area effects.
+server: client
+evidence: 25 fields / 100 bytes per row. Value match with 1.12 on 2,165 shared IDs: fields 0-10 at the same index (99-100%), AnimEventSoundID 1.12 field 14 -> 11 and Flags 15 -> 12 (100%); the 1.12 area fields 11-13 are gone. New fields: 13, 14 and 21-24 resolve 100% to SpellVisualKit (9, 70, 2, 375, 132, 115 values), 20 resolves 100% (351 of 351) to SpellMissileMotion, 15 is -1 or 0-8 (an attachment point), 16-19 small numbers; names from wowdev. Links: the kits 1-5 99.9-100% (row 10098 holds a left-over number in field 1), MissileModel 96.7% (a few negative values), the two sounds 100%.
+ID                 id
+PrecastKit         uint -> SpellVisualKit     | Played while casting.
+CastKit            uint -> SpellVisualKit     | Played when the cast finishes.
+ImpactKit          uint -> SpellVisualKit     | Played on every target hit.
+StateKit           uint -> SpellVisualKit     | Played on the target while the aura is active.
+ChannelKit         uint -> SpellVisualKit     | Played while channelling.
+HasMissile         uint enum(Bool)
+MissileModel       int -> SpellVisualEffectName | The projectile.
+MissilePathType    uint                       | How the missile flies.
+MissileDestinationAttachment uint             | Where the missile hits the target (an attachment point).
+MissileSound       int -> SoundEntries        | Looping sound of the missile while it flies.
+AnimEventSoundID   int -> SoundEntries        | Sound of the missile (copied with the missile from a weapon's visual).
+Flags              flags
+~CasterImpactKit   uint -> SpellVisualKit
+~TargetImpactKit   uint -> SpellVisualKit
+~MissileAttachment int                        | Where the missile starts on the caster (an attachment point, -1 = default).
+~MissileFollowGroundHeight uint
+~MissileFollowGroundDropSpeed uint
+~MissileFollowGroundApproach uint
+~MissileFollowGroundFlags uint
+~MissileMotion     uint -> SpellMissileMotion | A scripted missile path.
+~MissileTargetingKit uint -> SpellVisualKit
+~InstantAreaKit    uint -> SpellVisualKit
+~ImpactAreaKit     uint -> SpellVisualKit
+~PersistentAreaKit uint -> SpellVisualKit
+
+[SpellVisualKit]
+category: Spells
+about: A set of spell effects played together: the animation of the caster, effect models at the head, chest, feet, hands and weapons, a sound, a camera shake and special effects (tints, screen effects).
+server: client
+evidence: 38 fields / 152 bytes per row. Value match with 1.12 on 1,772 shared IDs, on the rows where the 1.12 value is not the most common one (empty slots are -1 in 1.12 and 0 in 2.4.3): KitType and AnimID 100% / 97%, HeadEffect-BreathEffect 3-8 at the same index (94-99%), SpecialEffect 1.12 fields 9-10 -> 11-12 (100%), WorldEffect 12 -> 14 (100%), SoundID 13 -> 15 (97%), ShakeID 14 -> 16, CharProc 15-18 -> 17-20, the parameter arrays 19-34 -> 21-36 (95-100%). New fields 9-10 resolve to SpellVisualEffectName like the other effect columns (4 of 4, 23 of 26); 37 is 0-3; names from wowdev. The third and fourth parameter arrays hold decimal numbers in 2.4.3. Links: the effect columns 88-100% (RightWeaponEffect 88.5%, SpecialEffect1 94.7%, the others 99-100%), AnimID 100%, SoundID 98.7%, ShakeID 100%.
+ID                 id
+~KitType           uint
+AnimID             int -> AnimationData       | Animation of the unit (-1 = none).
+HeadEffect         int -> SpellVisualEffectName | Spawned at the Head attachment.
+ChestEffect        int -> SpellVisualEffectName | At the Chest attachment.
+BaseEffect         int -> SpellVisualEffectName | At the Base (feet) attachment.
+LeftHandEffect     int -> SpellVisualEffectName | At the left spell hand.
+RightHandEffect    int -> SpellVisualEffectName | At the right spell hand.
+BreathEffect       int -> SpellVisualEffectName | At the Breath attachment.
+~LeftWeaponEffect  int -> SpellVisualEffectName
+~RightWeaponEffect int -> SpellVisualEffectName | 23 of 26 values resolve (ID 3688 is missing from the file).
+SpecialEffect[3]   int -> SpellVisualEffectName | At the Special 1-3 attachments. (SpecialEffect1: 36 of 38 values resolve; the missing ID 3025 is missing in 1.12 too.)
+WorldEffect        int -> SpellVisualEffectName | Placed at the unit's position instead of an attachment.
+SoundID            int -> SoundEntries
+ShakeID            int -> SpellEffectCameraShakes
+CharProc[4]        int                        | Special effect kinds (tint, screen tint, fade, area object...).
+CharParamZero[4]   float
+CharParamOne[4]    float
+~CharParamTwo[4]   float                      | Third parameter of each special effect (not verified).
+~CharParamThree[4] float                      | Fourth parameter of each special effect (not verified).
+~Flags             flags
+
+[SpellVisualEffectName]
+category: Spells
+about: The models of spell effects (fire balls, glows, impacts) used by spell visual kits and missiles.
+server: client
+label: Name
+evidence: 5 fields / 20 bytes per row. Value match with 1.12 on 772 shared IDs: Name 97%, FileName 97% (fields 1-2), AreaEffectSize 1.12 field 4 -> 3 (100% on the rows that are not 0); the 1.12 col_3 is gone. Field 4 is new: a decimal number (mostly 1); name from wowdev.
+ID                 id
+Name               string
+FileName           model                      | The effect model (Spells\*.mdx).
+AreaEffectSize     float                      | The model's radius for a persistent area.
+~Scale             float
+
+[SpellMissileMotion]
+category: Spells
+about: Scripted missile paths (Parabola, Spiral Vortex, Drunken Missiles...): a small script that moves the missile. New in 2.4.3.
+server: client
+label: Name
+evidence: 5 fields / 20 bytes per row (no 1.12 file). Fields 1 and 2 are text: a name and a script ("local angle = 0 ..."); 3 is 0 in every row; 4 is 1-8; names from wowdev. SpellVisual field 20 resolves to these IDs 100%.
+ID                 id
+Name               string
+~ScriptBody        string                     | The script that moves the missile.
+col_3              uint                       | Unknown (0 in every row).
+~MissileCount      uint
+
+[TotemCategory]
+category: Spells
+about: The kinds of tools a spell needs in the bags (Skinning Knife, Earth Totem, Blacksmith Hammer...): any item of the kind will do. New in 2.4.3.
+server: client
+label: Name
+evidence: 20 fields / 80 bytes per row (no 1.12 file). Field 1 is the name ("Skinning Knife", "Earth Totem"); 18 is 1-24 and 19 a bit (1, 2, 4, 8...); names from wowdev. Spell fields 212-213 resolve to these IDs 100%.
+ID                 id
+Name               loc
+~CategoryType      uint                       | Tools with the same type and a matching mask count as each other.
+~CategoryMask      flags
+
+[ParticleColor]
+category: Creatures and models
+about: Colour sets for the particles of creature and item models (start, middle, end colour). New in 2.4.3.
+server: client
+evidence: 10 fields / 40 bytes per row (no 1.12 file); fields 1-9 are colours with an alpha byte (0xAARRGGBB, mostly 0xFF......); names from wowdev. CreatureDisplayInfo field 13 and ItemDisplayInfo field 24 resolve to these IDs 100%.
+ID                 id
+~Start[3]          int                        | Start colours (0xAARRGGBB).
+~Mid[3]            int                        | Middle colours.
+~End[3]            int                        | End colours.
+
+# ---------------------------------------------------------------------------------------------- supporting tables
+# Tables the ones above link to, unchanged since 1.12 apart from the longer localized strings: their 1.12 sections are
+# copied, with the 2.4.3 measurements as evidence.
+
+[SoundProviderPreferences]
+category: Sounds and music
+about: Reverb (EAX) presets of areas: caves, halls, underwater...
+server: client
+label: Description
+evidence: 24 fields / 96 bytes per row: the columns of the 1.12 layout, unchanged; value match with 1.12 on 32 shared IDs: every column 100%. Column names as in the 1.12 layout (its best guesses stay "~").
+ID                 id
+Description        string
+~Flags             flags
+~EAXEnvironmentSelection uint
+~EAXDecayTime      float
+~EAX2EnvironmentSize float
+~EAX2EnvironmentDiffusion float
+~EAX2Room          int
+~EAX2RoomHF        int
+~EAX2DecayHFRatio  float
+~EAX2Reflections   int
+~EAX2ReflectionsDelay float
+~EAX2Reverb        int
+~EAX2ReverbDelay   float
+~EAX2RoomRolloff   float
+~EAX2AirAbsorption float
+~EAX3RoomLF        int
+~EAX3DecayLFRatio  float
+~EAX3EchoTime      float
+~EAX3EchoDepth     float
+~EAX3ModulationTime float
+~EAX3ModulationDepth float
+~EAX3HFReference   float
+~EAX3LFReference   float
+
+[AnimationData]
+category: Creatures and models
+about: The animations every model can play (Stand, Walk, Attack1H, SpellCast...): their names and what replaces an animation a model does not have.
+server: client
+evidence: 7 fields / 28 bytes per row: the columns of the 1.12 layout, unchanged; value match with 1.12 on 208 shared IDs: every column 84-100%, lowest Flags. Column names as in the 1.12 layout (its best guesses stay "~").
+ID                 id
+Name               string                    | The animation's name (Stand, Walk, Run, Attack1H, SpellCastDirected...). Models refer to animations by ID.
+~WeaponFlags       flags                     | How the animation uses weapons (sheathed / unsheathed / pulled).
+~BodyFlags         flags                     | Which part of the body plays the animation.
+~Priority          uint                      | Not read by the client's model animation code (values 0-500).
+Flags              flags                     | 0x10: the fallback is played backwards (Walkbackwards = Walk backwards); 0x20: the fallback is held on its last frame (Dead = Death held).
+Fallback           uint -> AnimationData     | The animation played instead when a model does not have this one (followed until the model has one).
+
+[SpellEffectCameraShakes]
+category: Spells
+about: The camera shakes a spell visual starts.
+server: client
+evidence: 4 fields / 16 bytes per row: the columns of the 1.12 layout, unchanged; value match with 1.12 on 9 shared IDs: every column 100%. Column names as in the 1.12 layout (its best guesses stay "~").
+ID                 id
+CameraShake[3]     uint -> CameraShakes
+
+[CameraShakes]
+category: Spells
+about: Camera shakes (earthquakes, explosions) that spell effects can start.
+server: client
+evidence: 8 fields / 32 bytes per row: the columns of the 1.12 layout, unchanged; value match with 1.12 on 24 shared IDs: every column 100%. Column names as in the 1.12 layout (its best guesses stay "~").
+ID                 id
+~ShakeType         uint                      | 0 sine, 1 sawtooth...
+~Direction         uint                      | 0 X, 1 Y, 2 Z.
+~Amplitude         float
+~Frequency         float
+~Duration          float                     | Seconds.
+~Phase             float
+~Coefficient       float
+
+[NPCSounds]
+category: Sounds and music
+about: The voice lines of NPCs (greeting, farewell, annoyed).
+server: client
+evidence: 5 fields / 20 bytes per row: the columns of the 1.12 layout, unchanged; value match with 1.12 on 156 shared IDs: every column 100%. Column names as in the 1.12 layout (its best guesses stay "~").
+ID                 id
+~GreetingSoundID   uint -> SoundEntries
+~FarewellSoundID   int -> SoundEntries
+~PissedSoundID     uint -> SoundEntries
+col_4              uint
+
+[UnitBlood]
+category: Creatures and models
+about: Blood splashes of creatures.
+server: client
+evidence: 10 fields / 40 bytes per row: the columns of the 1.12 layout, unchanged; value match with 1.12 on 3 shared IDs: every column 100%. Column names as in the 1.12 layout (its best guesses stay "~").
+ID                 id
+~CombatBloodSpurtFront[2] uint
+~CombatBloodSpurtBack[2] uint
+GroundBlood[5]     texture
+
+[UnitBloodLevels]
+category: Creatures and models
+about: Blood amounts by violence setting.
+server: client
+evidence: 4 fields / 16 bytes per row: the columns of the 1.12 layout, unchanged; value match with 1.12 on 3 shared IDs: every column 100%. Column names as in the 1.12 layout (its best guesses stay "~").
+ID                 id
+~Violencelevel[3]  uint
+
+[FootprintTextures]
+category: Creatures and models
+about: The footprint textures creatures leave on the ground.
+server: client
+label: FootstepFilePath
+evidence: 2 fields / 8 bytes per row: the columns of the 1.12 layout, unchanged; value match with 1.12 on 6 shared IDs: every column 100%. Column names as in the 1.12 layout (its best guesses stay "~").
+ID                 id
+FootstepFilePath   texture
+
+[ItemGroupSounds]
+category: Sounds and music
+about: The sounds of moving items (picking up, putting down) by item kind.
+server: client
+evidence: 5 fields / 20 bytes per row: the columns of the 1.12 layout, unchanged; value match with 1.12 on 24 shared IDs: every column 100%. Column names as in the 1.12 layout (its best guesses stay "~").
+ID                 id
+~Sound[4]          uint -> SoundEntries      | Pick up, put down, and two more. Rows 1-6 hold 273-275, which are not SoundEntries IDs (as in 1.12): the links of rows 7-24 resolve.
+
+[ItemVisuals]
+category: Items
+about: The glow effects of items (enchantments): which effect models are attached where.
+server: client
+evidence: 6 fields / 24 bytes per row: the columns of the 1.12 layout, unchanged; value match with 1.12 on 34 shared IDs: every column 88-100%, lowest Slot1. Column names as in the 1.12 layout (its best guesses stay "~").
+ID                 id
+~Slot[5]           uint -> ItemVisualEffects   | 82-96% of the values resolve; the others are left-over numbers in Blizzard's file (1.12: 96-100%).
+
+[ItemVisualEffects]
+category: Items
+about: The models of item glows and enchantment effects.
+server: client
+label: Model
+evidence: 2 fields / 8 bytes per row: the columns of the 1.12 layout, unchanged; value match with 1.12 on 35 shared IDs: every column 100%. Column names as in the 1.12 layout (its best guesses stay "~").
+ID                 id
+Model              model
+
+[CinematicSequences]
+category: Interface and text
+about: The intro movies of new characters: the voice-over and the cameras.
+server: client
+evidence: 10 fields / 40 bytes per row: the columns of the 1.12 layout, unchanged; value match with 1.12 on 10 shared IDs: every column 100%. Column names as in the 1.12 layout (its best guesses stay "~").
+ID                 id
+SoundID            uint -> SoundEntries
+Camera[8]          uint -> CinematicCamera
+
+[CinematicCamera]
+category: Interface and text
+about: The camera paths of the intro movies.
+server: client
+evidence: 7 fields / 28 bytes per row: the columns of the 1.12 layout, unchanged; value match with 1.12 on 10 shared IDs: every column 100%. Column names as in the 1.12 layout (its best guesses stay "~").
+ID                 id
+Model              model                     | The camera path model (Cameras\*.mdx).
+SoundID            uint -> SoundEntries      | The voice-over.
+OriginX            float
+OriginY            float
+OriginZ            float
+OriginFacing       float
+
+[Languages]
+category: Interface and text
+about: The languages (Common, Orcish, Darnassian...).
+server: client
+label: Name
+evidence: 18 fields / 72 bytes per row: the columns of the 1.12 layout (the text grown to 17 fields); value match with 1.12 on 13 shared IDs: every column 100%. Column names as in the 1.12 layout (its best guesses stay "~").
+ID                 id
+Name               loc
+
+[CreatureType]
+category: Creatures and models
+about: The creature types (Beast, Dragonkin, Demon, Humanoid...) shown in tooltips and used by spells that only affect some types.
+server: client
+label: Name
+evidence: 19 fields / 76 bytes per row: the columns of the 1.12 layout (the text grown to 17 fields); value match with 1.12 on 11 shared IDs: every column 100%. Column names as in the 1.12 layout (its best guesses stay "~").
+ID                 id
+Name               loc
+Flags              flags                     | 1: no experience for killing it (critters, totems).
+
+[SpellCategory]
+category: Spells
+about: Spell cooldown categories (spells of a category share their cooldown).
+server: client
+evidence: 2 fields / 8 bytes per row: the columns of the 1.12 layout, unchanged; value match with 1.12 on 165 shared IDs: every column 100%. Column names as in the 1.12 layout (its best guesses stay "~").
+ID                 id
+Flags              flags
+
+[SpellMechanic]
+category: Spells
+about: The names of spell mechanics (Stunned, Rooted, Polymorphed...).
+server: client
+label: StateName
+evidence: 18 fields / 72 bytes per row: the columns of the 1.12 layout (the text grown to 17 fields); value match with 1.12 on 27 shared IDs: every column 100%. Column names as in the 1.12 layout (its best guesses stay "~").
+ID                 id
+StateName          loc
+
+[SpellFocusObject]
+category: Spells
+about: The objects some spells need nearby (Anvil, Forge, Campfire, Moonwell...).
+server: client
+label: Name
+evidence: 18 fields / 72 bytes per row: the columns of the 1.12 layout (the text grown to 17 fields); value match with 1.12 on 138 shared IDs: every column 100%. Column names as in the 1.12 layout (its best guesses stay "~").
+ID                 id
+Name               loc
+
+[SpellCastTimes]
+category: Spells
+about: The cast times spells refer to (instant, 1.5 s, 3 s...).
+server: client
+evidence: 4 fields / 16 bytes per row: the columns of the 1.12 layout, unchanged; value match with 1.12 on 52 shared IDs: every column 98-100%, lowest Minimum. Column names as in the 1.12 layout (its best guesses stay "~").
+ID                 id
+Base               int                       | Cast time in milliseconds.
+PerLevel           int                       | Change per level, in milliseconds.
+Minimum            int                       | The shortest cast time.
+
+[SpellDuration]
+category: Spells
+about: The durations auras refer to (30 s, 10 min...).
+server: client
+evidence: 4 fields / 16 bytes per row: the columns of the 1.12 layout, unchanged; value match with 1.12 on 82 shared IDs: every column 90-100%, lowest Duration. Column names as in the 1.12 layout (its best guesses stay "~").
+ID                 id
+Duration           int                       | Milliseconds (-1 = until cancelled).
+DurationPerLevel   int
+MaxDuration        int
+
+[SpellRange]
+category: Spells
+about: The ranges of spells (melee, 30 yards, unlimited...).
+server: client
+label: DisplayName
+evidence: 38 fields / 152 bytes per row: the columns of the 1.12 layout (the text grown to 17 fields); value match with 1.12 on 28 shared IDs: every column 75-100%, lowest DisplayName. Column names as in the 1.12 layout (its best guesses stay "~").
+ID                 id
+RangeMin           float                     | Yards.
+RangeMax           float                     | Yards.
+Flags              flags
+DisplayName        loc
+DisplayNameShort   loc
+
+[SpellRadius]
+category: Spells
+about: The radiuses of area spells (5, 8, 10, 30 yards...).
+server: client
+evidence: 4 fields / 16 bytes per row: the columns of the 1.12 layout, unchanged; value match with 1.12 on 24 shared IDs: every column 100%. Column names as in the 1.12 layout (its best guesses stay "~").
+ID                 id
+Radius             float                     | Yards.
+RadiusPerLevel     float
+RadiusMax          float
+
+[SkillLineCategory]
+category: Skills and talents
+about: The groups of the skill window (Attributes, Weapon Skills, Class Skills, Armor Proficiencies, Languages, Professions...).
+server: client
+label: Name
+evidence: 19 fields / 76 bytes per row: the columns of the 1.12 layout (the text grown to 17 fields); value match with 1.12 on 8 shared IDs: every column 100%. Column names as in the 1.12 layout (its best guesses stay "~").
+ID                 id
+Name               loc
+SortIndex          uint
+
+[LoadingScreenTaxiSplines]
+category: Interface and text
+about: The flight lines drawn on the loading screen while you fly to another continent.
+server: client
+evidence: 19 fields / 76 bytes per row: the columns of the 1.12 layout, unchanged; value match with 1.12 on 12 shared IDs: every column 100%. Column names as in the 1.12 layout (its best guesses stay "~").
+ID                 id
+PathID             uint -> TaxiPath
+LocX[8]            float
+LocY[8]            float
+LegIndex           uint

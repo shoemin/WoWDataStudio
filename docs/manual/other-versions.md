@@ -59,7 +59,10 @@ Each version has its own columns: a table of 2.4.3 has other columns than the sa
 says for each table whether the app knows this version's columns:
 
 * *named*: the columns have names (the same kind of layout as the [Data tables](dbc-editor.md) tab uses for 1.12),
-  checked against the version's own files;
+  checked against the version's own files. For 2.4.3, 73 tables are named, for 3.3.5a 54: the tables of maps and areas,
+  lights, sounds, liquids, the world map, flight paths, creature, item and object displays, characters, classes, races,
+  factions, skills, talents and spells. A column keeps the name it has in 1.12 when it holds the same thing, so
+  **Compare across versions** lines them up;
 * *raw*: the app does not know this version's columns yet. Every field is shown as a number named `col_0`, `col_1`...,
   and a text shows as a number too (its place in the file).
 

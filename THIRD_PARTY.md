@@ -11,6 +11,9 @@ WoWDataTool is MIT-licensed (see `LICENSE`). Rules:
 
 * **MPQ hashing and encryption** (`crypto.py`): an independent implementation of the public algorithm. It was checked against the client's own Storm code in our decompile (`SFile_HashString`, `SFile_LocateFile` @006549a0) and against the archives themselves.
 * **DXT encoder** (`dxt.py`): our own numpy implementation of the well-known approach of principal-axis endpoints, inset, nearest index and least-squares refinement. The idea is described publicly (for example in stb_dxt, public domain / MIT, by Fabian Giesen and Sean Barrett, and in libsquish, MIT, by Simon Brown); no code was taken from either.
+* **DBC layouts of other versions** (`app\WoWData.Core\Dbc\Layouts\dbc_layouts_8606.txt`, `dbc_layouts_12340.txt`, 0.14.0): measured on the
+  2.4.3 and 3.3.5a clients' own files (value matching with the 1.12 layouts, string and link checks); public format
+  descriptions (wowdev.wiki) used as a reference for the names of new columns only, marked "(wowdev)" in the evidence.
 * **BLP, DBC, M2 layouts:** from our own decompile of `WoW.exe` build 5875 (`WoWDecomp\names`, `work\out60\src`, `work\out61\src`) and the public format descriptions on wowdev.wiki (used as a reference for field names only; `m2/schema.py` marks those names "(wowdev)").
 * **glTF writer** (`gltf.py`): written from the Khronos glTF 2.0 specification; no exporter code was used.
 * **Blender add-on** (`blender_addon/wowdata_blender`, and the `blender_addon/studio` scripts WoW Data Studio runs in Blender): our own code, MIT. It calls Blender's Python API (`bpy`) and Blender's bundled glTF importer at run time. Blender is GPL; the Blender Foundation considers add-ons that use `bpy` to be covered by the GPL when distributed together with Blender. MIT is GPL-compatible, so the add-on can be distributed under MIT on its own and combined with Blender without conflict. Nothing from Blender or its glTF add-on (Apache-2.0) is copied.

@@ -638,7 +638,11 @@ designer's *speak to* or *explore* objectives where they fit.
 
 *What happens:* the **Tables of this version** list of a TBC or WotLK client shows many tables as *raw*: every field is
 a number named `col_N`, and texts show as numbers (their place in the file). Only the tables whose columns were worked
-out and checked for that version have names. Raw columns are left out of **Compare across versions**.
+out and checked for that version have names: 73 tables of 2.4.3 and 54 of 3.3.5a (the map, area, light, sound, liquid,
+world-map, flight-path, creature, item and object display, character, class, race, faction, skill, talent and spell
+tables), out of 185 and 245. Raw columns are left out of **Compare across versions**. In the named tables, a grey,
+italic column name is a best guess, as in the 1.12 tables; the value names of spell effects, auras and attributes are
+not given for these versions (they changed since 1.12).
 
 *Who is affected:* anyone looking up a table of another version that is not named yet.
 
