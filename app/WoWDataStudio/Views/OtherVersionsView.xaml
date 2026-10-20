@@ -99,6 +99,7 @@
                                             </TextBox.InputBindings>
                                         </TextBox>
                                     </DockPanel>
+                                    <TextBlock DockPanel.Dock="Bottom" Text="{Binding FileCount}" Style="{StaticResource Muted}" Margin="0,4,0,0" />
                                     <DataGrid x:Name="FileGrid" ItemsSource="{Binding Files}" SelectedItem="{Binding SelectedFile}" AutoGenerateColumns="False" IsReadOnly="True"
                                               SelectionMode="Extended" HeadersVisibility="Column" GridLinesVisibility="Horizontal" EnableRowVirtualization="True">
                                         <DataGrid.Columns>

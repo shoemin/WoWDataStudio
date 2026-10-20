@@ -74,6 +74,7 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
     [ObservableProperty] private bool _statusIsError;
     [ObservableProperty] private string _clientSummary = "";
     [ObservableProperty] private string _filePattern = @"World\Maps\*.wdt";
+    [ObservableProperty] private string _fileCount = "";
     [ObservableProperty] private VersionFileRow? _selectedFile;
     [ObservableProperty] private ImageSource? _preview;
     [ObservableProperty] private string _previewText = "";
@@ -229,7 +230,7 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
         var names = _open.Data.Names();
         var hits = _open.Data.Glob(FilePattern.Replace('/', '\\'));
         foreach (var f in hits.Take(5000)) Files.Add(new VersionFileRow(f, names.TryGetValue(f.ToUpperInvariant(), out var lf) ? lf.Archive : ""));
-        SetStatus(hits.Count > 5000 ? $"{hits.Count:N0} files match; the first 5,000 are listed (narrow the pattern)." : $"{hits.Count:N0} files match.");
+        FileCount = hits.Count > 5000 ? $"{hits.Count:N0} files match; the first 5,000 are listed (narrow the pattern)." : $"{hits.Count:N0} files match.";
     }
 
     private void ShowPreview(VersionFileRow? f)
@@ -308,7 +309,8 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
             _table = t;
             var dt = new DataTable(name);
             foreach (var c in t.Layout.Columns) dt.Columns.Add(c.Name.Replace(".", "_"), typeof(string)).Caption = c.Name;
-            foreach (var r in t.Rows) dt.Rows.Add(t.Layout.Columns.Select(c => (object)t.Format(r, c)).ToArray());
+            // one line per row: a text with line breaks (battleground descriptions) shows them as " / "
+            foreach (var r in t.Rows) dt.Rows.Add(t.Layout.Columns.Select(c => (object)OneLine(t.Format(r, c))).ToArray());
             TableRows = dt.DefaultView;
             TableNote = t.Layout.IsFallback
                 ? $"{name} has no known layout for {_open.Copy.Version} yet: every field is shown as a raw number (col_N), texts as their offsets."
@@ -320,6 +322,8 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
             TableNote = $"{name} could not be read: {e.Message}";
         }
     }
+
+    private static string OneLine(string s) => s.IndexOf('\n') < 0 ? s : s.Replace("\r\n", "\n").Replace("\n", " / ");
 
     private void ApplyRowFilter()
     {
@@ -366,7 +370,7 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
         foreach (var (col, vals) in cmp.Columns)
         {
             if (CompareOnlyDifferences && vals.Distinct().Count() <= 1) continue;
-            dt.Rows.Add(new object[] { col }.Concat(vals.Select(v => (object)(v ?? "-"))).ToArray());
+            dt.Rows.Add(new object[] { col }.Concat(vals.Select(v => (object)(v == null ? "-" : OneLine(v)))).ToArray());
         }
         CompareRows = dt.DefaultView;
         CompareNote = cmp.Notes.Count == 0 ? $"{table} {id}: {cmp.Columns.Count} named columns in {cmp.Clients.Count} versions." : string.Join(" ", cmp.Notes);

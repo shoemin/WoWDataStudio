@@ -34,6 +34,8 @@ Clients from 6.x (Warlords of Draenor) on, and every client that Battle.net inst
 other Classic flavours), store their data in *CASC* (see the [Glossary](glossary.md)). They are found and listed, but
 cannot be read yet.
 
+![The clients found, and the archives of the 3.3.5a copy with a server's patch marked](../screenshots/137_other_versions_archives.png)
+
 ## Looking at a client
 
 Click a readable client in the list. The line above the tabs says what it is (version, release, language) and how many
@@ -49,6 +51,8 @@ from.
 * Select one or more files and click **Extract selected...** to copy them out as they are, into a folder you pick.
   Their folders are kept (`World\Maps\Northrend\Northrend_30_20.adt` lands in `<your folder>\World\Maps\Northrend\`).
   The app refuses a folder inside the client.
+
+![Storm Peaks ground textures of 3.3.5a, one in the preview](../screenshots/138_other_versions_files.png)
 
 ### Tables of this version
 
@@ -68,6 +72,8 @@ says for each table whether the app knows this version's columns:
 
 The tables of other versions are read only: to change data, use the **Data tables** tab of your 1.12 game.
 
+![The Map table of 3.3.5a with its named columns](../screenshots/139_other_versions_tables.png)
+
 ### Archives
 
 The client's archives in the order that version of the game reads them: a file is taken from the first archive that
@@ -83,6 +89,8 @@ One row of a data table side by side in several versions:
 2. Tick the versions to compare (one of each readable version found).
 3. Click **Compare**. Each line is a column (matched by its name), with its value in each version; `-` means the
    version has no such column or no such row. Tick **Only differences** to see only the columns that changed.
+
+![Fireball (spell 133) in 1.12.1, 2.4.3 and 3.3.5a, only the columns that differ](../screenshots/140_other_versions_compare.png)
 
 Columns that are not named for a version (*raw*) are left out of the comparison, because the same position means
 different things in different versions. The note above the result says so.
