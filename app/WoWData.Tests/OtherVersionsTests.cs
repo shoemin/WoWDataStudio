@@ -90,9 +90,10 @@ public class OtherVersionsTests : IDisposable
         Assert.Equal(("?", 0), (mpq.Version, mpq.Build));   // an exe without a version resource
         var casc = found.Single(f => f.Folder == c);
         Assert.Equal(ClientFormat.Casc, casc.Format);
-        Assert.False(casc.Readable);
+        Assert.True(casc.Readable);
         Assert.Equal(Path.Combine(_root, "clients", "bnet", "Data"), casc.DataDir);
-        Assert.Throws<NotSupportedException>(() => OtherClient.Open(casc));
+        // an empty store (no build info, no data archives) is found but cannot be opened
+        Assert.ThrowsAny<Exception>(() => OtherClient.Open(casc));
         // the Data folder and the executable lead to the same client
         Assert.Equal(w, ClientCopies.Inspect(Path.Combine(w, "Data"))!.Folder);
         Assert.Equal(w, ClientCopies.Inspect(Path.Combine(w, "Wow.exe"))!.Folder);
@@ -153,6 +154,49 @@ public class OtherVersionsTests : IDisposable
         Assert.Equal("Era", ClientPick.Resolve("1.15.9", found).Name);
         Assert.Throws<ArgumentException>(() => ClientPick.Resolve("1", found));   // 1.12.1 and 1.15.9
         Assert.Throws<ArgumentException>(() => ClientPick.Resolve("4.3.4", found));
+    }
+
+    [Fact]
+    public void GuessesTheTypeOfAFileKnownByNumber()
+    {
+        static byte[] B(string magic, string? second = null)
+        {
+            var b = new byte[24];
+            System.Text.Encoding.ASCII.GetBytes(magic).CopyTo(b, 0);
+            if (second != null) System.Text.Encoding.ASCII.GetBytes(second).CopyTo(b, 12);
+            return b;
+        }
+        Assert.Equal(".blp", ClientFileKinds.GuessExtension(B("BLP2")));
+        Assert.Equal(".m2", ClientFileKinds.GuessExtension(B("MD21")));
+        Assert.Equal(".db2", ClientFileKinds.GuessExtension(B("WDC5")));
+        Assert.Equal(".dbc", ClientFileKinds.GuessExtension(B("WDBC")));
+        Assert.Equal(".wdt", ClientFileKinds.GuessExtension(B("REVM", "DHPM")));
+        Assert.Equal(".adt", ClientFileKinds.GuessExtension(B("REVM", "RDHM")));
+        Assert.Equal(".wmo", ClientFileKinds.GuessExtension(B("REVM", "DHOM")));
+        Assert.Equal(".wdl", ClientFileKinds.GuessExtension(B("REVM", "FOAM")));
+        Assert.Equal(".bin", ClientFileKinds.GuessExtension(B("XXXX")));
+        Assert.Equal(".bin", ClientFileKinds.GuessExtension(new byte[2]));
+    }
+
+    /// <summary>The 1.60 beta from the developer's copies (skipped elsewhere): opened through OtherClient, a file by number.</summary>
+    [Fact]
+    public void OpensAModernClientWhenTheCopyIsPresent()
+    {
+        var folder = @"G:\WoW Clients and Patches\Clients\BattleNet snapshot 2026-10-20\_classic_beta_";
+        if (!Directory.Exists(folder)) return;
+        var copy = ClientCopies.Inspect(folder)!;
+        Assert.Equal(ClientFormat.Casc, copy.Format);
+        Assert.True(copy.Readable);
+        using var oc = OtherClient.Open(copy);
+        Assert.NotNull(oc.Casc);
+        Assert.Null(oc.Data);
+        Assert.False(oc.Files.CanList);                   // no listfile
+        Assert.Empty(oc.Files.Glob(@"World\Maps\*"));
+        Assert.Equal("#775971 local", oc.Files.SourceOf("#775971"));
+        var wdt = oc.Files.Read("#775971")!;
+        Assert.Equal(".wdt", ClientFileKinds.GuessExtension(wdt));
+        Assert.Equal(wdt, oc.Files.Read("775971"));
+        Assert.Empty(oc.TableNames());
     }
 
     [Fact]

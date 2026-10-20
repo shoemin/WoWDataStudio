@@ -1,8 +1,9 @@
 # Other versions (experimental)
 
 The **Other versions** tab reads the data of other World of Warcraft versions: The Burning Crusade (2.4.3), Wrath of
-the Lich King (3.3.5a), other 1.12 copies, and any other client that stores its data in MPQ archives. You need no
-server for them: everything comes from the client's own files. Use it to look things up and compare them with 1.12 (how
+the Lich King (3.3.5a), other 1.12 copies and any other client that stores its data in MPQ archives, and the files of
+modern clients (Warlords of Draenor 6.x, and the clients Battle.net installs today: Classic Era, the "1.60" Classic
+branch, MoP Classic, Retail). You need no server for them: everything comes from the client's own files. Use it to look things up and compare them with 1.12 (how
 a spell, a map or a creature's display changed), and to copy files out for reference.
 
 It is **experimental**: it is new, it may change, and later versions will add more (see *Not yet* below). It only ever
@@ -31,8 +32,9 @@ G:\WoW Clients\
    whether the app can read it (**Readable**).
 
 Clients from 6.x (Warlords of Draenor) on, and every client that Battle.net installs today (Retail, Classic Era, the
-other Classic flavours), store their data in *CASC* (see the [Glossary](glossary.md)). They are found and listed, but
-cannot be read yet.
+other Classic flavours), store their data in *CASC* (see the [Glossary](glossary.md)). Each Battle.net flavour (its
+`_classic_beta_`, `_retail_`... folder) is listed as a client of its own. Their **files** can be read (see *Modern
+clients* below); their data tables cannot be read yet.
 
 ![The clients found, and the archives of the 3.3.5a copy with a server's patch marked](../screenshots/137_other_versions_archives.png)
 
@@ -95,6 +97,27 @@ One row of a data table side by side in several versions:
 Columns that are not named for a version (*raw*) are left out of the comparison, because the same position means
 different things in different versions. The note above the result says so.
 
+## Modern clients (CASC)
+
+A modern client finds its files by number (the *FileDataID*), and many of its files have no name inside the client.
+In **Files matching**, type:
+
+* a full path, for example `World\Maps\Azeroth\Azeroth.wdt`: found when the client knows that name (Warlords of
+  Draenor knows nearly all of them, the newer clients only some);
+* a file number with `#`, for example `#775971` (that is the Azeroth map file in every modern client);
+* a wildcard such as `World\Maps\Azeroth\*`, only with a listfile (below).
+
+The list shows where the file stands: *local* (on this computer), *not downloaded* (Battle.net fetches it when the game
+needs it) or *encrypted* (cannot be read). **Preview** and **Extract selected...** work as for the other clients; a file
+known only by its number is copied as `<number>.<type>`, with the type taken from its first bytes (`.blp`, `.m2`,
+`.adt`, `.wdt`, `.db2`...).
+
+![The 1.60 Classic beta: a minimap tile of Elwynn Forest found by its number](../screenshots/141_other_versions_modern.png)
+
+**Listfile for modern clients** (optional): a listfile is a text file that names the files (lines `FileDataID;path`).
+The app does not come with one and never downloads one; if you have one, click **Choose listfile...** and pick it.
+Then the files have their names, and wildcards work.
+
 ## Blizzard archives only
 
 Some client copies contain archives that Blizzard did not ship: a private server's or a mod's patch, such as a
@@ -106,7 +129,8 @@ archives Blizzard shipped with 1.12.1, 2.4.3 and 3.3.5a; for other versions ever
 
 ## Not yet
 
-* Clients that store their data in CASC (6.x and later, and every Battle.net client) cannot be read yet.
+* The data tables of modern (CASC) clients cannot be read yet (they are DB2 files); their files can.
+* Converting maps between versions (the "1.60" Classic maps to 1.12 and back) is planned, not there yet.
 * 3D views of TBC and WotLK models, and bringing maps, models or textures of other versions into your 1.12 game, are
   planned, not there yet.
 * Many tables of other versions show raw columns ([Known issues](known-issues.md#other-versions)).

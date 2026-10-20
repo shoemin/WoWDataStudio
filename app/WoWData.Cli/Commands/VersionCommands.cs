@@ -33,6 +33,8 @@ internal static class VersionCommands
         catch (ArgumentException e) { throw new CliError(ExitCode.NotFound, e.Message); }
     }
 
+    private static readonly OptionSpec Listfile = new("listfile", "file", "names for a modern (CASC) client's files: a listfile you chose (FileDataID;path lines); also the other-clients.listfile setting");
+
     private static bool Blizzard(Invocation inv) => !inv.Flag("all-patches") && (inv.Flag("blizzard-only") || inv.Ctx.Settings.OtherClientsBlizzardOnly);
 
     private static OtherClient Open(Invocation inv, ClientCopy c)
@@ -40,9 +42,20 @@ internal static class VersionCommands
         try
         {
             inv.Ctx.Progress($"Opening {c.Name} ({c.Label})...");
-            return OtherClient.Open(c, Blizzard(inv));
+            var lf = c.Format == ClientFormat.Casc ? inv.Opt("listfile") ?? inv.Ctx.Settings.OtherClientsListfile : null;
+            if (lf != null && !File.Exists(lf)) throw new CliError(ExitCode.NotFound, $"the listfile \"{lf}\" does not exist.");
+            return OtherClient.Open(c, Blizzard(inv), lf);
         }
-        catch (NotSupportedException e) { throw new CliError(ExitCode.NotFound, e.Message); }
+        catch (Exception e) when (e is NotSupportedException or IOException or WoWData.Core.Casc.CascMissingException)
+        {
+            throw new CliError(ExitCode.NotFound, $"{c.Name} could not be opened: {e.Message}");
+        }
+    }
+
+    private static byte[] ReadFile(OtherClient oc, string path)
+    {
+        try { return oc.Files.Read(path) ?? throw new CliError(ExitCode.NotFound, $"{path} is not in {oc.Copy.Name}" + (oc.Casc != null && !path.TrimStart('#').All(char.IsDigit) ? " (or its name is not known: give its FileDataID as #number, or a listfile)." : ".")); }
+        catch (ClientFileException e) { throw new CliError(ExitCode.NotFound, e.Message); }
     }
 
     private static object CopyJson(ClientCopy c) => new
@@ -74,7 +87,7 @@ internal static class VersionCommands
                 foreach (var l in Common.Table(new[] { "Name", "Version", "Build", "Release", "Data", "Readable" },
                              found.Select(c => (IReadOnlyList<string>)new[] { c.Name, c.Version, c.Build.ToString(), c.Release, c.Format.ToString().ToUpperInvariant(), c.Readable ? "yes" : "not yet" }), 50))
                     r.Line(l);
-                if (found.Any(c => c.Format == ClientFormat.Casc)) r.Line("CASC clients (6.x and later, and Battle.net clients) are found but cannot be read yet.");
+                if (found.Any(c => c.Format == ClientFormat.Casc)) r.Line("CASC clients (6.x and later, and Battle.net clients): their files can be read, their data tables not yet.");
                 return Task.FromResult(r);
             },
         };
@@ -83,22 +96,43 @@ internal static class VersionCommands
             Path = "versions info",
             Summary = "one client: version, release, locale, its archives in the order the game reads them (patches that are not Blizzard's marked), files and tables",
             Args = new[] { "<client>" },
-            Options = new[] { Folder, BlizzardOnly, AllPatches },
+            Options = new[] { Folder, BlizzardOnly, AllPatches, Listfile },
             NeedsClient = false,
             Details = "<client> is the client's folder, its name in \"wds versions find\", a version (3.3.5, 2.4) or a build (12340).",
-            Examples = new[] { "wds versions info 3.3.5", "wds versions info \"2.4.3.8606 - The Burning Crusade\" --json" },
+            Examples = new[] { "wds versions info 3.3.5", "wds versions info \"2.4.3.8606 - The Burning Crusade\" --json", "wds versions info _classic_beta_" },
             Run = inv =>
             {
                 var c = Pick(inv, inv.Arg(0));
                 using var oc = Open(inv, c);
-                var names = oc.Data.Names();
+                if (oc.Casc is { } casc)
+                {
+                    inv.Ctx.Progress("Counting the files that are on this computer...");
+                    var ids = casc.FileDataIds().ToList();
+                    var states = ids.GroupBy(casc.State).ToDictionary(g => g.Key, g => g.Count());
+                    int St(WoWData.Core.Casc.CascFileState s) => states.GetValueOrDefault(s);
+                    var cr = new CliResult().With(new
+                    {
+                        client = CopyJson(c), product = casc.Product, buildName = casc.BuildName, files = ids.Count,
+                        local = St(WoWData.Core.Casc.CascFileState.Local), notDownloaded = St(WoWData.Core.Casc.CascFileState.NotLocal),
+                        encrypted = St(WoWData.Core.Casc.CascFileState.Encrypted), nameHashes = casc.Root.NameHashCount, listfileNames = oc.ListfileNames,
+                    });
+                    cr.Line($"{c.Name}: World of Warcraft {c.Version} (build {c.Build}), {c.Release}; CASC product {casc.Product} ({casc.BuildName})");
+                    cr.Line($"  folder     {c.Folder}");
+                    cr.Line($"  data       {casc.DataDirectory}");
+                    cr.Line($"  files      {ids.Count:N0} (English or all languages): {St(WoWData.Core.Casc.CascFileState.Local):N0} on this computer, {St(WoWData.Core.Casc.CascFileState.NotLocal):N0} not downloaded, {St(WoWData.Core.Casc.CascFileState.Encrypted):N0} encrypted");
+                    cr.Line($"  names      {casc.Root.NameHashCount:N0} name hashes in the build (a path can be looked up), {oc.ListfileNames:N0} names from your listfile");
+                    cr.Line("  tables     DB2 tables cannot be read yet");
+                    if (oc.ListfileNames == 0) cr.Line("Without a listfile, files are found by their full path (when the build hashes it) or by number: #775971.");
+                    return Task.FromResult(cr);
+                }
+                var names = oc.Data!.Names();
                 var tables = oc.TableNames();
                 var named = tables.Count(t => oc.Layouts.Get(t) != null);
                 var archives = ClientData.ClientArchiveOrder(c.DataDir);
                 var r = new CliResult().With(new
                 {
-                    client = CopyJson(c), blizzardOnly = oc.BlizzardOnly, archives = archives.Select(a => new { name = a, mounted = oc.Data.Archives.Any(m => m.Name.Equals(a, StringComparison.OrdinalIgnoreCase)), blizzard = !oc.CustomArchives.Contains(a, StringComparer.OrdinalIgnoreCase) }),
-                    files = names.Count, deleted = oc.Data.DeletedNames().Count, tables = tables.Count, tablesWithLayout = named, layoutBuild = oc.Layouts.Build,
+                    client = CopyJson(c), blizzardOnly = oc.BlizzardOnly, archives = archives.Select(a => new { name = a, mounted = oc.Data!.Archives.Any(m => m.Name.Equals(a, StringComparison.OrdinalIgnoreCase)), blizzard = !oc.CustomArchives.Contains(a, StringComparer.OrdinalIgnoreCase) }),
+                    files = names.Count, deleted = oc.Data!.DeletedNames().Count, tables = tables.Count, tablesWithLayout = named, layoutBuild = oc.Layouts.Build,
                 });
                 r.Line($"{c.Name}: World of Warcraft {c.Version} (build {c.Build}), {c.Release}{(c.Locale != null ? $", {c.Locale}" : "")}");
                 r.Line($"  folder   {c.Folder}");
@@ -109,7 +143,7 @@ internal static class VersionCommands
                     bool custom = oc.CustomArchives.Contains(a, StringComparer.OrdinalIgnoreCase);
                     r.Line($"    {i++,2} {a}{(custom ? oc.BlizzardOnly ? "   [not Blizzard's: left out]" : "   [not Blizzard's: a server's or a mod's patch]" : "")}");
                 }
-                r.Line($"  files    {names.Count:N0} (plus {oc.Data.DeletedNames().Count:N0} removed by patches)");
+                r.Line($"  files    {names.Count:N0} (plus {oc.Data!.DeletedNames().Count:N0} removed by patches)");
                 r.Line($"  tables   {tables.Count} ({named} with named columns for this version, the others raw)");
                 if (oc.CustomArchives.Count > 0 && !oc.BlizzardOnly) r.Warnings.Add($"{string.Join(", ", oc.CustomArchives)} {(oc.CustomArchives.Count == 1 ? "is" : "are")} not Blizzard's and replace{(oc.CustomArchives.Count == 1 ? "s" : "")} some of the game's files: --blizzard-only reads the game as Blizzard shipped it.");
                 return Task.FromResult(r);
@@ -118,51 +152,70 @@ internal static class VersionCommands
         yield return new CommandSpec
         {
             Path = "versions files",
-            Summary = "a client's files by wildcard (* and ?), with the archive each one is read from",
+            Summary = "a client's files by wildcard (* and ?) with where each is read from; a modern (CASC) client: a full path or #FileDataID, wildcards with a listfile",
             Args = new[] { "<client>", "<pattern>" },
-            Options = new[] { Folder, BlizzardOnly, AllPatches, Common.Limit },
+            Options = new[] { Folder, BlizzardOnly, AllPatches, Listfile, Common.Limit },
             NeedsClient = false,
-            Examples = new[] { "wds versions files 3.3.5 World\\Maps\\Northrend\\*.adt", "wds versions files 2.4.3 Interface\\Icons\\INV_Sword_* --limit 0 --json" },
+            Examples = new[] { "wds versions files 3.3.5 World\\Maps\\Northrend\\*.adt", "wds versions files 2.4.3 Interface\\Icons\\INV_Sword_* --limit 0 --json", "wds versions files _classic_beta_ #775971" },
             Run = inv =>
             {
                 var c = Pick(inv, inv.Arg(0));
                 using var oc = Open(inv, c);
-                var names = oc.Data.Names();
-                var files = oc.Data.Glob(inv.Arg(1).Replace('/', '\\'));
+                var pattern = inv.Arg(1).Replace('/', '\\');
+                bool wild = pattern.Contains('*') || pattern.Contains('?');
+                List<ClientFileHit> files;
+                if (wild)
+                {
+                    if (!oc.Files.CanList)
+                        throw new CliError(ExitCode.Usage, $"{c.Name} has no file names to search: give a full path or #FileDataID, or a listfile (--listfile, or the other-clients.listfile setting).");
+                    files = oc.Files.Glob(pattern).ToList();
+                }
+                else
+                {
+                    var src = oc.Files.SourceOf(pattern);
+                    files = src == null ? new List<ClientFileHit>() : new List<ClientFileHit> { new(pattern, src) };
+                }
                 var shown = files.Take(Common.LimitOf(inv)).ToList();
-                var r = new CliResult().With(new { client = c.Name, total = files.Count, files = shown.Select(f => new { path = f, archive = names.TryGetValue(f.ToUpperInvariant(), out var lf) ? lf.Archive : null }) });
+                var r = new CliResult().With(new { client = c.Name, total = files.Count, files = shown.Select(f => new { path = f.Path, source = f.Source }) });
                 r.Line($"{files.Count:N0} files in {c.Name}" + (shown.Count < files.Count ? $" (showing {shown.Count}; --limit 0 for all)" : ""));
-                foreach (var f in shown) r.Line($"{(names.TryGetValue(f.ToUpperInvariant(), out var lf2) ? lf2.Archive : ""),-26} {f}");
+                foreach (var f in shown) r.Line($"{f.Source,-26} {f.Path}");
                 return Task.FromResult(r);
             },
         };
         yield return new CommandSpec
         {
             Path = "versions extract",
-            Summary = "copy files out of a client as they are (one path, or a wildcard into a folder, keeping the folders)",
+            Summary = "copy files out of a client as they are (one path or #FileDataID, or a wildcard into a folder, keeping the folders)",
             Args = new[] { "<client>", "<path-or-pattern>" },
-            Options = new[] { Folder, BlizzardOnly, AllPatches, new OptionSpec("out", "file-or-folder", "where to write (default: the current folder)") },
+            Options = new[] { Folder, BlizzardOnly, AllPatches, Listfile, new OptionSpec("out", "file-or-folder", "where to write (default: the current folder)") },
             NeedsClient = false,
-            Examples = new[] { "wds versions extract 3.3.5 DBFilesClient\\Map.dbc --out wotlk\\", "wds versions extract 2.4.3 \"World\\Maps\\Expansion01\\*.adt\" --out tbc_maps\\" },
+            Details = "A file known only by its number (#FileDataID) is written as <number> with an extension from its first bytes (.blp, .m2, .adt, .wdt, .db2...).",
+            Examples = new[] { "wds versions extract 3.3.5 DBFilesClient\\Map.dbc --out wotlk\\", "wds versions extract 2.4.3 \"World\\Maps\\Expansion01\\*.adt\" --out tbc_maps\\", "wds versions extract _classic_beta_ #775971 --out beta\\" },
             Run = async inv =>
             {
                 var c = Pick(inv, inv.Arg(0));
                 using var oc = Open(inv, c);
                 var pattern = inv.Arg(1).Replace('/', '\\');
                 bool many = pattern.Contains('*') || pattern.Contains('?');
-                var paths = many ? oc.Data.Glob(pattern) : new List<string> { ClientData.ResolveName(pattern) };
+                if (many && !oc.Files.CanList)
+                    throw new CliError(ExitCode.Usage, $"{c.Name} has no file names to search: give a full path or #FileDataID, or a listfile (--listfile, or the other-clients.listfile setting).");
+                var paths = many ? oc.Files.Glob(pattern).Select(h => h.Path).ToList() : new List<string> { oc.Casc != null ? pattern : ClientData.ResolveName(pattern) };
                 if (paths.Count == 0) throw new CliError(ExitCode.NotFound, $"no file matches {pattern} in {c.Name}.");
-                var outArg = inv.Opt("out") ?? (many ? "." : Path.GetFileName(paths[0]));
+                var outArg = inv.Opt("out") ?? ".";
                 var outRoot = Path.GetFullPath(outArg);
-                if (FindCommands.IsInside(outRoot + "\\", c.Folder) || string.Equals(outRoot.TrimEnd('\\'), c.Folder.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+                if (FindCommands.IsInside(outRoot + "\\", c.Folder) || string.Equals(outRoot.TrimEnd('\\'), c.Folder.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)
+                    || FindCommands.IsInside(outRoot + "\\", c.DataDir) || string.Equals(outRoot.TrimEnd('\\'), c.DataDir.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
                     throw new CliError(ExitCode.Refused, $"Refusing to write into the client's folder ({c.Folder}): other versions are only read. Extract somewhere else.");
                 var written = new List<object>();
                 string lastFile = "";
                 long bytes = 0;
                 foreach (var p in paths)
                 {
-                    var data = oc.Data.Read(p) ?? throw new CliError(ExitCode.NotFound, $"{p} is not in {c.Name}.");
-                    string dest = many ? Path.Combine(outRoot, p) : Directory.Exists(outRoot) || outArg.EndsWith('\\') || outArg.EndsWith('/') ? Path.Combine(outRoot, Path.GetFileName(p)) : outRoot;
+                    var data = ReadFile(oc, p);
+                    // a file known only by its number: <number><extension from its first bytes>
+                    var name = p.StartsWith('#') || p.All(char.IsDigit) ? p.TrimStart('#') + ClientFileKinds.GuessExtension(data) : p;
+                    bool toFolder = many || inv.Opt("out") == null || Directory.Exists(outRoot) || outArg.EndsWith('\\') || outArg.EndsWith('/');
+                    string dest = many ? Path.Combine(outRoot, name) : toFolder ? Path.Combine(outRoot, Path.GetFileName(name)) : outRoot;
                     Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
                     await File.WriteAllBytesAsync(dest, data);
                     written.Add(new { path = p, file = dest, bytes = data.Length });
@@ -197,6 +250,7 @@ internal static class VersionCommands
                 }
                 var r = new CliResult().With(new { client = c.Name, tables = list.Select(x => new { name = x.Name, rows = x.Rows, fields = x.Fields, columns = x.Columns }) });
                 r.Line($"{list.Count} tables in {c.Name} ({list.Count(x => x.Columns != "raw")} with named columns)");
+                if (oc.Casc != null) r.Warnings.Add($"{c.Name} is a modern (CASC) client: its data tables are DB2 files, which cannot be read yet.");
                 foreach (var l in Common.Table(new[] { "Table", "Rows", "Fields", "Columns" }, list.Select(x => (IReadOnlyList<string>)new[] { x.Name, x.Rows.ToString("N0"), x.Fields.ToString(), x.Columns }), 50))
                     r.Line(l);
                 return Task.FromResult(r);
@@ -243,7 +297,7 @@ internal static class VersionCommands
             Path = "versions compare",
             Summary = "one data-table row side by side in several versions (columns matched by name)",
             Args = new[] { "<table>", "<id>" },
-            Options = new[] { Folder, BlizzardOnly, AllPatches, new OptionSpec("clients", "list", "these clients (comma-separated names, versions or builds; default: every readable one)"), new OptionSpec("raw", null, "also the unnamed columns (col_N)"), new OptionSpec("diff", null, "only the columns whose values differ") },
+            Options = new[] { Folder, BlizzardOnly, AllPatches, new OptionSpec("clients", "list", "these clients (comma-separated names, versions or builds; default: one of each MPQ version)"), new OptionSpec("raw", null, "also the unnamed columns (col_N)"), new OptionSpec("diff", null, "only the columns whose values differ") },
             NeedsClient = false,
             Examples = new[] { "wds versions compare Spell 133", "wds versions compare AreaTable 1519 --clients 1.12,2.4,3.3.5 --diff", "wds versions compare Map 0 --json" },
             Run = inv =>
@@ -251,7 +305,7 @@ internal static class VersionCommands
                 var found = Found(inv);
                 var picks = inv.Opt("clients") is { } list
                     ? list.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(x => Pick(inv, x, found)).ToList()
-                    : found.Where(x => x.Readable).GroupBy(x => (x.Version, x.Build)).Select(g => g.First()).OrderBy(x => x.Build).ToList();
+                    : found.Where(x => x.Format == ClientFormat.Mpq).GroupBy(x => (x.Version, x.Build)).Select(g => g.First()).OrderBy(x => x.Build).ToList();
                 if (picks.Count == 0) throw new CliError(ExitCode.NotFound, "no readable client to compare.");
                 var opened = new List<OtherClient>();
                 try

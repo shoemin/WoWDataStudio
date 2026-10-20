@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.RegularExpressions;
+using WoWData.Core.Casc;
 using WoWData.Core.Dbc;
 using WoWData.Core.Mpq;
 
@@ -10,7 +11,7 @@ public enum ClientFormat
 {
     /// <summary>MPQ archives (1.x to 4.x): readable.</summary>
     Mpq,
-    /// <summary>CASC storage (6.x on, and every Battle.net client): found and listed, not readable yet (docs\research\CASC_INVESTIGATION.md).</summary>
+    /// <summary>CASC storage (6.x on, and every Battle.net client): its files are read by FileDataID or by name (<see cref="CascClientFiles"/>); its DB2 tables not yet.</summary>
     Casc,
     Unknown,
 }
@@ -21,7 +22,7 @@ public sealed record ClientCopy(string Folder, string Exe, string DataDir, strin
     /// <summary>The folder's name (the name a client is picked by on the command line, with the version and build).</summary>
     public string Name => Path.GetFileName(Folder.TrimEnd('\\', '/'));
     public string Label => $"{Version} (build {Build})";
-    public bool Readable => Format == ClientFormat.Mpq;
+    public bool Readable => Format is ClientFormat.Mpq or ClientFormat.Casc;
 
     /// <summary>The release in words, from the version number.</summary>
     public string Release => Version.Split('.') is [var maj, var min, ..] && int.TryParse(maj, out var a) && int.TryParse(min, out var b)
@@ -233,48 +234,79 @@ public static class VersionCompare
 public sealed class OtherClient : IDisposable
 {
     public ClientCopy Copy { get; }
-    public ClientData Data { get; }
+    /// <summary>The client's files, the same way for MPQ and CASC clients.</summary>
+    public IClientFiles Files { get; }
+    /// <summary>The MPQ archives (null for a CASC client).</summary>
+    public ClientData? Data => (Files as MpqClientFiles)?.Data;
+    /// <summary>The CASC storage (null for an MPQ client).</summary>
+    public CascStorage? Casc => (Files as CascClientFiles)?.Storage;
     public DbcLayouts Layouts { get; }
     /// <summary>True when patch archives that Blizzard did not ship are left out.</summary>
     public bool BlizzardOnly { get; }
     /// <summary>The mounted (or, with <see cref="BlizzardOnly"/>, left-out) patch archives that are not Blizzard's.</summary>
     public IReadOnlyList<string> CustomArchives { get; }
+    /// <summary>Names taken from the user's listfile (CASC), 0 without one.</summary>
+    public int ListfileNames { get; }
 
-    private OtherClient(ClientCopy copy, ClientData data, bool blizzardOnly, IReadOnlyList<string> custom)
+    private OtherClient(ClientCopy copy, IClientFiles files, bool blizzardOnly, IReadOnlyList<string> custom, int listfileNames = 0)
     {
         Copy = copy;
-        Data = data;
+        Files = files;
         BlizzardOnly = blizzardOnly;
         CustomArchives = custom;
+        ListfileNames = listfileNames;
         Layouts = DbcLayouts.ForBuild(copy.Build, copy.Version);
     }
 
-    public static OtherClient Open(ClientCopy copy, bool blizzardOnly = false)
+    /// <summary>
+    /// Opens a client read-only. MPQ: its archives in that version's order (<paramref name="blizzardOnly"/> leaves out
+    /// patch archives Blizzard did not ship). CASC: its local storage (a Battle.net flavor folder opens its own product);
+    /// <paramref name="listfile"/>, a file the user chose, gives names to the FileDataIDs (never bundled).
+    /// </summary>
+    public static OtherClient Open(ClientCopy copy, bool blizzardOnly = false, string? listfile = null)
     {
         if (copy.Format == ClientFormat.Casc)
-            throw new NotSupportedException($"{copy.Name} ({copy.Label}) stores its data in CASC, which WoW Data Studio cannot read yet (see the manual: Other versions).");
+        {
+            var storage = CascStorage.Open(copy.Folder);
+            var files = new CascClientFiles(storage);
+            int names = 0;
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(listfile)) names = files.LoadListfile(listfile);
+            }
+            catch
+            {
+                files.Dispose();
+                throw;
+            }
+            return new OtherClient(copy, files, false, Array.Empty<string>(), names);
+        }
         if (copy.Format != ClientFormat.Mpq)
-            throw new NotSupportedException($"{copy.Name}: no game archives were found in {copy.DataDir}.");
+            throw new NotSupportedException($"{copy.Name}: no game data was found in {copy.DataDir}.");
         var order = ClientData.ClientArchiveOrder(copy.DataDir);
         var known = ClientCopies.BlizzardPatches(copy.Build).Select(n => copy.Locale == null ? n : n.Replace("<loc>", copy.Locale)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var custom = known.Count == 0 ? new List<string>()
             : order.Where(n => Path.GetFileName(n).StartsWith("patch", StringComparison.OrdinalIgnoreCase) && !known.Contains(n)).ToList();
         var data = blizzardOnly ? new ClientData(copy.DataDir, order.Except(custom, StringComparer.OrdinalIgnoreCase).ToList()) : new ClientData(copy.DataDir, order);
-        return new OtherClient(copy, data, blizzardOnly, custom);
+        return new OtherClient(copy, new MpqClientFiles(data), blizzardOnly, custom);
     }
 
-    /// <summary>The data tables of the client (names without DBFilesClient\ and .dbc), sorted.</summary>
+    /// <summary>The data tables of the client (names without DBFilesClient\ and .dbc), sorted. A CASC client lists
+    /// none yet (its tables are DB2 files, which cannot be read yet).</summary>
     public IReadOnlyList<string> TableNames() =>
+        Data == null ? Array.Empty<string>() :
         Data.Glob(@"DBFilesClient\*.dbc").Select(p => Path.GetFileNameWithoutExtension(p)).Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
 
-    /// <summary>A data table read with this build's layout, or null when the client has no such table.</summary>
+    /// <summary>A data table (a WDBC .dbc file) read with this build's layout, or null when the client has no such table.</summary>
     public DbcTable? Table(string name)
     {
         var n = name.EndsWith(".dbc", StringComparison.OrdinalIgnoreCase) ? name[..^4] : name;
-        var bytes = Data.Read($@"DBFilesClient\{n}.dbc");
+        byte[]? bytes;
+        try { bytes = Files.Read($@"DBFilesClient\{n}.dbc"); }
+        catch (ClientFileException) { return null; }
         return bytes == null ? null : DbcTable.Load(bytes, n, Layouts);
     }
 
-    public void Dispose() => Data.Dispose();
+    public void Dispose() => Files.Dispose();
 }

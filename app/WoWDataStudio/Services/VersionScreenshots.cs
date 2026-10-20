@@ -11,6 +11,7 @@ namespace WoWDataStudio.Services;
 ///   138_other_versions_files      Northrend ground textures of 3.3.5a, one in the preview
 ///   139_other_versions_tables     the Map table of 3.3.5a with its named columns
 ///   140_other_versions_compare    one spell compared in 1.12.1, 2.4.3 and 3.3.5a, only the differences
+///   141_other_versions_modern     the "1.60" Classic beta (CASC): a minimap tile of Azeroth found by its number
 /// </summary>
 internal static class VersionScreenshots
 {
@@ -72,5 +73,50 @@ internal static class VersionScreenshots
         await ScreenshotRunner.Settle(600);
         Expect(v.CompareRows != null, "other versions: Spell 133 is compared");
         await Shot(win, outDir, "140_other_versions_compare");
+
+        // 141: the "1.60" Classic beta (CASC): a minimap tile of Azeroth found by its number, from the WDT's MAID table
+        var beta = v.Clients.FirstOrDefault(c => c.Name.Equals("_classic_beta_", StringComparison.OrdinalIgnoreCase));
+        if (beta == null)
+        {
+            ScreenshotRunner.Log("other versions: no _classic_beta_ client in the folder; picture 141 skipped");
+            return;
+        }
+        v.SelectedClient = beta;
+        await v.Opening;
+        win.BrowserScreen.VersionsScreen.ShowInnerTab(0);
+        uint minimap = MinimapOfAzeroth(v);
+        Expect(minimap != 0, "other versions: a minimap tile number from Azeroth's WDT");
+        v.FilePattern = "#" + minimap;
+        v.SearchFilesCommand.Execute(null);
+        await ScreenshotRunner.Settle(800);
+        Expect(v.Preview != null, "other versions: a 1.60 minimap tile is previewed");
+        await Shot(win, outDir, "141_other_versions_modern");
+    }
+
+    /// <summary>The minimap texture of the first Azeroth tile that has one: MAID holds 8 FileDataIDs per tile (root, obj0,
+    /// obj1, tex0, lod, map texture, map normal texture, minimap texture).</summary>
+    private static uint MinimapOfAzeroth(OtherVersionsViewModel v)
+    {
+        try
+        {
+            var wdt = v.ReadForScreenshots("#775971");
+            if (wdt == null) return 0;
+            for (int p = 0; p + 8 <= wdt.Length;)
+            {
+                var magic = System.Text.Encoding.ASCII.GetString(wdt, p, 4);
+                int size = BitConverter.ToInt32(wdt, p + 4);
+                if (magic == "DIAM")
+                {
+                    // Elwynn Forest (tile 32_48: entry 48 * 64 + 32), else the first tile with a minimap
+                    int elwynn = p + 8 + (48 * 64 + 32) * 32;
+                    if (elwynn + 32 <= p + 8 + size && BitConverter.ToUInt32(wdt, elwynn + 28) is var me && me != 0) return me;
+                    for (int e = p + 8; e + 32 <= p + 8 + size; e += 32)
+                        if (BitConverter.ToUInt32(wdt, e + 28) is var m && m != 0) return m;
+                }
+                p += 8 + size;
+            }
+        }
+        catch (Exception e) when (e is IOException or ArgumentException) { }
+        return 0;
     }
 }

@@ -52,6 +52,9 @@ public sealed class AppSettings
     public string? OtherClientsDir { get; set; }
     /// <summary>Leave out patch archives that Blizzard did not ship (a private server's or a mod's patch).</summary>
     public bool OtherClientsBlizzardOnly { get; set; }
+    /// <summary>A listfile the user chose ("FileDataID;path" lines): names for the files of modern (CASC) clients; null = none.
+    /// Never bundled or downloaded by the app.</summary>
+    public string? OtherClientsListfile { get; set; }
 
     // ---- 3D pop-out windows (0.5.1)
     /// <summary>Per kind ("model", "terrain"): the last size, position, monitor and layout of the pop-out 3D window.</summary>

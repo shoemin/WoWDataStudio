@@ -32,6 +32,18 @@ recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
     resolving for at least 95% of the values (the few below are named in the hint with their rate), names of new
     columns from public format descriptions marked `~` unless the file proves them. A column keeps its 1.12 name when it
     holds the same thing. The 3.3.5a layouts were measured on Blizzard's archives (without the server's patch-7.mpq).
+* **Modern clients (CASC): their files.** A read-only CASC reader of our own (`WoWData.Core.Casc`, written from the
+  public format descriptions and our probe; `docs\research\CASC_INVESTIGATION.md`): `.build.info` / `versions`, the
+  local `.idx` indexes, the data archives, BLTE (plain, zlib, nested; every chunk's MD5 checked; encrypted chunks are
+  never decrypted), the encoding file, legacy and MFST roots. Every Battle.net flavour opens as a client of its own.
+  Files are named by path (when the build hashes the name) or by number (`#775971`); a listfile the user chooses
+  (`other-clients.listfile`, **Choose listfile...**, `--listfile`) names the rest. **Files**, **Preview**, **Extract
+  selected...**, `wds versions info / files / extract` work for them; a file known only by its number is extracted as
+  `<number>.<type>` from its first bytes. Measured on 1.60.1.70450 (`_classic_beta_`): 1,245,465 files, 1,240,600 on
+  the computer, 3,601 encrypted, 1,254 not downloaded; Azeroth (736 tiles) and Kalimdor (988 tiles) complete; opens in
+  about 3 s. Root records: the English / all-language one, not low-violence, not Mac-only, the standard resolution of a
+  texture (not the 4x high-resolution twin), fewer languages first. Tests: `CascTests` (synthetic BLTE, hashes,
+  indexes and a whole synthetic store; the real copies when present).
 * **MPQ reader: the archives of TBC 2.4.3 and WotLK 3.3.5a.** bzip2-compressed sectors are read (our own decoder,
   `Mpq\Bzip2.cs`, written from the bzip2 format description; every block's CRC is checked), and so are files packed with a
   smaller sector size than their archive's header says (WotLK `backup-enUS.MPQ`). Measured on the copies in

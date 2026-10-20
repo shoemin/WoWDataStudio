@@ -29,10 +29,17 @@
                     <TextBox Text="{Binding Folder, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" />
                 </DockPanel>
                 <DockPanel Margin="0,6,0,0">
+                    <TextBlock DockPanel.Dock="Left" Text="Listfile for modern clients" VerticalAlignment="Center" Margin="0,0,8,0"
+                               ToolTip="Optional: a listfile you chose (FileDataID;path lines) gives names to the files of modern (CASC) clients. The app never bundles or downloads one." />
+                    <Button DockPanel.Dock="Right" Content="Choose listfile..." Command="{Binding ChooseListfileCommand}" Padding="10,5" Margin="8,0,0,0" />
+                    <TextBox Text="{Binding Listfile, UpdateSourceTrigger=LostFocus}" VerticalAlignment="Center"
+                             ToolTip="Empty: the files of modern clients are found by their full path (when the build knows it) or by their number (#775971)." />
+                </DockPanel>
+                <DockPanel Margin="0,6,0,0">
                     <CheckBox DockPanel.Dock="Left" Content="Blizzard archives only" IsChecked="{Binding BlizzardOnly}" VerticalAlignment="Center" Margin="0,0,14,0"
                               ToolTip="Leave out patch archives Blizzard did not ship (a private server's or a mod's patch-?.MPQ), to see the game as Blizzard released it." />
                     <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" VerticalAlignment="Center"
-                               Text="Experimental. Other versions are only read: nothing in their folders is ever changed. MPQ clients (1.x to 3.x) can be read; CASC clients (6.x and later, Battle.net) are listed only." />
+                               Text="Experimental. Other versions are only read: nothing in their folders is ever changed. MPQ clients (1.x to 3.x): files and data tables; modern CASC clients (6.x and later, Battle.net): files." />
                 </DockPanel>
             </StackPanel>
         </Border>

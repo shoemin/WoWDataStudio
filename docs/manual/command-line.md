@@ -2770,6 +2770,8 @@ wds changes folder --open
 Read the data of other World of Warcraft clients without changing them (the **Other versions** tab, see
 [Other versions](other-versions.md)). `<client>` is a client's folder, its name in `wds versions find`, a version
 (`3.3.5`, `2.4`) or a build (`12340`). The folder that is searched is the `other-clients` setting, or `--folder`.
+A modern (CASC) client's files are named by their full path or their number (`#775971`); a listfile you choose
+(`--listfile`, or the `other-clients.listfile` setting) names them for wildcard searches.
 
 #### wds versions find
 
@@ -2797,15 +2799,17 @@ wds versions info <client> [options]
 * `--folder <folder>`: search this folder for clients instead of the other-clients setting
 * `--blizzard-only`: leave out patch archives Blizzard did not ship (a private server's or a mod's patch-?.MPQ); also the other-clients.blizzard-only setting
 * `--all-patches`: read every patch archive the client mounts, even when other-clients.blizzard-only is set
+* `--listfile <file>`: names for a modern (CASC) client's files: a listfile you chose (FileDataID;path lines); also the other-clients.listfile setting
 
 ```
 wds versions info 3.3.5
 wds versions info "2.4.3.8606 - The Burning Crusade" --json
+wds versions info _classic_beta_
 ```
 
 #### wds versions files
 
-A client's files by wildcard (* and ?), with the archive each one is read from.
+A client's files by wildcard (* and ?) with where each is read from; a modern (CASC) client: a full path or #FileDataID, wildcards with a listfile.
 
 ```
 wds versions files <client> <pattern> [options]
@@ -2814,16 +2818,18 @@ wds versions files <client> <pattern> [options]
 * `--folder <folder>`: search this folder for clients instead of the other-clients setting
 * `--blizzard-only`: leave out patch archives Blizzard did not ship (a private server's or a mod's patch-?.MPQ); also the other-clients.blizzard-only setting
 * `--all-patches`: read every patch archive the client mounts, even when other-clients.blizzard-only is set
+* `--listfile <file>`: names for a modern (CASC) client's files: a listfile you chose (FileDataID;path lines); also the other-clients.listfile setting
 * `--limit <n>`: at most n results (default 50; 0 = all)
 
 ```
 wds versions files 3.3.5 World\Maps\Northrend\*.adt
 wds versions files 2.4.3 Interface\Icons\INV_Sword_* --limit 0 --json
+wds versions files _classic_beta_ #775971
 ```
 
 #### wds versions extract
 
-Copy files out of a client as they are (one path, or a wildcard into a folder, keeping the folders).
+Copy files out of a client as they are (one path or #FileDataID, or a wildcard into a folder, keeping the folders).
 
 ```
 wds versions extract <client> <path-or-pattern> [options]
@@ -2832,11 +2838,13 @@ wds versions extract <client> <path-or-pattern> [options]
 * `--folder <folder>`: search this folder for clients instead of the other-clients setting
 * `--blizzard-only`: leave out patch archives Blizzard did not ship (a private server's or a mod's patch-?.MPQ); also the other-clients.blizzard-only setting
 * `--all-patches`: read every patch archive the client mounts, even when other-clients.blizzard-only is set
+* `--listfile <file>`: names for a modern (CASC) client's files: a listfile you chose (FileDataID;path lines); also the other-clients.listfile setting
 * `--out <file-or-folder>`: where to write (default: the current folder)
 
 ```
 wds versions extract 3.3.5 DBFilesClient\Map.dbc --out wotlk\
 wds versions extract 2.4.3 "World\Maps\Expansion01\*.adt" --out tbc_maps\
+wds versions extract _classic_beta_ #775971 --out beta\
 ```
 
 #### wds versions tables
@@ -2887,7 +2895,7 @@ wds versions compare <table> <id> [options]
 * `--folder <folder>`: search this folder for clients instead of the other-clients setting
 * `--blizzard-only`: leave out patch archives Blizzard did not ship (a private server's or a mod's patch-?.MPQ); also the other-clients.blizzard-only setting
 * `--all-patches`: read every patch archive the client mounts, even when other-clients.blizzard-only is set
-* `--clients <list>`: these clients (comma-separated names, versions or builds; default: every readable one)
+* `--clients <list>`: these clients (comma-separated names, versions or builds; default: one of each MPQ version)
 * `--raw`: also the unnamed columns (col_N)
 * `--diff`: only the columns whose values differ
 
@@ -3178,6 +3186,7 @@ app's tests fail when the app, the command line and this table differ.
 | changes.show | **Show** | (app only: navigation: jumps to the file in its tab ("wds find info" describes it)) |
 | versions.folder | **Folder of other game versions** | `wds settings set` |
 | versions.blizzard-only | **Blizzard archives only** | `wds settings set` |
+| versions.listfile | **Choose listfile...** | `wds settings set` |
 | versions.find | **Find clients** | `wds versions find` |
 | versions.info | **Archives** | `wds versions info` |
 | versions.files | **Files matching** | `wds versions files` |

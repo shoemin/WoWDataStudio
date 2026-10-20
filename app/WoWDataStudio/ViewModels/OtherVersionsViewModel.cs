@@ -59,6 +59,7 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
         _main = main;
         _folder = session.Settings.OtherClientsDir ?? "";
         _blizzardOnly = session.Settings.OtherClientsBlizzardOnly;
+        _listfile = session.Settings.OtherClientsListfile ?? "";
     }
 
     public ObservableCollection<ClientRow> Clients { get; } = new();
@@ -75,6 +76,7 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
     [ObservableProperty] private string _clientSummary = "";
     [ObservableProperty] private string _filePattern = @"World\Maps\*.wdt";
     [ObservableProperty] private string _fileCount = "";
+    [ObservableProperty] private string _listfile;
     [ObservableProperty] private VersionFileRow? _selectedFile;
     [ObservableProperty] private ImageSource? _preview;
     [ObservableProperty] private string _previewText = "";
@@ -89,6 +91,9 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
     [ObservableProperty] private string _compareNote = "";
 
     public bool HasClient => _open != null;
+
+    /// <summary>For the screenshots: a file of the open client.</summary>
+    internal byte[]? ReadForScreenshots(string pathOrId) => _open?.Files.Read(pathOrId);
 
     private void SetStatus(string text, bool error = false)
     {
@@ -158,10 +163,10 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
         Clients.Clear();
         CompareClients.Clear();
         foreach (var c in found) Clients.Add(new ClientRow(c));
-        foreach (var c in found.Where(c => c.Readable).GroupBy(c => (c.Version, c.Build)).Select(g => g.First()).OrderBy(c => c.Build))
+        foreach (var c in found.Where(c => c.Format == ClientFormat.Mpq).GroupBy(c => (c.Version, c.Build)).Select(g => g.First()).OrderBy(c => c.Build))
             CompareClients.Add(new CompareClientChoice { Copy = c });
         SetStatus(found.Count == 0 ? "No World of Warcraft client was found in that folder." :
-            $"{found.Count} clients found, {found.Count(c => c.Readable)} readable." + (found.Any(c => c.Format == ClientFormat.Casc) ? " CASC clients (6.x and later, Battle.net) are listed but cannot be read yet." : ""));
+            $"{found.Count} clients found, {found.Count(c => c.Readable)} readable." + (found.Any(c => c.Format == ClientFormat.Casc) ? " Modern (CASC) clients: their files can be read, their data tables not yet." : ""));
     }
 
     private async Task OpenClientAsync(ClientRow row)
@@ -174,18 +179,20 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
         TableRows = null;
         Preview = null;
         PreviewText = "";
+        FileCount = "";
         OnPropertyChanged(nameof(HasClient));
         if (!row.Copy.Readable)
         {
-            ClientSummary = $"{row.Name}: World of Warcraft {row.Version} (build {row.Build}), {row.Release}. Its data is stored in {row.Data}, which cannot be read yet.";
+            ClientSummary = $"{row.Name}: World of Warcraft {row.Version} (build {row.Build}), {row.Release}. No game data was found in its folder.";
             return;
         }
         try
         {
             var bo = BlizzardOnly;
-            var (oc, tables) = await _main.RunBusyAsync($"Opening {row.Name}...", () => Task.Run(() =>
+            var lf = row.Copy.Format == ClientFormat.Casc && !string.IsNullOrWhiteSpace(Listfile) && File.Exists(Listfile) ? Listfile : null;
+            var (oc, tables, files) = await _main.RunBusyAsync($"Opening {row.Name}...", () => Task.Run(() =>
             {
-                var o = OtherClient.Open(row.Copy, bo);
+                var o = OtherClient.Open(row.Copy, bo, lf);
                 var list = new List<VersionTableRow>();
                 foreach (var n in o.TableNames())
                 {
@@ -196,27 +203,38 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
                     }
                     catch (DbcException) { list.Add(new VersionTableRow(n, 0, 0, "unreadable")); }
                 }
-                o.Data.Names();
-                return (o, list);
+                return (o, list, o.Files.FileCount);
             }));
             _open = oc;
             OnPropertyChanged(nameof(HasClient));
-            int i = 1;
-            foreach (var a in ClientData.ClientArchiveOrder(row.Copy.DataDir))
-            {
-                bool custom = oc.CustomArchives.Contains(a, StringComparer.OrdinalIgnoreCase);
-                Archives.Add(new ArchiveRow(i++, a, custom ? oc.BlizzardOnly ? "not Blizzard's: left out" : "not Blizzard's: a server's or a mod's patch" : ""));
-            }
-            foreach (var t in tables) Tables.Add(t);
             var c = row.Copy;
-            ClientSummary = $"{c.Name}: World of Warcraft {c.Version} (build {c.Build}), {c.Release}{(c.Locale != null ? ", " + c.Locale : "")}. " +
-                            $"{oc.Data.Names().Count:N0} files, {tables.Count} tables ({tables.Count(t => t.Columns != "raw" && t.Columns != "unreadable")} with named columns).";
-            SetStatus(oc.CustomArchives.Count > 0 && !oc.BlizzardOnly
-                ? $"{string.Join(", ", oc.CustomArchives)} is not Blizzard's and replaces some of the game's files. Tick \"Blizzard archives only\" to read the game as Blizzard shipped it."
-                : $"{c.Name} is open (read only).");
+            foreach (var t in tables) Tables.Add(t);
+            if (oc.Casc is { } casc)
+            {
+                ClientSummary = $"{c.Name}: World of Warcraft {c.Version} (build {c.Build}), {c.Release}; modern storage (CASC, {casc.Product}). " +
+                                $"{files:N0} files; {casc.Root.NameHashCount:N0} can be found by their full path, {oc.ListfileNames:N0} names from your listfile.";
+                SetStatus(oc.ListfileNames == 0
+                    ? $"{c.Name} is open (read only). Its files have no names to search: type a full path or a file number (#775971), or choose a listfile. Its data tables cannot be read yet."
+                    : $"{c.Name} is open (read only). Its data tables cannot be read yet.");
+                if (FilePattern.Contains('*') && !oc.Files.CanList) FilePattern = "#775971";
+            }
+            else
+            {
+                int i = 1;
+                foreach (var a in ClientData.ClientArchiveOrder(row.Copy.DataDir))
+                {
+                    bool custom = oc.CustomArchives.Contains(a, StringComparer.OrdinalIgnoreCase);
+                    Archives.Add(new ArchiveRow(i++, a, custom ? oc.BlizzardOnly ? "not Blizzard's: left out" : "not Blizzard's: a server's or a mod's patch" : ""));
+                }
+                ClientSummary = $"{c.Name}: World of Warcraft {c.Version} (build {c.Build}), {c.Release}{(c.Locale != null ? ", " + c.Locale : "")}. " +
+                                $"{files:N0} files, {tables.Count} tables ({tables.Count(t => t.Columns != "raw" && t.Columns != "unreadable")} with named columns).";
+                SetStatus(oc.CustomArchives.Count > 0 && !oc.BlizzardOnly
+                    ? $"{string.Join(", ", oc.CustomArchives)} is not Blizzard's and replaces some of the game's files. Tick \"Blizzard archives only\" to read the game as Blizzard shipped it."
+                    : $"{c.Name} is open (read only).");
+            }
             SearchFiles();
         }
-        catch (Exception e) when (e is IOException or MpqException or NotSupportedException or UnauthorizedAccessException)
+        catch (Exception e) when (e is IOException or MpqException or NotSupportedException or UnauthorizedAccessException or WoWData.Core.Casc.CascMissingException)
         {
             SetStatus($"{row.Name} could not be opened: {e.Message}", true);
         }
@@ -227,10 +245,23 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
     {
         Files.Clear();
         if (_open == null) return;
-        var names = _open.Data.Names();
-        var hits = _open.Data.Glob(FilePattern.Replace('/', '\\'));
-        foreach (var f in hits.Take(5000)) Files.Add(new VersionFileRow(f, names.TryGetValue(f.ToUpperInvariant(), out var lf) ? lf.Archive : ""));
-        FileCount = hits.Count > 5000 ? $"{hits.Count:N0} files match; the first 5,000 are listed (narrow the pattern)." : $"{hits.Count:N0} files match.";
+        var pattern = FilePattern.Trim().Replace('/', '\\');
+        if (pattern.Contains('*') || pattern.Contains('?'))
+        {
+            if (!_open.Files.CanList)
+            {
+                FileCount = "This client's files have no names to search: type a full path or a file number (#775971), or choose a listfile.";
+                return;
+            }
+            var hits = _open.Files.Glob(pattern);
+            foreach (var f in hits.Take(5000)) Files.Add(new VersionFileRow(f.Path, f.Source));
+            FileCount = hits.Count > 5000 ? $"{hits.Count:N0} files match; the first 5,000 are listed (narrow the pattern)." : $"{hits.Count:N0} files match.";
+            return;
+        }
+        var src = pattern.Length == 0 ? null : _open.Files.SourceOf(pattern);
+        if (src != null) Files.Add(new VersionFileRow(pattern, src));
+        FileCount = src == null ? "No such file (or its name is not known: try its number, #FileDataID)." : "1 file.";
+        if (src != null) SelectedFile = Files[0];
     }
 
     private void ShowPreview(VersionFileRow? f)
@@ -240,21 +271,37 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
         if (f == null || _open == null) return;
         try
         {
-            var data = _open.Data.Read(f.Path);
+            var data = _open.Files.Read(f.Path);
             if (data == null) return;
-            if (f.Path.EndsWith(".blp", StringComparison.OrdinalIgnoreCase))
+            var ext = f.Path.StartsWith('#') ? ClientFileKinds.GuessExtension(data) : Path.GetExtension(f.Path);
+            if (ext.Equals(".blp", StringComparison.OrdinalIgnoreCase))
             {
                 var blp = BlpFile.Parse(data);
                 var img = blp.Decode();
                 Preview = ImageSources.ToBitmap(img);
                 PreviewText = $"{img.Width} x {img.Height}, {data.Length:N0} bytes, from {f.Archive}";
             }
-            else PreviewText = $"{data.Length:N0} bytes, from {f.Archive}";
+            else PreviewText = $"{data.Length:N0} bytes ({ext} file), from {f.Archive}";
         }
-        catch (Exception e) when (e is BlpException or MpqException or IOException)
+        catch (Exception e) when (e is BlpException or MpqException or IOException or ClientFileException)
         {
             PreviewText = $"Cannot show it: {e.Message}";
         }
+    }
+
+    [RelayCommand]
+    private void ChooseListfile()
+    {
+        var f = Dialogs.PickOpenFile("A listfile (FileDataID;path lines) for modern clients", "Listfiles (*.csv;*.txt)|*.csv;*.txt|All files (*.*)|*.*");
+        if (f == null) return;
+        Listfile = f;
+    }
+
+    partial void OnListfileChanged(string value)
+    {
+        _session.Settings.OtherClientsListfile = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        SaveSettings();
+        if (SelectedClient is { Copy.Format: ClientFormat.Casc }) Opening = OpenClientAsync(SelectedClient);
     }
 
     [RelayCommand]
@@ -271,27 +318,35 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
         var dest = Dialogs.PickFolder("Where to copy the files (their folders are kept)", _session.Settings.ExportDir);
         if (dest == null) return;
         var full = Path.GetFullPath(dest).TrimEnd('\\') + "\\";
-        if (full.StartsWith(_open.Copy.Folder.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase))
+        if (full.StartsWith(_open.Copy.Folder.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase)
+            || full.StartsWith(_open.Copy.DataDir.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase))
         {
             SetStatus("That folder is inside the client: other versions are only read. Pick another folder.", true);
             return;
         }
         var oc = _open;
-        long bytes = await _main.RunBusyAsync($"Copying {items.Count} files...", () => Task.Run(() =>
+        var (count, bytes, failed) = await _main.RunBusyAsync($"Copying {items.Count} files...", () => Task.Run(() =>
         {
             long b = 0;
+            int n = 0;
+            var bad = new List<string>();
             foreach (var it in items)
             {
-                var data = oc.Data.Read(it.Path);
+                byte[]? data;
+                try { data = oc.Files.Read(it.Path); }
+                catch (ClientFileException e) { bad.Add(e.Message); continue; }
                 if (data == null) continue;
-                var outPath = Path.Combine(dest, it.Path);
+                // a file known only by its number: <number><extension from its first bytes>
+                var name = it.Path.StartsWith('#') ? it.Path.TrimStart('#') + ClientFileKinds.GuessExtension(data) : it.Path;
+                var outPath = Path.Combine(dest, name);
                 Directory.CreateDirectory(Path.GetDirectoryName(outPath)!);
                 File.WriteAllBytes(outPath, data);
                 b += data.Length;
+                n++;
             }
-            return b;
+            return (n, b, bad);
         }));
-        _main.Toast($"{items.Count} files ({bytes:N0} bytes) copied to {dest}.");
+        _main.Toast($"{count} files ({bytes:N0} bytes) copied to {dest}." + (failed.Count > 0 ? $" {failed.Count} could not be read: {failed[0]}" : ""));
     }
 
     private DbcTable? _table;

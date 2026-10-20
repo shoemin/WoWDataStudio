@@ -267,6 +267,7 @@ public static class FeatureRegistry
         // ---- other versions (0.14.0, experimental): read other World of Warcraft clients, never change them
         new("versions.folder", "Other versions", "Folder of other game versions", "settings set"),
         new("versions.blizzard-only", "Other versions", "Blizzard archives only", "settings set"),
+        new("versions.listfile", "Other versions", "Choose listfile...", "settings set"),
         new("versions.find", "Other versions", "Find clients", "versions find"),
         new("versions.info", "Other versions", "Archives", "versions info"),
         new("versions.files", "Other versions", "Files matching", "versions files"),

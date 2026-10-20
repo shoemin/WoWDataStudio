@@ -651,18 +651,28 @@ not given for these versions (they changed since 1.12).
 
 *Status:* open (each version's layout file, `app\WoWData.Core\Dbc\Layouts\dbc_layouts_<build>.txt`, gets more tables).
 
-### CASC clients cannot be read
+### The data tables of modern clients cannot be read
 
-*What happens:* clients from 6.x (Warlords of Draenor) on and every client Battle.net installs today (Retail, Classic
-Era, the other Classic flavours) are found and listed with **Readable** *not yet*; their files and tables cannot be
-opened.
+*What happens:* clients from 6.x (Warlords of Draenor) on and every client Battle.net installs today store their
+tables as DB2 files. **Tables of this version** stays empty for them, and **Compare across versions** leaves them out.
+Their files can be read.
 
-*Who is affected:* anyone who wants the data of those versions.
+*Who is affected:* anyone who wants the table data of those versions.
 
-*Workaround:* none in the app yet.
+*Workaround:* extract the `.db2` file (**Extract selected...**) and read it with another tool.
 
-*Status:* open; investigated (reading them offline works; the plan is in `docs\research\CASC_INVESTIGATION.md` of the
-source).
+*Status:* open (a DB2 reader is planned with the map conversion work).
+
+### Most files of the newer modern clients have no names
+
+*What happens:* the "1.60" Classic and Retail clients know the names of only about 12% of their files; the others
+are found by number (`#775971`). Wildcard searches need a listfile.
+
+*Who is affected:* anyone browsing a modern client without a listfile.
+
+*Workaround:* choose a listfile you have (**Choose listfile...**), or look a file up by its number.
+
+*Status:* by design (the app does not ship or download a listfile).
 
 ### "Blizzard archives only" knows three releases
 

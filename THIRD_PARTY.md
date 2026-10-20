@@ -33,6 +33,14 @@ codecs, M2 reader/writer/validator/animation, model looks, index. The 3D rendere
 skinning, M2 material state from our decompile) is our own; WoW Model Viewer / WMVx were not used. The PNG codec (`Imaging\Png.cs`, written from the PNG specification, W3C/ISO 15948), the bzip2 decoder (`Mpq\Bzip2.cs`, written from the public description of the bzip2 1.0 file format; no bzip2 library code; tested against Python's bz2 output), the image resize,
 the compare heat map and the median-cut palette (our own; Pillow's is not used) were written for this project.
 
+* **CASC reader** (`app\WoWData.Core\Casc`, read-only access to modern WoW clients): our own code, ported from our
+  own probe scripts (`docs\research\CASC_INVESTIGATION.md`) and written from public format descriptions of
+  `.build.info`/`versions`, build configs, `.idx` v7, `data.###`, BLTE, the encoding file and the WoW root file
+  (legacy and MFST). The name hash is Bob Jenkins' lookup3 `hashlittle2` (public domain algorithm), implemented from
+  its published description and checked against its published test value. No code from CascLib, TACTLib,
+  CASCExplorer or any other CASC library was copied or consulted as code. It never decrypts (no encryption keys are
+  used or shipped) and no listfile is shipped: a listfile is only read from a path the user chooses.
+
 NuGet packages, **bundled** in the self-contained publish (`app\publish\bin`):
 
 | Package | Version | Licence | Used for |
