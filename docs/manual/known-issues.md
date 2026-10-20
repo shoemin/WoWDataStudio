@@ -632,6 +632,46 @@ designer's *speak to* or *explore* objectives where they fit.
 
 *Status:* open (by design).
 
+## Other versions
+
+### Many tables of other versions show raw columns
+
+*What happens:* the **Tables of this version** list of a TBC or WotLK client shows many tables as *raw*: every field is
+a number named `col_N`, and texts show as numbers (their place in the file). Only the tables whose columns were worked
+out and checked for that version have names. Raw columns are left out of **Compare across versions**.
+
+*Who is affected:* anyone looking up a table of another version that is not named yet.
+
+*Workaround:* compare the raw numbers with the same row in 1.12, or extract the table (**Extract selected...** on
+`DBFilesClient\<Table>.dbc`) and read it with another tool.
+
+*Status:* open (each version's layout file, `app\WoWData.Core\Dbc\Layouts\dbc_layouts_<build>.txt`, gets more tables).
+
+### CASC clients cannot be read
+
+*What happens:* clients from 6.x (Warlords of Draenor) on and every client Battle.net installs today (Retail, Classic
+Era, the other Classic flavours) are found and listed with **Readable** *not yet*; their files and tables cannot be
+opened.
+
+*Who is affected:* anyone who wants the data of those versions.
+
+*Workaround:* none in the app yet.
+
+*Status:* open; investigated (reading them offline works; the plan is in `docs\research\CASC_INVESTIGATION.md` of the
+source).
+
+### "Blizzard archives only" knows three releases
+
+*What happens:* the app knows which patch archives Blizzard shipped with 1.12.1, 2.4.3 and 3.3.5a. For any other
+version **Blizzard archives only** leaves nothing out, and no archive is marked *not Blizzard's*.
+
+*Who is affected:* copies of other versions with a server's or a mod's patch archive.
+
+*Workaround:* look at the **Archives** list: a patch archive with an unusual name (`patch-7.mpq`, `patch-Z.MPQ`) is
+usually not Blizzard's; move a copy of the client without it into the folder.
+
+*Status:* open.
+
 ## The command line
 
 ### `wds models render` needs the app and OpenGL

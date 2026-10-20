@@ -47,6 +47,12 @@ public sealed class AppSettings
     /// <summary>The view shown last in the Server data tab.</summary>
     public string? ServerLastView { get; set; }
 
+    // ---- other versions (0.14.0, experimental)
+    /// <summary>The folder searched for other World of Warcraft clients (any version) to read their data; null = none.</summary>
+    public string? OtherClientsDir { get; set; }
+    /// <summary>Leave out patch archives that Blizzard did not ship (a private server's or a mod's patch).</summary>
+    public bool OtherClientsBlizzardOnly { get; set; }
+
     // ---- 3D pop-out windows (0.5.1)
     /// <summary>Per kind ("model", "terrain"): the last size, position, monitor and layout of the pop-out 3D window.</summary>
     public Dictionary<string, PopoutSettings> Popouts { get; set; } = new();

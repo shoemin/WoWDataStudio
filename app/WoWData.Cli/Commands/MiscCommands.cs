@@ -45,7 +45,7 @@ internal static class MiscCommands
             NeedsClient = false,
             Options = new[]
             {
-                new OptionSpec("area", "name", "only one area (Setup, Find, Textures, Models, Maps, Server maps, Data tables, My changes, Help, Command line)"),
+                new OptionSpec("area", "name", "only one area (" + string.Join(", ", WoWData.Core.Features.FeatureRegistry.All.Select(f => f.Area).Distinct()) + ")"),
                 new OptionSpec("markdown", null, "print the coverage table of docs\\manual\\command-line.md (for maintainers)"),
             },
             Examples = new[] { "wds features", "wds features --area \"Data tables\" --json", "wds features --markdown" },

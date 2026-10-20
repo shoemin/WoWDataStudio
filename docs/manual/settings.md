@@ -97,6 +97,7 @@ line under each field says what it found.
 | What | Where it is set |
 |---|---|
 | The export folder | **1. Export texture as PNG...** always suggests `Documents\WoW Data Studio\Exports\<game path>`; pick any other folder in its save dialog. **2. Import edited PNG...** opens in the folder you last used. |
+| The folder of other game versions, and **Blizzard archives only** | the **Other versions** tab (**Folder of other game versions**, the tick box next to it); `wds settings set other-clients <folder>` and `wds settings set other-clients.blizzard-only true` on the command line. See [Other versions](other-versions.md). |
 | Where the app keeps its data | `%APPDATA%\WoWDataStudio` (see [Troubleshooting](troubleshooting.md#where-the-app-keeps-its-files)) |
 
 ## Starting the app with options (advanced)

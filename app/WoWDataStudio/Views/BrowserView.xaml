@@ -78,6 +78,8 @@
                     <MenuItem Header="Spell designer" Command="{Binding ShowSpellDesignerCommand}" ToolTip="Make or clone spells with a guided form: tooltip preview, checks, visuals, trainers; the game's and the server's spell rows in step." />
                     <MenuItem Header="Classes and talents" Command="{Binding ShowClassesCommand}" ToolTip="A class's talent trees on the grid, its spells by level, class masks, and a new class (experimental)." />
                     <MenuItem Header="Quest chains" Command="{Binding ShowQuestsCommand}" ToolTip="Quest chains as flowcharts, a quest editor in plain fields, branches and the other faction's chain, new quest givers on the map, checks; the server's quest rows." />
+                    <Separator />
+                    <MenuItem Header="Other versions (experimental)" Command="{Binding ShowVersionsCommand}" ToolTip="Read the data of other World of Warcraft versions (TBC, WotLK...): files, archives, data tables, a row compared across versions. Read only." />
                 </MenuItem>
                 <MenuItem Header="_Help">
                     <MenuItem Header="User manual" InputGestureText="F1" Command="{x:Static s:Manual.OpenCommand}" CommandParameter="index"
@@ -615,6 +617,17 @@
                         </StackPanel>
                     </TabItem.Header>
                     <v:QuestDesignerView x:Name="QuestsScreen" DataContext="{Binding Quests}" />
+                </TabItem>
+
+                <!-- ============================== OTHER VERSIONS (0.14.0, experimental) ============================== -->
+                <TabItem Padding="14,6" s:Manual.Topic="other-versions">
+                    <TabItem.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE81C;" FontFamily="Segoe MDL2 Assets" Margin="0,1,6,0" />
+                            <TextBlock Text="Other versions" FontWeight="SemiBold" />
+                        </StackPanel>
+                    </TabItem.Header>
+                    <v:OtherVersionsView x:Name="VersionsScreen" DataContext="{Binding Versions}" />
                 </TabItem>
             </TabControl>
         </DockPanel>

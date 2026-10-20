@@ -98,8 +98,10 @@ public sealed class DbcColumn
     public int Index { get; init; }
     /// <summary>The first file field of the column (0-based).</summary>
     public int Field { get; init; }
-    /// <summary>Number of file fields: 9 for a localized string, else 1.</summary>
-    public int Fields => Storage == DbcStorage.Loc ? DbcFile.Locales + 1 : 1;
+    /// <summary>Number of file fields: 9 for a localized string of 1.12 (8 languages + flags), 17 for TBC/WotLK, else 1.</summary>
+    public int Fields => Storage == DbcStorage.Loc ? LocaleCount + 1 : 1;
+    /// <summary>The languages of a localized string: 8 in 1.12, 16 in TBC 2.4.3 and WotLK 3.3.5a.</summary>
+    public int LocaleCount { get; init; } = DbcFile.Locales;
     /// <summary>Byte offset of the column in a record.</summary>
     public int Offset { get; init; }
     /// <summary>Bytes per field (1, 2 or 4).</summary>
@@ -144,7 +146,7 @@ public sealed class DbcColumn
                     DbcStorage.UInt32 => "whole number (0 or more)",
                     DbcStorage.Float => "decimal number",
                     DbcStorage.String => "text",
-                    DbcStorage.Loc => "text in 8 languages",
+                    DbcStorage.Loc => $"text in {LocaleCount} languages",
                     DbcStorage.UInt8 => "small number (0-255)",
                     DbcStorage.UInt16 => "number (0-65535)",
                     _ => "",

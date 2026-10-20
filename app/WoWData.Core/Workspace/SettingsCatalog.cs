@@ -20,6 +20,8 @@ public static class SettingsCatalog
         new("dbc-locale", "Language", "the language of localized texts in the data tables: enUS, koKR, frFR, deDE, zhCN, zhTW, esES, esMX (empty: the game's)"),
         new("noggit", "Noggit program (noggit.exe)", "our fixed Noggit fork's noggit.exe (empty: the fork's build next to the app)"),
         new("noggit-client", "Client copy for Noggit (optional)", "a copy of the game folder for Noggit (never the game folder itself; empty: the app's client view)"),
+        new("other-clients", "Folder of other game versions", "experimental: a folder with copies of other World of Warcraft clients (any version) whose data the Other versions tab and \"wds versions\" read, never change (empty: none)"),
+        new("other-clients.blizzard-only", "Blizzard archives only", "true or false: other versions are read without patch archives Blizzard did not ship (a private server's or a mod's patch-?.MPQ)"),
         new("server-tools", "Server tools folder", "the folder with reextract.ps1 and swap_in.ps1 (empty: found next to the app or the game folder)"),
         new("server-data", "Server data folder", "the world server's data folder with maps, vmaps, mmaps and 5875\\dbc (empty: Server\\data next to the game folder)"),
         new("server.enabled", "Use the server database for names", "true or false"),
@@ -48,6 +50,8 @@ public static class SettingsCatalog
         "ground-textures" => s.GroundTextures switch { GroundTextureMode.Base => "base", GroundTextureMode.Specular => "specular", _ => "as-the-game" },
         "dbc-locale" => s.DbcLocale is { } l && l >= 0 && l < Dbc.DbcTable.LocaleNames.Length ? Dbc.DbcTable.LocaleNames[l] : "",
         "noggit" => s.NoggitPath ?? "",
+        "other-clients" => s.OtherClientsDir ?? "",
+        "other-clients.blizzard-only" => s.OtherClientsBlizzardOnly ? "true" : "false",
         "noggit-client" => s.NoggitClientDir ?? "",
         "server-tools" => s.ServerToolsDir ?? "",
         "server-data" => s.ServerDataDir ?? "",
@@ -109,6 +113,18 @@ public static class SettingsCatalog
                 }
                 break;
             case "noggit": s.NoggitPath = N(value); break;
+            case "other-clients":
+                if (N(value) is { } oc && !Directory.Exists(oc)) throw new ArgumentException($"the folder \"{oc}\" does not exist.");
+                s.OtherClientsDir = N(value);
+                break;
+            case "other-clients.blizzard-only":
+                s.OtherClientsBlizzardOnly = value.Trim().ToLowerInvariant() switch
+                {
+                    "true" or "on" or "yes" or "1" => true,
+                    "false" or "off" or "no" or "0" => false,
+                    _ => throw new ArgumentException("other-clients.blizzard-only is true or false."),
+                };
+                break;
             case "noggit-client":
                 if (N(value) != null && s.ClientDir != null && NoggitService.IsSameOrInside(Path.GetFullPath(value.Trim()), Path.GetFullPath(s.ClientDir)))
                     throw new ArgumentException("Noggit must never read or write the game folder itself: choose a copy of it (or leave this empty for the app's own client view).");
@@ -173,6 +189,8 @@ public static class SettingsCatalog
             case "ground-textures": s.GroundTextures = GroundTextureMode.AsTheGame; break;
             case "dbc-locale": s.DbcLocale = null; break;
             case "noggit": s.NoggitPath = null; break;
+            case "other-clients": s.OtherClientsDir = null; break;
+            case "other-clients.blizzard-only": s.OtherClientsBlizzardOnly = false; break;
             case "noggit-client": s.NoggitClientDir = null; break;
             case "server-tools": s.ServerToolsDir = null; break;
             case "server-data": s.ServerDataDir = null; break;

@@ -25,10 +25,49 @@ public sealed class DbcLayouts
 {
     public const string ResourceName = "WoWData.Core.Dbc.Layouts.dbc_layouts_5875.txt";
 
+    public const int DefaultBuild = 5875;
+
     private static readonly Lazy<DbcLayouts> Builtin = new(() => Parse(ReadResource()), LazyThreadSafetyMode.ExecutionAndPublication);
+    private static readonly Dictionary<int, DbcLayouts> ByBuild = new();
 
     /// <summary>The built-in layouts of the 1.12.1 client.</summary>
     public static DbcLayouts Default => Builtin.Value;
+
+    /// <summary>The client build the layouts describe (5875 = 1.12.1, 8606 = 2.4.3, 12340 = 3.3.5a).</summary>
+    public int Build { get; private set; } = DefaultBuild;
+    /// <summary>The game version in words ("1.12.1").</summary>
+    public string Version { get; private set; } = "1.12.1";
+    /// <summary>Languages of a localized string: 8 in 1.12, 16 from TBC on.</summary>
+    public int LocaleCount { get; private set; } = DbcFile.Locales;
+
+    /// <summary>
+    /// The built-in layouts of another client build (experimental: reading other versions), from the embedded
+    /// <c>dbc_layouts_&lt;build&gt;.txt</c>. A build without a layout file gets an empty set: every table opens with raw
+    /// columns (col_N). 1.12.1 (5875) is <see cref="Default"/>.
+    /// </summary>
+    public static DbcLayouts ForBuild(int build, string? version = null)
+    {
+        if (build == DefaultBuild) return Default;
+        lock (ByBuild)
+        {
+            if (ByBuild.TryGetValue(build, out var l)) return l;
+            using var s = typeof(DbcLayouts).Assembly.GetManifestResourceStream($"WoWData.Core.Dbc.Layouts.dbc_layouts_{build}.txt");
+            if (s != null)
+            {
+                using var r = new StreamReader(s);
+                l = Parse(r.ReadToEnd());
+                if (l.Build != build) throw new DbcLayoutException($"dbc_layouts_{build}.txt says @build {l.Build}");
+            }
+            else l = new DbcLayouts { Build = build, Version = version ?? build.ToString(CultureInfo.InvariantCulture), LocaleCount = build >= 6000 ? 16 : DbcFile.Locales };
+            return ByBuild[build] = l;
+        }
+    }
+
+    /// <summary>The builds that have a built-in layout file.</summary>
+    public static IReadOnlyList<int> KnownBuilds() =>
+        typeof(DbcLayouts).Assembly.GetManifestResourceNames()
+            .Select(n => Regex.Match(n, @"\.dbc_layouts_(\d+)\.txt$")).Where(m => m.Success)
+            .Select(m => int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture)).OrderBy(b => b).ToList();
 
     private readonly Dictionary<string, DbcLayout> _tables = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, DbcNamedValues> _values = new(StringComparer.OrdinalIgnoreCase);
@@ -44,8 +83,8 @@ public sealed class DbcLayouts
         var l = Get(table);
         if (l != null && l.FieldCount == fieldCount && l.RecordSize == recordSize) return l;
         string why = l == null
-            ? $"{table}.dbc has no known 1.12.1 layout: every column is shown as a raw number (col_N)."
-            : $"This {table}.dbc has {fieldCount} fields / {recordSize} bytes per row, but the 1.12.1 layout has {l.FieldCount} / {l.RecordSize}: " +
+            ? $"{table}.dbc has no known {Version} layout: every column is shown as a raw number (col_N)."
+            : $"This {table}.dbc has {fieldCount} fields / {recordSize} bytes per row, but the {Version} layout has {l.FieldCount} / {l.RecordSize}: " +
               "it is shown with raw columns (col_N). Was it made for another game version?";
         var fb = DbcLayout.Fallback(table, fieldCount, recordSize, why);
         return l == null ? fb : new DbcLayout
@@ -69,6 +108,18 @@ public sealed class DbcLayouts
     {
         var res = new DbcLayouts();
         var lines = text.Replace("\r\n", "\n").Split('\n');
+        // pass 0: the file's directives (@build <number> <version>, @locales <n>); a file without them is 1.12.1
+        foreach (var raw in lines)
+        {
+            var d = raw.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (d.Length >= 2 && d[0] == "@build")
+            {
+                res.Build = int.Parse(d[1], CultureInfo.InvariantCulture);
+                res.Version = d.Length >= 3 ? d[2] : d[1];
+                res.LocaleCount = res.Build >= 6000 ? 16 : DbcFile.Locales;
+            }
+            else if (d.Length >= 2 && d[0] == "@locales") res.LocaleCount = int.Parse(d[1], CultureInfo.InvariantCulture);
+        }
         // pass 1: named values (they may be defined after the tables that use them)
         for (int i = 0; i < lines.Length; i++)
         {
@@ -224,7 +275,7 @@ public sealed class DbcLayouts
                 {
                     Name = count == 1 ? name : name + (i + 1).ToString(CultureInfo.InvariantCulture),
                     Index = cols.Count, Field = field, Offset = offset, Size = size, Storage = storage.Value, Semantic = sem, Values = values,
-                    ForeignKey = fk, ServerRef = serverRef, Hint = hint, Verified = verified,
+                    ForeignKey = fk, ServerRef = serverRef, Hint = hint, Verified = verified, LocaleCount = LocaleCount,
                 };
                 if (cols.Any(x => string.Equals(x.Name, c.Name, StringComparison.OrdinalIgnoreCase)))
                     throw new DbcLayoutException($"line {no}: {table} has two columns named {c.Name}");

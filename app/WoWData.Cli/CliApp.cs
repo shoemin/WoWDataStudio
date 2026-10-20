@@ -42,6 +42,7 @@ public static class CliApp
         ("classes", "the class designer: a class's spells by level, skill lines, trees, assigning spells to levels and trainers, class masks, a new class (experimental)"),
         ("quests", "the quest-chain designer: chains as flowcharts, the quest editor's fields, new / branched / joined quests, givers and enders, objectives and drop sources, rewards, new quest-giver NPCs on the map, the chain for the other faction, the discipline template, checks, text preview, CSV / JSON, test in game"),
         ("changes", "My changes: list, compare, revert, test in game, release patch, uninstall it"),
+        ("versions", "experimental: other World of Warcraft versions (any client folder): find them, their files and archives, extract, data tables, compare a row across versions; read only"),
         ("manual", "the user manual"),
         ("version", "the version and build (the same as the app's Help > About)"),
         ("commands", "the command tree (for tools: --json)"),
@@ -55,7 +56,7 @@ public static class CliApp
         .Concat(Commands.SetupCommands.All()).Concat(Commands.FindCommands.All()).Concat(Commands.TextureCommands.All())
         .Concat(Commands.ModelCommands.All()).Concat(Commands.MapCommands.All()).Concat(Commands.DbcCommands.All())
         .Concat(Commands.ServerCommands.All()).Concat(Commands.SpellCommands.All()).Concat(Commands.TalentCommands.All())
-        .Concat(Commands.ClassCommands.All()).Concat(Commands.QuestCommands.All()).Concat(Commands.ChangeCommands.All()).ToList();
+        .Concat(Commands.ClassCommands.All()).Concat(Commands.QuestCommands.All()).Concat(Commands.ChangeCommands.All()).Concat(Commands.VersionCommands.All()).ToList();
 
     public static CommandSpec? Find(string path) => Tree.FirstOrDefault(c => string.Equals(c.Path, path, StringComparison.OrdinalIgnoreCase));
 

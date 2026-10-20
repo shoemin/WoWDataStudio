@@ -8,6 +8,23 @@ recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
 
 ### Added
 
+* **Other versions tab (experimental) and `wds versions`.** Reads other World of Warcraft clients without a server and
+  never changes them ([Other versions](docs/manual/other-versions.md)):
+  * **Find clients** in a folder (the `other-clients` setting): every client in it and its subfolders, with the version
+    and build from its executable (the text of the version resource: modern executables pack the numbers differently),
+    the release, MPQ or CASC, readable or not. Measured on `G:\WoW Clients and Patches\Clients`: 15 clients, the 4 MPQ
+    ones readable (1.12.1 twice, 2.4.3, 3.3.5a), the 11 CASC ones listed (WoD 6.2.3 and the Battle.net flavours).
+  * Each client's archives in the order **that** version mounts them, read from its `Wow.exe` (TBC 2.4.3 and WotLK
+    3.3.5a: patch chains sorted by full path, the locale archives, the base archives;
+    `docs\research\MPQ_ERA_DELTA.md`). Tests: `ArchiveOrderTests`.
+  * **Blizzard archives only** (`other-clients.blizzard-only`, `--blizzard-only`): leaves out patch archives Blizzard
+    did not ship. The 3.3.5a copy has a private server's `patch-7.mpq` that replaces 19 tables (Spell.dbc: 49,916 rows
+    with it, 49,839 without).
+  * Files by wildcard with their archive, a texture **Preview**, **Extract selected...** (refused into the client's own
+    folder); **Tables of this version** with that build's layout (`DbcLayouts.ForBuild`, one layout file per build,
+    16 languages per text from TBC on; raw `col_N` columns where none is known yet); **Compare across versions**
+    (one row side by side, columns matched by name).
+  * Commands: `wds versions find`, `info`, `files`, `extract`, `tables`, `rows`, `compare`. Tests: `OtherVersionsTests`.
 * **MPQ reader: the archives of TBC 2.4.3 and WotLK 3.3.5a.** bzip2-compressed sectors are read (our own decoder,
   `Mpq\Bzip2.cs`, written from the bzip2 format description; every block's CRC is checked), and so are files packed with a
   smaller sector size than their archive's header says (WotLK `backup-enUS.MPQ`). Measured on the copies in

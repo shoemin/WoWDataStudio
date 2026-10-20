@@ -264,6 +264,18 @@ public static class FeatureRegistry
         new("settings.hot-reload", "Setup", "Hot reload in the running game", "settings set"),
         new("changes.show", "My changes", "Show", "", FeatureFront.GuiOnly, "navigation: jumps to the file in its tab (\"wds find info\" describes it)"),
 
+        // ---- other versions (0.14.0, experimental): read other World of Warcraft clients, never change them
+        new("versions.folder", "Other versions", "Folder of other game versions", "settings set"),
+        new("versions.blizzard-only", "Other versions", "Blizzard archives only", "settings set"),
+        new("versions.find", "Other versions", "Find clients", "versions find"),
+        new("versions.info", "Other versions", "Archives", "versions info"),
+        new("versions.files", "Other versions", "Files matching", "versions files"),
+        new("versions.extract", "Other versions", "Extract selected...", "versions extract"),
+        new("versions.preview", "Other versions", "Preview", "", FeatureFront.GuiOnly, "viewing: a picture of the selected texture (\"wds versions extract\" copies the file out)"),
+        new("versions.tables", "Other versions", "Tables of this version", "versions tables"),
+        new("versions.rows", "Other versions", "Find in rows", "versions rows"),
+        new("versions.compare", "Other versions", "Compare across versions", "versions compare"),
+
         // ---- help and the command line itself
         new("help.manual", "Help", "Help > User manual", "manual"),
         new("help.about", "Help", "Help > About WoW Data Studio", "version"),

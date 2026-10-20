@@ -2765,6 +2765,138 @@ wds changes folder
 wds changes folder --open
 ```
 
+### Other versions (experimental)
+
+Read the data of other World of Warcraft clients without changing them (the **Other versions** tab, see
+[Other versions](other-versions.md)). `<client>` is a client's folder, its name in `wds versions find`, a version
+(`3.3.5`, `2.4`) or a build (`12340`). The folder that is searched is the `other-clients` setting, or `--folder`.
+
+#### wds versions find
+
+The World of Warcraft clients in the folder of other versions: version, release, data format, readable or not.
+
+```
+wds versions find [options]
+```
+
+* `--folder <folder>`: search this folder for clients instead of the other-clients setting
+
+```
+wds versions find
+wds versions find --folder "G:\WoW Clients" --json
+```
+
+#### wds versions info
+
+One client: version, release, locale, its archives in the order the game reads them (patches that are not Blizzard's marked), files and tables.
+
+```
+wds versions info <client> [options]
+```
+
+* `--folder <folder>`: search this folder for clients instead of the other-clients setting
+* `--blizzard-only`: leave out patch archives Blizzard did not ship (a private server's or a mod's patch-?.MPQ); also the other-clients.blizzard-only setting
+* `--all-patches`: read every patch archive the client mounts, even when other-clients.blizzard-only is set
+
+```
+wds versions info 3.3.5
+wds versions info "2.4.3.8606 - The Burning Crusade" --json
+```
+
+#### wds versions files
+
+A client's files by wildcard (* and ?), with the archive each one is read from.
+
+```
+wds versions files <client> <pattern> [options]
+```
+
+* `--folder <folder>`: search this folder for clients instead of the other-clients setting
+* `--blizzard-only`: leave out patch archives Blizzard did not ship (a private server's or a mod's patch-?.MPQ); also the other-clients.blizzard-only setting
+* `--all-patches`: read every patch archive the client mounts, even when other-clients.blizzard-only is set
+* `--limit <n>`: at most n results (default 50; 0 = all)
+
+```
+wds versions files 3.3.5 World\Maps\Northrend\*.adt
+wds versions files 2.4.3 Interface\Icons\INV_Sword_* --limit 0 --json
+```
+
+#### wds versions extract
+
+Copy files out of a client as they are (one path, or a wildcard into a folder, keeping the folders).
+
+```
+wds versions extract <client> <path-or-pattern> [options]
+```
+
+* `--folder <folder>`: search this folder for clients instead of the other-clients setting
+* `--blizzard-only`: leave out patch archives Blizzard did not ship (a private server's or a mod's patch-?.MPQ); also the other-clients.blizzard-only setting
+* `--all-patches`: read every patch archive the client mounts, even when other-clients.blizzard-only is set
+* `--out <file-or-folder>`: where to write (default: the current folder)
+
+```
+wds versions extract 3.3.5 DBFilesClient\Map.dbc --out wotlk\
+wds versions extract 2.4.3 "World\Maps\Expansion01\*.adt" --out tbc_maps\
+```
+
+#### wds versions tables
+
+A client's data tables: rows, fields, and whether this version's columns are named or shown raw.
+
+```
+wds versions tables <client> [options]
+```
+
+* `--folder <folder>`: search this folder for clients instead of the other-clients setting
+* `--blizzard-only`: leave out patch archives Blizzard did not ship (a private server's or a mod's patch-?.MPQ); also the other-clients.blizzard-only setting
+* `--all-patches`: read every patch archive the client mounts, even when other-clients.blizzard-only is set
+
+```
+wds versions tables 3.3.5
+wds versions tables 2.4.3 --json
+```
+
+#### wds versions rows
+
+Rows of a client's data table (columns named where this version's layout is known, else col_N).
+
+```
+wds versions rows <client> <table> [options]
+```
+
+* `--folder <folder>`: search this folder for clients instead of the other-clients setting
+* `--blizzard-only`: leave out patch archives Blizzard did not ship (a private server's or a mod's patch-?.MPQ); also the other-clients.blizzard-only setting
+* `--all-patches`: read every patch archive the client mounts, even when other-clients.blizzard-only is set
+* `--columns <list>`: only these columns (comma-separated)
+* `--where <column=value> (repeatable)`: only rows whose column has this value (text: contains, case-insensitive)
+* `--limit <n>`: at most n results (default 50; 0 = all)
+
+```
+wds versions rows 3.3.5 Map --columns ID,Directory,MapName
+wds versions rows 2.4.3 AreaTable --where MapID=530 --limit 0 --json
+```
+
+#### wds versions compare
+
+One data-table row side by side in several versions (columns matched by name).
+
+```
+wds versions compare <table> <id> [options]
+```
+
+* `--folder <folder>`: search this folder for clients instead of the other-clients setting
+* `--blizzard-only`: leave out patch archives Blizzard did not ship (a private server's or a mod's patch-?.MPQ); also the other-clients.blizzard-only setting
+* `--all-patches`: read every patch archive the client mounts, even when other-clients.blizzard-only is set
+* `--clients <list>`: these clients (comma-separated names, versions or builds; default: every readable one)
+* `--raw`: also the unnamed columns (col_N)
+* `--diff`: only the columns whose values differ
+
+```
+wds versions compare Spell 133
+wds versions compare AreaTable 1519 --clients 1.12,2.4,3.3.5 --diff
+wds versions compare Map 0 --json
+```
+
 ### Help and the command line itself
 
 #### wds version
@@ -3044,6 +3176,16 @@ app's tests fail when the app, the command line and this table differ.
 | changes.reload | **Reload in running game** | `wds changes reload` |
 | settings.hot-reload | **Hot reload in the running game** | `wds settings set` |
 | changes.show | **Show** | (app only: navigation: jumps to the file in its tab ("wds find info" describes it)) |
+| versions.folder | **Folder of other game versions** | `wds settings set` |
+| versions.blizzard-only | **Blizzard archives only** | `wds settings set` |
+| versions.find | **Find clients** | `wds versions find` |
+| versions.info | **Archives** | `wds versions info` |
+| versions.files | **Files matching** | `wds versions files` |
+| versions.extract | **Extract selected...** | `wds versions extract` |
+| versions.preview | **Preview** | (app only: viewing: a picture of the selected texture ("wds versions extract" copies the file out)) |
+| versions.tables | **Tables of this version** | `wds versions tables` |
+| versions.rows | **Find in rows** | `wds versions rows` |
+| versions.compare | **Compare across versions** | `wds versions compare` |
 | help.manual | **Help > User manual** | `wds manual` |
 | help.about | **Help > About WoW Data Studio** | `wds version` |
 | help.cli | **Help > The command line (wds)** | `wds manual` |

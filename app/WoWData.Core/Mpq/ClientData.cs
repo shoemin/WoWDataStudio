@@ -69,6 +69,24 @@ public sealed class ClientData : IDisposable
         }
     }
 
+    /// <summary>A view of exactly these archives (names relative to the Data folder), highest priority first: for other
+    /// client versions read with some archives left out (experimental reader, "Blizzard archives only").</summary>
+    public ClientData(string dataDir, IReadOnlyList<string> archives)
+    {
+        DataDir = dataDir;
+        Overlays = Array.Empty<string>();
+        try
+        {
+            foreach (var n in archives)
+                Archives.Add(new MountedArchive(n, new MpqArchive(System.IO.Path.Combine(dataDir, n)), true));
+        }
+        catch
+        {
+            Dispose();
+            throw;
+        }
+    }
+
     public void Dispose()
     {
         foreach (var a in Archives) a.Archive.Dispose();

@@ -66,7 +66,7 @@ public sealed class DbcTable
                 int f = c.Field + i;
                 _fieldOffset[f] = c.Offset + i * c.Size;
                 _fieldSize[f] = c.Size;
-                _isString[f] = c.Storage == DbcStorage.String || (c.Storage == DbcStorage.Loc && i < DbcFile.Locales);
+                _isString[f] = c.Storage == DbcStorage.String || (c.Storage == DbcStorage.Loc && i < c.LocaleCount);
             }
     }
 
@@ -203,7 +203,7 @@ public sealed class DbcTable
 
     /// <summary>The text of a string column, or of one locale of a localized column (0 = enUS).</summary>
     public string Text(DbcRow row, DbcColumn c, int locale = 0) =>
-        c.Storage == DbcStorage.Loc ? Text(row, c.Field + Math.Clamp(locale, 0, DbcFile.Locales - 1)) : Text(row, c.Field);
+        c.Storage == DbcStorage.Loc ? Text(row, c.Field + Math.Clamp(locale, 0, c.LocaleCount - 1)) : Text(row, c.Field);
 
     /// <summary>The key of a row (its ID), or null when the table has no ID column.</summary>
     public long? Key(DbcRow row) => Layout.KeyColumn is { } k ? Number(row, k) : null;
@@ -352,8 +352,8 @@ public sealed class DbcTable
         return f.ToString("R", CultureInfo.InvariantCulture);
     }
 
-    /// <summary>The flags-loc field of a localized column (field 9 of the 9).</summary>
-    public static int LocFlagsField(DbcColumn c) => c.Field + DbcFile.Locales;
+    /// <summary>The flags-loc field of a localized column (the last of its fields).</summary>
+    public static int LocFlagsField(DbcColumn c) => c.Field + c.LocaleCount;
 
     /// <summary>Parse a number typed for a column (decimal, 0x hex for whole numbers, an enum name, "raw:0x..." for any bits).</summary>
     public static bool TryParse(DbcColumn c, string text, out uint raw, out string? error)

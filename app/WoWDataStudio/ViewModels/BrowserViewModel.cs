@@ -127,6 +127,8 @@ public sealed partial class BrowserViewModel : ObservableObject
 
     /// <summary>The Quest chains tab (index 7, 0.13.0); shares the Spell designer's session.</summary>
     public QuestDesignerViewModel Quests { get; }
+    /// <summary>0.14.0 (experimental): the Other versions tab.</summary>
+    public OtherVersionsViewModel Versions { get; }
 
     /// <summary>Tab indexes: 0 Browse, 1 My changes, 2 Maps, 3 Data tables, 4 Server data, 5 Spell designer, 6 Classes and
     /// talents, 7 Quest chains.</summary>
@@ -136,6 +138,7 @@ public sealed partial class BrowserViewModel : ObservableObject
     public const int SpellsTab = 5;
     public const int ClassesTab = 6;
     public const int QuestsTab = 7;
+    public const int VersionsTab = 8;
 
     partial void OnSelectedTabChanged(int value)
     {
@@ -150,6 +153,7 @@ public sealed partial class BrowserViewModel : ObservableObject
         if (value == SpellsTab) _ = Spells.EnsureLoadedAsync();
         if (value == ClassesTab) _ = Classes.EnsureLoadedAsync();
         if (value == QuestsTab) _ = Quests.EnsureLoadedAsync();
+        if (value == VersionsTab) _ = Versions.EnsureLoadedAsync();
     }
 
     /// <summary>The view scrolls the texture viewer into sight (after a texture was opened from the 3D viewer).</summary>
@@ -230,6 +234,7 @@ public sealed partial class BrowserViewModel : ObservableObject
         Spells = new SpellDesignerViewModel(session, main, this);
         Classes = new ClassTalentViewModel(session, main, Spells);
         Quests = new QuestDesignerViewModel(session, main, this, Spells);
+        Versions = new OtherVersionsViewModel(session, main);
         _searchTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(220) };
         _searchTimer.Tick += (_, _) => { _searchTimer.Stop(); _ = ApplyFilterAsync(); };
         var defs = new (AssetKind Kind, string Label, string Tip)[]
@@ -1001,6 +1006,9 @@ public sealed partial class BrowserViewModel : ObservableObject
 
     [RelayCommand]
     private void ShowQuests() => SelectedTab = QuestsTab;
+
+    [RelayCommand]
+    private void ShowVersions() => SelectedTab = VersionsTab;
 
     [RelayCommand]
     private void OpenSettings() => _main.OpenSettingsCommand.Execute(null);

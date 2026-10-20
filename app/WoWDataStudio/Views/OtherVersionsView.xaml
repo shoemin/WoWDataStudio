@@ -1,0 +1,197 @@
+<UserControl x:Class="WoWDataStudio.Views.OtherVersionsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:h="clr-namespace:WoWDataStudio.Helpers"
+             xmlns:s="clr-namespace:WoWDataStudio.Services"
+             s:Manual.Topic="other-versions">
+    <UserControl.Resources>
+        <h:BoolToCollapsedConverter x:Key="BoolVis" />
+        <h:BoolToCollapsedConverter x:Key="BoolVisInv" Invert="True" />
+        <h:NullToCollapsedConverter x:Key="NullVis" />
+        <Style x:Key="ToolButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+            <Setter Property="Margin" Value="0,0,6,6" />
+            <Setter Property="Padding" Value="9,4" />
+        </Style>
+        <Style x:Key="Section" TargetType="TextBlock" BasedOn="{StaticResource H3}">
+            <Setter Property="Margin" Value="0,10,0,4" />
+        </Style>
+    </UserControl.Resources>
+
+    <DockPanel Margin="0,8,0,0">
+        <!-- ============================== THE FOLDER OF OTHER VERSIONS ============================== -->
+        <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Padding="12,8" Margin="0,0,0,8">
+            <StackPanel>
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Left" Text="Folder of other game versions" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <Button DockPanel.Dock="Right" Content="Find clients" Command="{Binding FindClientsCommand}" Style="{StaticResource PrimaryButton}" Padding="14,5" Margin="8,0,0,0"
+                            ToolTip="Look for World of Warcraft clients of any version in this folder and its subfolders." />
+                    <Button DockPanel.Dock="Right" Content="Browse..." Command="{Binding BrowseFolderCommand}" Padding="10,5" Margin="8,0,0,0" />
+                    <TextBox Text="{Binding Folder, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" />
+                </DockPanel>
+                <DockPanel Margin="0,6,0,0">
+                    <CheckBox DockPanel.Dock="Left" Content="Blizzard archives only" IsChecked="{Binding BlizzardOnly}" VerticalAlignment="Center" Margin="0,0,14,0"
+                              ToolTip="Leave out patch archives Blizzard did not ship (a private server's or a mod's patch-?.MPQ), to see the game as Blizzard released it." />
+                    <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" VerticalAlignment="Center"
+                               Text="Experimental. Other versions are only read: nothing in their folders is ever changed. MPQ clients (1.x to 3.x) can be read; CASC clients (6.x and later, Battle.net) are listed only." />
+                </DockPanel>
+            </StackPanel>
+        </Border>
+        <Border DockPanel.Dock="Bottom" Padding="4,6,4,0">
+            <TextBlock Text="{Binding Status}" TextWrapping="Wrap">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding StatusIsError}" Value="True"><Setter Property="Foreground" Value="{StaticResource Bad}" /></DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </Border>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="430" />
+                <ColumnDefinition Width="8" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- ============================== CLIENTS ============================== -->
+            <Border Style="{StaticResource Card}" Padding="10">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Clients found" Style="{StaticResource H3}" Margin="0,0,0,6" />
+                    <DataGrid x:Name="ClientGrid" ItemsSource="{Binding Clients}" SelectedItem="{Binding SelectedClient}" AutoGenerateColumns="False" IsReadOnly="True"
+                              SelectionMode="Single" HeadersVisibility="Column" GridLinesVisibility="Horizontal">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" />
+                            <DataGridTextColumn Header="Version" Binding="{Binding Version}" Width="60" />
+                            <DataGridTextColumn Header="Build" Binding="{Binding Build}" Width="52" />
+                            <DataGridTextColumn Header="Data" Binding="{Binding Data}" Width="44" />
+                            <DataGridTextColumn Header="Readable" Binding="{Binding ReadableText}" Width="62" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </Border>
+
+            <!-- ============================== THE OPEN CLIENT ============================== -->
+            <Border Grid.Column="2" Style="{StaticResource Card}" Padding="10">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="{Binding ClientSummary}" TextWrapping="Wrap" Margin="0,0,0,6" FontWeight="SemiBold" />
+                    <TabControl x:Name="InnerTabs" Background="Transparent" BorderThickness="0">
+                        <!-- files -->
+                        <TabItem Header="Files" Padding="12,5">
+                            <Grid Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="8" />
+                                    <ColumnDefinition Width="300" />
+                                </Grid.ColumnDefinitions>
+                                <DockPanel>
+                                    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                                        <Button DockPanel.Dock="Right" Content="Extract selected..." Style="{StaticResource ToolButton}" Margin="6,0,0,0"
+                                                Command="{Binding ExtractSelectedCommand}" CommandParameter="{Binding SelectedItems, ElementName=FileGrid}"
+                                                ToolTip="Copy the selected files out as they are, into a folder you pick (their folders are kept)." />
+                                        <Button DockPanel.Dock="Right" Content="Search" Command="{Binding SearchFilesCommand}" Style="{StaticResource ToolButton}" Margin="6,0,0,0" IsDefault="False" />
+                                        <TextBlock DockPanel.Dock="Left" Text="Files matching" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                        <TextBox Text="{Binding FilePattern, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"
+                                                 ToolTip="A path with * and ? (for example World\Maps\Northrend\*.adt or Interface\Icons\INV_Sword_*)." >
+                                            <TextBox.InputBindings>
+                                                <KeyBinding Key="Enter" Command="{Binding SearchFilesCommand}" />
+                                            </TextBox.InputBindings>
+                                        </TextBox>
+                                    </DockPanel>
+                                    <DataGrid x:Name="FileGrid" ItemsSource="{Binding Files}" SelectedItem="{Binding SelectedFile}" AutoGenerateColumns="False" IsReadOnly="True"
+                                              SelectionMode="Extended" HeadersVisibility="Column" GridLinesVisibility="Horizontal" EnableRowVirtualization="True">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="*" />
+                                            <DataGridTextColumn Header="Archive" Binding="{Binding Archive}" Width="170" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </DockPanel>
+                                <DockPanel Grid.Column="2">
+                                    <TextBlock DockPanel.Dock="Top" Text="Preview" Style="{StaticResource H3}" Margin="0,0,0,4" />
+                                    <TextBlock DockPanel.Dock="Top" Text="{Binding PreviewText}" TextWrapping="Wrap" Style="{StaticResource Muted}" Margin="0,0,0,6" />
+                                    <Border BorderBrush="{StaticResource Border}" BorderThickness="1" Background="#FFE9EDF2">
+                                        <Image Source="{Binding Preview}" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" />
+                                    </Border>
+                                </DockPanel>
+                            </Grid>
+                        </TabItem>
+
+                        <!-- data tables -->
+                        <TabItem Header="Tables of this version" Padding="12,5">
+                            <Grid Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="280" />
+                                    <ColumnDefinition Width="8" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <DataGrid ItemsSource="{Binding Tables}" SelectedItem="{Binding SelectedTable}" AutoGenerateColumns="False" IsReadOnly="True"
+                                          SelectionMode="Single" HeadersVisibility="Column" GridLinesVisibility="Horizontal">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Table" Binding="{Binding Name}" Width="*" />
+                                        <DataGridTextColumn Header="Rows" Binding="{Binding Rows, StringFormat=N0}" Width="56" />
+                                        <DataGridTextColumn Header="Columns" Binding="{Binding Columns}" Width="90" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                                <DockPanel Grid.Column="2">
+                                    <TextBlock DockPanel.Dock="Top" Text="{Binding TableNote}" TextWrapping="Wrap" Style="{StaticResource Muted}" Margin="0,0,0,6" />
+                                    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                                        <TextBlock DockPanel.Dock="Left" Text="Find in rows" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                        <TextBox Text="{Binding RowFilter, UpdateSourceTrigger=PropertyChanged, Delay=300}" ToolTip="Show only the rows with this text in any column." />
+                                    </DockPanel>
+                                    <DataGrid ItemsSource="{Binding TableRows}" AutoGenerateColumns="True" IsReadOnly="True" HeadersVisibility="Column"
+                                              GridLinesVisibility="Horizontal" EnableRowVirtualization="True" EnableColumnVirtualization="True"
+                                              AutoGeneratingColumn="Grid_AutoGeneratingColumn" />
+                                </DockPanel>
+                            </Grid>
+                        </TabItem>
+
+                        <!-- archives -->
+                        <TabItem Header="Archives" Padding="12,5">
+                            <DockPanel Margin="0,8,0,0">
+                                <TextBlock DockPanel.Dock="Top" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,6"
+                                           Text="The client's archives in the order that version of the game reads them (from its Wow.exe): a file is taken from the first archive that has it." />
+                                <DataGrid ItemsSource="{Binding Archives}" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="#" Binding="{Binding Order}" Width="40" />
+                                        <DataGridTextColumn Header="Archive" Binding="{Binding Name}" Width="300" />
+                                        <DataGridTextColumn Header="Note" Binding="{Binding Note}" Width="*" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </DockPanel>
+                        </TabItem>
+
+                        <!-- compare -->
+                        <TabItem Header="Compare across versions" Padding="12,5">
+                            <DockPanel Margin="0,8,0,0">
+                                <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                                    <TextBlock Text="Table" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                    <TextBox Text="{Binding CompareTable, UpdateSourceTrigger=PropertyChanged}" Width="180" VerticalAlignment="Center" Margin="0,0,12,0"
+                                             ToolTip="The data table's name (Spell, Map, AreaTable, CreatureDisplayInfo...)." />
+                                    <TextBlock Text="ID" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                    <TextBox Text="{Binding CompareId, UpdateSourceTrigger=PropertyChanged}" Width="90" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                    <CheckBox Content="Only differences" IsChecked="{Binding CompareOnlyDifferences}" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                    <Button Content="Compare" Command="{Binding CompareCommand}" Style="{StaticResource PrimaryButton}" Padding="14,5"
+                                            ToolTip="The row in each ticked version, side by side, column by column (matched by name)." />
+                                </WrapPanel>
+                                <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding CompareClients}" Margin="0,0,0,6">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <CheckBox Content="{Binding Label}" IsChecked="{Binding IsChecked}" Margin="0,0,14,2" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock DockPanel.Dock="Top" Text="{Binding CompareNote}" TextWrapping="Wrap" Style="{StaticResource Muted}" Margin="0,0,0,6" />
+                                <DataGrid ItemsSource="{Binding CompareRows}" AutoGenerateColumns="True" IsReadOnly="True" HeadersVisibility="Column"
+                                          GridLinesVisibility="Horizontal" AutoGeneratingColumn="Grid_AutoGeneratingColumn" />
+                            </DockPanel>
+                        </TabItem>
+                    </TabControl>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </DockPanel>
+</UserControl>
