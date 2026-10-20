@@ -20,9 +20,10 @@ public enum MpqEntryState { None, File, Deleted, Invalid }
 public readonly record struct MpqBlock(long Position, uint CompressedSize, uint FileSize, uint Flags);
 
 /// <summary>
-/// Read-only MPQ archive (port of wowdata/mpq.py). Supports what the 1.12 archives use: header format 0 and 1,
-/// zlib and stored sectors, single-unit files, encrypted files (with or without FIX_KEY), sector CRC tables and
-/// delete markers. PKWARE implode, bzip2, Huffman and ADPCM are not used by any 1.12 archive and raise
+/// Read-only MPQ archive (port of wowdata/mpq.py). Supports what the 1.12 to 3.3.5a archives use: header format 0 and 1,
+/// zlib, bzip2 (<see cref="Bzip2"/>, a few WotLK files) and stored sectors, single-unit files, encrypted files (with or
+/// without FIX_KEY), sector CRC tables, delete markers, and files packed with a smaller sector size than the archive's.
+/// PKWARE implode, Huffman and ADPCM are not used by any of those archives and raise
 /// <see cref="UnsupportedCompressionException"/>. The file is opened read-only with shared read access; nothing
 /// in this class can write to an archive.
 /// </summary>
@@ -270,13 +271,21 @@ public sealed class MpqArchive : IDisposable
                 StormCrypto.Decrypt(raw.AsSpan(i, Math.Min(SectorSize, raw.Length - i)), key.Value + (uint)s);
             return raw.AsSpan(0, fsize).ToArray();
         }
-        int nsect = (fsize + SectorSize - 1) / SectorSize;
-        int ntab = nsect + 1 + ((e.Flags & FlagSectorCrc) != 0 ? 1 : 0);
-        if (raw.Length < ntab * 4) throw new MpqException($"{Name}: {name}: sector table outside the file");
-        var table = raw.AsSpan(0, ntab * 4).ToArray();
-        if (key != null) StormCrypto.Decrypt(table, key.Value - 1);
-        var offs = new int[ntab];
-        for (int i = 0; i < ntab; i++) offs[i] = (int)BinaryPrimitives.ReadUInt32LittleEndian(table.AsSpan(i * 4));
+        int sectorSize = SectorSize;
+        var offs = SectorTable(raw, fsize, sectorSize, e.Flags, key, name);
+        if (offs[0] != offs.Length * 4)
+        {
+            // A few files were packed with a smaller sector size than the archive header says (WotLK 3.3.5a
+            // backup-enUS.MPQ: 4096-byte sectors in a 16384-byte archive). The sector table's first offset is its own
+            // size, which tells the sector count; take the smaller sector size that agrees with it.
+            for (int sz = SectorSize / 2; sz >= 512; sz /= 2)
+            {
+                int[] t;
+                try { t = SectorTable(raw, fsize, sz, e.Flags, key, name); } catch (MpqException) { break; }
+                if (t[0] == t.Length * 4) { sectorSize = sz; offs = t; break; }
+            }
+        }
+        int nsect = (fsize + sectorSize - 1) / sectorSize;
         var output = new byte[fsize];
         int outPos = 0;
         for (int i = 0; i < nsect; i++)
@@ -285,12 +294,24 @@ public sealed class MpqArchive : IDisposable
             if (start < 0 || end > raw.Length || end < start) throw new MpqException($"{Name}: {name}: bad sector offsets");
             var d = raw.AsSpan(start, end - start).ToArray();
             if (key != null) StormCrypto.Decrypt(d, key.Value + (uint)i);
-            int expect = Math.Min(SectorSize, fsize - i * SectorSize);
+            int expect = Math.Min(sectorSize, fsize - i * sectorSize);
             var sector = Decompress(d, expect, e.Flags);
             sector.AsSpan(0, Math.Min(sector.Length, fsize - outPos)).CopyTo(output.AsSpan(outPos));
             outPos += sector.Length;
         }
         return output;
+    }
+
+    private int[] SectorTable(byte[] raw, int fsize, int sectorSize, uint flags, uint? key, string name)
+    {
+        int nsect = (fsize + sectorSize - 1) / sectorSize;
+        int ntab = nsect + 1 + ((flags & FlagSectorCrc) != 0 ? 1 : 0);
+        if (raw.Length < ntab * 4) throw new MpqException($"{Name}: {name}: sector table outside the file");
+        var table = raw.AsSpan(0, ntab * 4).ToArray();
+        if (key != null) StormCrypto.Decrypt(table, key.Value - 1);
+        var offs = new int[ntab];
+        for (int i = 0; i < ntab; i++) offs[i] = (int)BinaryPrimitives.ReadUInt32LittleEndian(table.AsSpan(i * 4));
+        return offs;
     }
 
     private static byte[] Decompress(byte[] d, int expect, uint flags)
@@ -312,6 +333,7 @@ public sealed class MpqArchive : IDisposable
             }
             return got == expect ? outBuf : outBuf.AsSpan(0, got).ToArray();
         }
+        if (mask == CompBzip2) return Bzip2.Decompress(d, 1, expect);
         throw new UnsupportedCompressionException($"sector compression mask 0x{mask:x2} is not supported");
     }
 

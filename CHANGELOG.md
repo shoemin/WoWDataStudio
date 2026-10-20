@@ -4,11 +4,25 @@ What changed in each release of WoW Data Studio (the desktop app, `app\`). Bugs 
 listed in the manual's [Known issues](docs/manual/known-issues.md); when one is fixed it is removed from that list and
 recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
 
+## Unreleased (0.14.0, in progress: reading other client versions, experimental)
+
+### Added
+
+* **MPQ reader: the archives of TBC 2.4.3 and WotLK 3.3.5a.** bzip2-compressed sectors are read (our own decoder,
+  `Mpq\Bzip2.cs`, written from the bzip2 format description; every block's CRC is checked), and so are files packed with a
+  smaller sector size than their archive's header says (WotLK `backup-enUS.MPQ`). Measured on the copies in
+  `G:\WoW Clients and Patches\Clients`: every listed file of 1.12.1 (91,636), 2.4.3 (134,672) and 3.3.5a (234,987) reads,
+  0 failures; before, 17 WotLK files did not (8 game files in `lichking.MPQ`, including two Storm Peaks textures).
+  Tests: `Bzip2Tests` (streams made by Python's bz2 module, run edges, multi-block, a corrupted stream must raise).
+
+### Fixed
+
+* The 0.13.3 entry below showed a broken path to its in-game test results.
+
 ## 0.13.3 (2026-10-16)
 
 The cause of the open issue of 0.13.2 (*a designed spell given as a quest reward is not learned*) was found in the
-server's and the game's code, proven on a copy of the test server and fixed; the in-game test (`tests\ingame
-esults20261016_1900_spellids`) then saw the designed spell learned from the quest reward ("You have learned a new spell: WDS
+server's and the game's code, proven on a copy of the test server and fixed; the in-game test (`tests\ingame\results\20261016_1900_spellids`) then saw the designed spell learned from the quest reward ("You have learned a new spell: WDS
 Shadow Lance (Rank 1)", in the spell book's Destruction tab), listed and bought at the class trainer, and cast (its
 tinted missile, *Your WDS Shadow Lance hits Mottled Boar for 791 Shadow damage*).
 
