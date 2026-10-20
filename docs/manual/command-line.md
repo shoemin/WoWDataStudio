@@ -2849,7 +2849,7 @@ wds versions extract _classic_beta_ #775971 --out beta\
 
 #### wds versions tables
 
-A client's data tables: rows, fields, and whether this version's columns are named or shown raw.
+A client's data tables: rows, fields, and whether this version's columns are named or shown raw (a modern client: its DB2 tables from its executable).
 
 ```
 wds versions tables <client> [options]
@@ -2858,15 +2858,18 @@ wds versions tables <client> [options]
 * `--folder <folder>`: search this folder for clients instead of the other-clients setting
 * `--blizzard-only`: leave out patch archives Blizzard did not ship (a private server's or a mod's patch-?.MPQ); also the other-clients.blizzard-only setting
 * `--all-patches`: read every patch archive the client mounts, even when other-clients.blizzard-only is set
+* `--listfile <file>`: names for a modern (CASC) client's files: a listfile you chose (FileDataID;path lines); also the other-clients.listfile setting
+* `--read`: a modern (CASC) client: read every table to count its rows (slower)
 
 ```
 wds versions tables 3.3.5
 wds versions tables 2.4.3 --json
+wds versions tables _classic_beta_
 ```
 
 #### wds versions rows
 
-Rows of a client's data table (columns named where this version's layout is known, else col_N).
+Rows of a client's data table, old (DBC) or modern (DB2): columns named where this version's layout is known, else col_N.
 
 ```
 wds versions rows <client> <table> [options]
@@ -2875,6 +2878,7 @@ wds versions rows <client> <table> [options]
 * `--folder <folder>`: search this folder for clients instead of the other-clients setting
 * `--blizzard-only`: leave out patch archives Blizzard did not ship (a private server's or a mod's patch-?.MPQ); also the other-clients.blizzard-only setting
 * `--all-patches`: read every patch archive the client mounts, even when other-clients.blizzard-only is set
+* `--listfile <file>`: names for a modern (CASC) client's files: a listfile you chose (FileDataID;path lines); also the other-clients.listfile setting
 * `--columns <list>`: only these columns (comma-separated)
 * `--where <column=value> (repeatable)`: only rows whose column has this value (text: contains, case-insensitive)
 * `--limit <n>`: at most n results (default 50; 0 = all)
@@ -2882,11 +2886,12 @@ wds versions rows <client> <table> [options]
 ```
 wds versions rows 3.3.5 Map --columns ID,Directory,MapName
 wds versions rows 2.4.3 AreaTable --where MapID=530 --limit 0 --json
+wds versions rows _classic_beta_ Map --limit 0
 ```
 
 #### wds versions compare
 
-One data-table row side by side in several versions (columns matched by name).
+One data-table row side by side in several versions, old (DBC) or modern (DB2) tables (columns matched by name).
 
 ```
 wds versions compare <table> <id> [options]
@@ -2902,7 +2907,7 @@ wds versions compare <table> <id> [options]
 ```
 wds versions compare Spell 133
 wds versions compare AreaTable 1519 --clients 1.12,2.4,3.3.5 --diff
-wds versions compare Map 0 --json
+wds versions compare Map 0 --clients 1.12,_classic_beta_
 ```
 
 ### Help and the command line itself

@@ -651,17 +651,19 @@ not given for these versions (they changed since 1.12).
 
 *Status:* open (each version's layout file, `app\WoWData.Core\Dbc\Layouts\dbc_layouts_<build>.txt`, gets more tables).
 
-### The data tables of modern clients cannot be read
+### Most columns of the modern clients' tables are raw
 
-*What happens:* clients from 6.x (Warlords of Draenor) on and every client Battle.net installs today store their
-tables as DB2 files. **Tables of this version** stays empty for them, and **Compare across versions** leaves them out.
-Their files can be read.
+*What happens:* the DB2 tables of modern clients are read with the field types their program file gives, but most
+columns have no names (`col_N`). Names exist only for the tables maps need, and only for 1.60.1 build 70450
+(`app\WoWData.Core\Db2\Layouts\db2_layouts_70450.txt`, each column proven by measurement). Records that are encrypted
+in the client are left out (for example 8 of 81 rows of 1.60's Map table).
 
-*Who is affected:* anyone who wants the table data of those versions.
+*Who is affected:* anyone reading other tables, or other modern builds.
 
-*Workaround:* extract the `.db2` file (**Extract selected...**) and read it with another tool.
+*Workaround:* compare the raw values with the same table of an older version (**Compare across versions** with raw
+columns: `wds versions compare <table> <id> --raw`).
 
-*Status:* open (a DB2 reader is planned with the map conversion work).
+*Status:* open (more tables get names as the conversion work needs them).
 
 ### Most files of the newer modern clients have no names
 

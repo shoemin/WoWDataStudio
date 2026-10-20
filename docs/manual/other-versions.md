@@ -33,8 +33,8 @@ G:\WoW Clients\
 
 Clients from 6.x (Warlords of Draenor) on, and every client that Battle.net installs today (Retail, Classic Era, the
 other Classic flavours), store their data in *CASC* (see the [Glossary](glossary.md)). Each Battle.net flavour (its
-`_classic_beta_`, `_retail_`... folder) is listed as a client of its own. Their **files** can be read (see *Modern
-clients* below); their data tables cannot be read yet.
+`_classic_beta_`, `_retail_`... folder) is listed as a client of its own. Their files and their data tables can be read
+(see *Modern clients* below).
 
 ![The clients found, and the archives of the 3.3.5a copy with a server's patch marked](../screenshots/137_other_versions_archives.png)
 
@@ -114,6 +114,12 @@ known only by its number is copied as `<number>.<type>`, with the type taken fro
 
 ![The 1.60 Classic beta: a minimap tile of Elwynn Forest found by its number](../screenshots/141_other_versions_modern.png)
 
+*Their data tables* (DB2 files) are listed in **Tables of this version** by name, from the client's own program file:
+more than a thousand of them. A table is read when you click it. Most of their columns are raw (`col_N`); for 1.60.1
+(build 70450) the tables that maps need have names (Map, AreaTable, the liquid tables, Light, WMOAreaTable, the ground
+effects, ZoneMusic). Records that are encrypted in the client are left out, and the note above the rows says how many.
+In **Compare across versions** the modern clients are listed too, not ticked at first.
+
 **Listfile for modern clients** (optional): a listfile is a text file that names the files (lines `FileDataID;path`).
 The app does not come with one and never downloads one; if you have one, click **Choose listfile...** and pick it.
 Then the files have their names, and wildcards work.
@@ -129,7 +135,7 @@ archives Blizzard shipped with 1.12.1, 2.4.3 and 3.3.5a; for other versions ever
 
 ## Not yet
 
-* The data tables of modern (CASC) clients cannot be read yet (they are DB2 files); their files can.
+* Most columns of the modern clients' data tables have no names yet.
 * Converting maps between versions (the "1.60" Classic maps to 1.12 and back) is planned, not there yet.
 * 3D views of TBC and WotLK models, and bringing maps, models or textures of other versions into your 1.12 game, are
   planned, not there yet.

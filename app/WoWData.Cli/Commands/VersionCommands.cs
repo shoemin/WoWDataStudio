@@ -64,12 +64,6 @@ internal static class VersionCommands
         format = c.Format.ToString().ToUpperInvariant(), layout = c.Layout.ToString(), locale = c.Locale, readable = c.Readable,
     };
 
-    private static DbcTable Table(OtherClient oc, string name) =>
-        oc.Table(name) ?? throw new CliError(ExitCode.NotFound, $"{oc.Copy.Name} has no table {name} (wds versions tables \"{oc.Copy.Name}\").");
-
-    private static DbcColumn Col(DbcTable t, string name) =>
-        t.Layout.Column(name) ?? throw new CliError(ExitCode.NotFound, $"{t.Name} has no column {name}. Its columns: {string.Join(", ", t.Layout.Columns.Select(c => c.Name))}.");
-
     public static IEnumerable<CommandSpec> All()
     {
         yield return new CommandSpec
@@ -230,28 +224,35 @@ internal static class VersionCommands
         yield return new CommandSpec
         {
             Path = "versions tables",
-            Summary = "a client's data tables: rows, fields, and whether this version's columns are named or shown raw",
+            Summary = "a client's data tables: rows, fields, and whether this version's columns are named or shown raw (a modern client: its DB2 tables from its executable)",
             Args = new[] { "<client>" },
-            Options = new[] { Folder, BlizzardOnly, AllPatches },
+            Options = new[] { Folder, BlizzardOnly, AllPatches, Listfile, new OptionSpec("read", null, "a modern (CASC) client: read every table to count its rows (slower)") },
             NeedsClient = false,
-            Examples = new[] { "wds versions tables 3.3.5", "wds versions tables 2.4.3 --json" },
+            Examples = new[] { "wds versions tables 3.3.5", "wds versions tables 2.4.3 --json", "wds versions tables _classic_beta_" },
             Run = inv =>
             {
                 var c = Pick(inv, inv.Arg(0));
                 using var oc = Open(inv, c);
-                var list = new List<(string Name, int Rows, int Fields, string Columns)>();
+                var list = new List<(string Name, string Rows, int Fields, string Columns)>();
+                bool read = oc.Casc == null || inv.Flag("read");
                 foreach (var n in oc.TableNames())
                 {
-                    DbcTable? t;
-                    try { t = oc.Table(n); }
-                    catch (DbcException) { list.Add((n, 0, 0, "unreadable")); continue; }
-                    if (t == null) continue;
-                    list.Add((n, t.Rows.Count, t.FieldCount, t.Layout.IsFallback ? "raw" : t.Layout.CoverageText));
+                    if (!read)
+                    {
+                        var e = oc.Catalog.Get(n);
+                        list.Add((n, "", e?.FieldCount ?? 0, $"#{e?.FileDataId}" + (WoWData.Core.Db2.Db2Layouts.ForBuild(c.Build)?.Get(n) != null ? ", layout" : "")));
+                        continue;
+                    }
+                    VersionTable? t;
+                    try { t = oc.TableView(n); }
+                    catch (Exception ex) when (ex is DbcException or WoWData.Core.Db2.Db2FormatException) { list.Add((n, "", 0, "unreadable")); continue; }
+                    if (t == null) { if (oc.Casc != null) list.Add((n, "", 0, "not on this computer")); continue; }
+                    list.Add((n, t.RowCount.ToString("N0"), t.FieldCount, t.Coverage));
                 }
                 var r = new CliResult().With(new { client = c.Name, tables = list.Select(x => new { name = x.Name, rows = x.Rows, fields = x.Fields, columns = x.Columns }) });
-                r.Line($"{list.Count} tables in {c.Name} ({list.Count(x => x.Columns != "raw")} with named columns)");
-                if (oc.Casc != null) r.Warnings.Add($"{c.Name} is a modern (CASC) client: its data tables are DB2 files, which cannot be read yet.");
-                foreach (var l in Common.Table(new[] { "Table", "Rows", "Fields", "Columns" }, list.Select(x => (IReadOnlyList<string>)new[] { x.Name, x.Rows.ToString("N0"), x.Fields.ToString(), x.Columns }), 50))
+                r.Line(read ? $"{list.Count} tables in {c.Name} ({list.Count(x => x.Columns != "raw" && x.Columns != "unreadable" && x.Columns != "not on this computer")} with named columns)"
+                            : $"{list.Count} tables in {c.Name} (DB2, from its executable; \"#\" is the file number; --read counts rows)");
+                foreach (var l in Common.Table(new[] { "Table", "Rows", "Fields", read ? "Columns" : "File" }, list.Select(x => (IReadOnlyList<string>)new[] { x.Name, x.Rows, x.Fields.ToString(), x.Columns }), 50))
                     r.Line(l);
                 return Task.FromResult(r);
             },
@@ -259,47 +260,53 @@ internal static class VersionCommands
         yield return new CommandSpec
         {
             Path = "versions rows",
-            Summary = "rows of a client's data table (columns named where this version's layout is known, else col_N)",
+            Summary = "rows of a client's data table, old (DBC) or modern (DB2): columns named where this version's layout is known, else col_N",
             Args = new[] { "<client>", "<table>" },
-            Options = new[] { Folder, BlizzardOnly, AllPatches, new OptionSpec("columns", "list", "only these columns (comma-separated)"), new OptionSpec("where", "column=value", "only rows whose column has this value (text: contains, case-insensitive)", true), Common.Limit },
+            Options = new[] { Folder, BlizzardOnly, AllPatches, Listfile, new OptionSpec("columns", "list", "only these columns (comma-separated)"), new OptionSpec("where", "column=value", "only rows whose column has this value (text: contains, case-insensitive)", true), Common.Limit },
             NeedsClient = false,
-            Examples = new[] { "wds versions rows 3.3.5 Map --columns ID,Directory,MapName", "wds versions rows 2.4.3 AreaTable --where MapID=530 --limit 0 --json" },
+            Examples = new[] { "wds versions rows 3.3.5 Map --columns ID,Directory,MapName", "wds versions rows 2.4.3 AreaTable --where MapID=530 --limit 0 --json", "wds versions rows _classic_beta_ Map --limit 0" },
             Run = inv =>
             {
                 var c = Pick(inv, inv.Arg(0));
                 using var oc = Open(inv, c);
-                var t = Table(oc, inv.Arg(1));
-                var cols = inv.Opt("columns") is { } cl ? cl.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(n => Col(t, n)).ToList() : t.Layout.Columns.ToList();
-                IEnumerable<DbcRow> rows = t.Rows;
+                var t = oc.TableView(inv.Arg(1)) ?? throw new CliError(ExitCode.NotFound, $"{c.Name} has no table {inv.Arg(1)} (wds versions tables \"{c.Name}\").");
+                int Col(string name)
+                {
+                    for (int i = 0; i < t.Columns.Count; i++) if (string.Equals(t.Columns[i], name, StringComparison.OrdinalIgnoreCase)) return i;
+                    throw new CliError(ExitCode.NotFound, $"{t.Name} has no column {name}. Its columns: {string.Join(", ", t.Columns)}.");
+                }
+                var cols = inv.Opt("columns") is { } cl ? cl.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(Col).ToList() : Enumerable.Range(0, t.Columns.Count).ToList();
+                IEnumerable<string[]> rows = t.Rows();
                 foreach (var w in inv.Opts("where"))
                 {
                     int eq = w.IndexOf('=');
                     if (eq <= 0) throw new CliError(ExitCode.Usage, $"--where is column=value (not \"{w}\").");
-                    var wc = Col(t, w[..eq].Trim());
+                    int wc = Col(w[..eq].Trim());
                     var val = w[(eq + 1)..].Trim();
-                    rows = rows.Where(r => wc.IsString ? t.Format(r, wc).Contains(val, StringComparison.OrdinalIgnoreCase) : t.Format(r, wc) == val);
+                    rows = rows.Where(r => t.IsText[wc] ? r[wc].Contains(val, StringComparison.OrdinalIgnoreCase) : r[wc] == val);
                 }
                 var all = rows.ToList();
                 var shown = all.Take(Common.LimitOf(inv)).ToList();
                 var res = new CliResult().With(new
                 {
-                    client = c.Name, table = t.Name, layout = t.Layout.IsFallback ? "raw" : "named", total = t.Rows.Count, matched = all.Count,
-                    columns = cols.Select(x => x.Name), rows = shown.Select(r => cols.ToDictionary(x => x.Name, x => (object)t.Format(r, x))),
+                    client = c.Name, table = t.Name, layout = t.IsRaw ? "raw" : "named", total = t.RowCount, matched = all.Count, note = t.Note,
+                    columns = cols.Select(x => t.Columns[x]), rows = shown.Select(r => cols.ToDictionary(x => t.Columns[x], x => (object)r[x])),
                 });
-                res.Line($"{c.Name} {t.Name}: {(all.Count == t.Rows.Count ? $"{t.Rows.Count:N0} rows" : $"{all.Count:N0} of {t.Rows.Count:N0} rows")}" + (shown.Count < all.Count ? $" (showing {shown.Count}; --limit 0 for all)" : ""));
-                if (t.Layout.IsFallback) res.Warnings.Add($"{t.Name} has no known layout for {c.Version} yet: raw columns.");
-                foreach (var l in Common.Table(cols.Select(x => x.Name).ToList(), shown.Select(r => (IReadOnlyList<string>)cols.Select(x => t.Format(r, x)).ToList()), 40)) res.Line(l);
+                res.Line($"{c.Name} {t.Name}: {(all.Count == t.RowCount ? $"{t.RowCount:N0} rows" : $"{all.Count:N0} of {t.RowCount:N0} rows")}" + (shown.Count < all.Count ? $" (showing {shown.Count}; --limit 0 for all)" : ""));
+                if (t.IsRaw) res.Warnings.Add($"{t.Name} has no known layout for {c.Version} yet: raw columns.");
+                if (t.Note.Length > 0) res.Warnings.Add(t.Note);
+                foreach (var l in Common.Table(cols.Select(x => t.Columns[x]).ToList(), shown.Select(r => (IReadOnlyList<string>)cols.Select(x => r[x]).ToList()), 40)) res.Line(l);
                 return Task.FromResult(res);
             },
         };
         yield return new CommandSpec
         {
             Path = "versions compare",
-            Summary = "one data-table row side by side in several versions (columns matched by name)",
+            Summary = "one data-table row side by side in several versions, old (DBC) or modern (DB2) tables (columns matched by name)",
             Args = new[] { "<table>", "<id>" },
             Options = new[] { Folder, BlizzardOnly, AllPatches, new OptionSpec("clients", "list", "these clients (comma-separated names, versions or builds; default: one of each MPQ version)"), new OptionSpec("raw", null, "also the unnamed columns (col_N)"), new OptionSpec("diff", null, "only the columns whose values differ") },
             NeedsClient = false,
-            Examples = new[] { "wds versions compare Spell 133", "wds versions compare AreaTable 1519 --clients 1.12,2.4,3.3.5 --diff", "wds versions compare Map 0 --json" },
+            Examples = new[] { "wds versions compare Spell 133", "wds versions compare AreaTable 1519 --clients 1.12,2.4,3.3.5 --diff", "wds versions compare Map 0 --clients 1.12,_classic_beta_" },
             Run = inv =>
             {
                 var found = Found(inv);
@@ -311,7 +318,7 @@ internal static class VersionCommands
                 try
                 {
                     foreach (var p in picks) opened.Add(Open(inv, p));
-                    var cmp = VersionCompare.Row(inv.Arg(0), inv.Long(1), opened.Select(o => (o.Copy.Version, o.Table(inv.Arg(0)))).ToList(), 0, inv.Flag("raw"));
+                    var cmp = VersionCompare.Row(inv.Arg(0), inv.Long(1), opened.Select(o => (o.Copy.Version, o.TableView(inv.Arg(0)))).ToList(), inv.Flag("raw"));
                     var cols = inv.Flag("diff") ? cmp.Columns.Where(x => x.Values.Distinct().Count() > 1).ToList() : cmp.Columns.ToList();
                     var r = new CliResult().With(new
                     {

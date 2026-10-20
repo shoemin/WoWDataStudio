@@ -196,7 +196,30 @@ public class OtherVersionsTests : IDisposable
         var wdt = oc.Files.Read("#775971")!;
         Assert.Equal(".wdt", ClientFileKinds.GuessExtension(wdt));
         Assert.Equal(wdt, oc.Files.Read("775971"));
-        Assert.Empty(oc.TableNames());
+        // its DB2 tables: from the executable's catalog, read through the shared table view
+        Assert.True(oc.TableNames().Count > 1000);
+        var map = oc.TableView("Map")!;
+        Assert.False(map.IsRaw);
+        var azeroth = map.Row(0)!;
+        Assert.Equal("Azeroth", azeroth[map.Columns.ToList().IndexOf("Directory")]);
+        Assert.Equal("775971", azeroth[map.Columns.ToList().IndexOf("WdtFileDataID")]);
+        // compared with a 1.12-style table through the same view
+        var cmp = VersionCompare.Row("Map", 0, new (string, VersionTable?)[] { ("1.60.1", map), ("none", null) });
+        Assert.Contains(cmp.Columns, c => c.Column == "Directory" && c.Values[0] == "Azeroth");
+        Assert.Contains(cmp.Notes, n => n == "none: no Map table.");
+    }
+
+    [Fact]
+    public void TableViewOfAnOldTable()
+    {
+        var bytes = Dbc((1, 11), (2, 12));
+        var t = VersionTable.FromDbc(DbcTable.Load(bytes, "Map", DbcLayouts.ForBuild(99996)));
+        Assert.True(t.IsRaw);
+        Assert.Equal(new[] { "col_0", "col_1" }, t.Columns);
+        Assert.Equal(new[] { "2", "12" }, t.Row(2));
+        Assert.Null(t.Row(3));
+        var cmp = VersionCompare.Row("Map", 2, new (string, VersionTable?)[] { ("A", t) }, includeRaw: true);
+        Assert.Equal(new[] { "12" }, cmp.Columns[1].Values);
     }
 
     [Fact]

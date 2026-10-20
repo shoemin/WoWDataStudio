@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using WoWData.Core.Casc;
+using WoWData.Core.Db2;
 using WoWData.Core.Dbc;
 using WoWData.Core.Mpq;
 
@@ -225,6 +226,34 @@ public static class VersionCompare
         }
         return new VersionRowCompare(table, id, tables.Select(x => x.Client).ToList(), order.Select(n => (n, values[n])).ToList(), notes);
     }
+
+    /// <summary>The same for tables of any format (old WDBC and modern DB2), through <see cref="VersionTable"/>.</summary>
+    public static VersionRowCompare Row(string table, long id, IReadOnlyList<(string Client, VersionTable? Table)> tables, bool includeRaw = false)
+    {
+        var notes = new List<string>();
+        var order = new List<string>();
+        var values = new Dictionary<string, string?[]>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < tables.Count; i++)
+        {
+            var (client, t) = tables[i];
+            if (t == null) { notes.Add($"{client}: no {table} table."); continue; }
+            if (t.IsRaw) notes.Add($"{client}: {table} has no known layout for this version yet (raw columns{(includeRaw ? "" : ", left out")}).");
+            var row = t.Row(id);
+            if (row == null) { notes.Add($"{client}: no row {id}."); continue; }
+            for (int c = 0; c < t.Columns.Count; c++)
+            {
+                var name = t.Columns[c];
+                if (!includeRaw && name.StartsWith("col_", StringComparison.Ordinal)) continue;
+                if (!values.TryGetValue(name, out var v))
+                {
+                    values[name] = v = new string?[tables.Count];
+                    order.Add(name);
+                }
+                v[i] = row[c];
+            }
+        }
+        return new VersionRowCompare(table, id, tables.Select(x => x.Client).ToList(), order.Select(n => (n, values[n])).ToList(), notes);
+    }
 }
 
 /// <summary>
@@ -291,12 +320,34 @@ public sealed class OtherClient : IDisposable
         return new OtherClient(copy, new MpqClientFiles(data), blizzardOnly, custom);
     }
 
-    /// <summary>The data tables of the client (names without DBFilesClient\ and .dbc), sorted. A CASC client lists
-    /// none yet (its tables are DB2 files, which cannot be read yet).</summary>
+    private Db2Catalog? _catalog;
+
+    /// <summary>A CASC client's DB2 tables (name -> FileDataID and field types), from its executable (modern clients) or
+    /// the table names in it resolved by name hash (WoD 6.x).</summary>
+    public Db2Catalog Catalog => _catalog ??= Casc == null ? Db2Catalog.Empty : Db2Catalog.ForStorage(Casc);
+
+    /// <summary>The data tables of the client (names without DBFilesClient\ and the extension), sorted: an MPQ client's
+    /// .dbc files, a CASC client's DB2 tables from <see cref="Catalog"/>.</summary>
     public IReadOnlyList<string> TableNames() =>
-        Data == null ? Array.Empty<string>() :
+        Data == null ? Catalog.Entries.Select(e => e.Name).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList() :
         Data.Glob(@"DBFilesClient\*.dbc").Select(p => Path.GetFileNameWithoutExtension(p)).Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+
+    /// <summary>
+    /// A data table of any format as text rows: an MPQ client's .dbc with this build's layout (<see cref="Table"/>), a
+    /// CASC client's DB2 with the field types of its executable and, where a layout file for the build names them, its
+    /// columns (<see cref="Db2Layouts"/>). Null when the client has no such table or it is not on this computer.
+    /// </summary>
+    public VersionTable? TableView(string name)
+    {
+        if (Data != null) return Table(name) is { } t ? VersionTable.FromDbc(t) : null;
+        if (Casc == null) return null;
+        var n = name.EndsWith(".db2", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".dbc", StringComparison.OrdinalIgnoreCase) ? name[..^4] : name;
+        var db2 = Catalog.Open(Casc, n);
+        if (db2 == null) return null;
+        Db2Layouts.ForBuild(Copy.Build)?.Apply(db2, out _);
+        return VersionTable.FromDb2(db2);
+    }
 
     /// <summary>A data table (a WDBC .dbc file) read with this build's layout, or null when the client has no such table.</summary>
     public DbcTable? Table(string name)

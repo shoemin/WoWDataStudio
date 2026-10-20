@@ -44,6 +44,15 @@ recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
   about 3 s. Root records: the English / all-language one, not low-violence, not Mac-only, the standard resolution of a
   texture (not the 4x high-resolution twin), fewer languages first. Tests: `CascTests` (synthetic BLTE, hashes,
   indexes and a whole synthetic store; the real copies when present).
+* **Modern clients' data tables (DB2).** Our own DB2 reader (`WoWData.Core.Db2`: WDC5, WDC4, WDC3, WDB2, WDBC; every
+  field storage kind, pallet and common data, per-section strings, ID lists, copy tables, parent IDs, sparse records;
+  encrypted sections left out and counted). The table list and the field types come from the client's own program file
+  (`Db2Catalog`: 1,161 tables in 1.60.1.70450, 1,128 in Retail; WoD by the table paths in its program and name hashes).
+  `db2_layouts_70450.txt` names the tables maps need, by measurement against the older versions (Map, AreaTable,
+  LiquidType / LiquidObject / LiquidMaterial, Light, WMOAreaTable, GroundEffect*, ZoneMusic). The Other versions tab
+  and `wds versions tables / rows / compare` show old and modern tables the same way (`VersionTable`); a modern client's
+  table is read when clicked. Found with it: 1.60's 12 maps of its own (Zephras Isle, Hyjal Crater, Darkspear Islands,
+  Battle for Gilneas, The Hall of Thanes...), and how its liquids map onto 1.12's four kinds. Tests: `Db2Tests`.
 * **MPQ reader: the archives of TBC 2.4.3 and WotLK 3.3.5a.** bzip2-compressed sectors are read (our own decoder,
   `Mpq\Bzip2.cs`, written from the bzip2 format description; every block's CRC is checked), and so are files packed with a
   smaller sector size than their archive's header says (WotLK `backup-enUS.MPQ`). Measured on the copies in

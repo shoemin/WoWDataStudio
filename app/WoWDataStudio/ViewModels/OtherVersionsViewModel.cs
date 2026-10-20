@@ -165,6 +165,9 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
         foreach (var c in found) Clients.Add(new ClientRow(c));
         foreach (var c in found.Where(c => c.Format == ClientFormat.Mpq).GroupBy(c => (c.Version, c.Build)).Select(g => g.First()).OrderBy(c => c.Build))
             CompareClients.Add(new CompareClientChoice { Copy = c });
+        // modern clients can be compared too (their DB2 tables), not ticked at first
+        foreach (var c in found.Where(c => c.Format == ClientFormat.Casc).OrderBy(c => c.Version, StringComparer.Ordinal).ThenBy(c => c.Build))
+            CompareClients.Add(new CompareClientChoice { Copy = c, IsChecked = false });
         SetStatus(found.Count == 0 ? "No World of Warcraft client was found in that folder." :
             $"{found.Count} clients found, {found.Count(c => c.Readable)} readable." + (found.Any(c => c.Format == ClientFormat.Casc) ? " Modern (CASC) clients: their files can be read, their data tables not yet." : ""));
     }
@@ -194,15 +197,23 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
             {
                 var o = OtherClient.Open(row.Copy, bo, lf);
                 var list = new List<VersionTableRow>();
-                foreach (var n in o.TableNames())
+                if (o.Casc != null)
                 {
-                    try
-                    {
-                        var t = o.Table(n);
-                        if (t != null) list.Add(new VersionTableRow(n, t.Rows.Count, t.FieldCount, t.Layout.IsFallback ? "raw" : t.Layout.CoverageText));
-                    }
-                    catch (DbcException) { list.Add(new VersionTableRow(n, 0, 0, "unreadable")); }
+                    // a modern client: its DB2 tables from the executable, read when one is clicked (1,000+ tables)
+                    var layouts = WoWData.Core.Db2.Db2Layouts.ForBuild(o.Copy.Build);
+                    foreach (var n in o.TableNames())
+                        list.Add(new VersionTableRow(n, 0, o.Catalog.Get(n)?.FieldCount ?? 0, layouts?.Get(n) != null ? "named (click)" : "click to read"));
                 }
+                else
+                    foreach (var n in o.TableNames())
+                    {
+                        try
+                        {
+                            var t = o.Table(n);
+                            if (t != null) list.Add(new VersionTableRow(n, t.Rows.Count, t.FieldCount, t.Layout.IsFallback ? "raw" : t.Layout.CoverageText));
+                        }
+                        catch (DbcException) { list.Add(new VersionTableRow(n, 0, 0, "unreadable")); }
+                    }
                 return (o, list, o.Files.FileCount);
             }));
             _open = oc;
@@ -349,30 +360,37 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
         _main.Toast($"{count} files ({bytes:N0} bytes) copied to {dest}." + (failed.Count > 0 ? $" {failed.Count} could not be read: {failed[0]}" : ""));
     }
 
-    private DbcTable? _table;
 
     private void LoadTable(string name)
     {
         TableRows = null;
         TableNote = "";
-        _table = null;
         if (_open == null) return;
         try
         {
-            var t = _open.Table(name);
-            if (t == null) return;
-            _table = t;
+            var t = _open.TableView(name);
+            if (t == null)
+            {
+                TableNote = $"{name} could not be read (not on this computer, or encrypted).";
+                return;
+            }
             var dt = new DataTable(name);
-            foreach (var c in t.Layout.Columns) dt.Columns.Add(c.Name.Replace(".", "_"), typeof(string)).Caption = c.Name;
+            var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var c in t.Columns)
+            {
+                var key = c.Replace(".", "_");
+                while (!used.Add(key)) key += "_";
+                dt.Columns.Add(key, typeof(string)).Caption = c;
+            }
             // one line per row: a text with line breaks (battleground descriptions) shows them as " / "
-            foreach (var r in t.Rows) dt.Rows.Add(t.Layout.Columns.Select(c => (object)OneLine(t.Format(r, c))).ToArray());
+            foreach (var r in t.Rows()) dt.Rows.Add(r.Select(v => (object)OneLine(v)).ToArray());
             TableRows = dt.DefaultView;
-            TableNote = t.Layout.IsFallback
-                ? $"{name} has no known layout for {_open.Copy.Version} yet: every field is shown as a raw number (col_N), texts as their offsets."
-                : $"{name}: {t.Rows.Count:N0} rows, {t.Layout.CoverageText} for {_open.Copy.Version}. Read only.";
+            TableNote = (t.IsRaw
+                ? $"{name} has no known layout for {_open.Copy.Version} yet: every field is shown as a raw number (col_N)" + (_open.Casc == null ? ", texts as their offsets." : ".")
+                : $"{name}: {t.RowCount:N0} rows, {t.Coverage} for {_open.Copy.Version}. Read only.") + (t.Note.Length > 0 ? " " + t.Note + "." : "");
             ApplyRowFilter();
         }
-        catch (DbcException e)
+        catch (Exception e) when (e is DbcException or WoWData.Core.Db2.Db2FormatException or ClientFileException)
         {
             TableNote = $"{name} could not be read: {e.Message}";
         }
@@ -411,7 +429,7 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
             try
             {
                 foreach (var p in picks) opened.Add(OtherClient.Open(p, bo));
-                return VersionCompare.Row(table, id, opened.Select(o => (o.Copy.Version, o.Table(table))).ToList());
+                return VersionCompare.Row(table, id, opened.Select(o => (o.Copy.Version, o.TableView(table))).ToList());
             }
             finally
             {
