@@ -4,6 +4,99 @@ What changed in each release of WoW Data Studio (the desktop app, `app\`). Bugs 
 listed in the manual's [Known issues](docs/manual/known-issues.md); when one is fixed it is removed from that list and
 recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
 
+## 0.13.3 (2026-10-16)
+
+The cause of the open issue of 0.13.2 (*a designed spell given as a quest reward is not learned*) was found in the
+server's and the game's code, proven on a copy of the test server and fixed; the in-game test (`tests\ingame
+esults20261016_1900_spellids`) then saw the designed spell learned from the quest reward ("You have learned a new spell: WDS
+Shadow Lance (Rank 1)", in the spell book's Destruction tab), listed and bought at the class trainer, and cast (its
+tinted missile, *Your WDS Shadow Lance hits Mottled Boar for 791 Shadow damage*).
+
+### Fixed
+
+* **Spell designer: designed spells could never be learned or used.** New spells got IDs from the custom ID range
+  (900000 and up). The VMaNGOS world server casts no spell above 40000: its spell code returns at once, without a log line,
+  when the ID is above `MAX_SPELL_ID` (40000, `Spell.h` / `Spell::cast`). Every way of learning a spell casts a learn
+  spell (the quest giver at the turn-in, the trainer, the re-teach at login), so the learn spell 900001 taught nothing,
+  and spell 900000 itself would have done nothing. Besides, the 1.12 game cannot know a spell above 65535: the packets
+  that fill the spell book carry 16-bit IDs (spell 900000 arrives as 48032), which is why even `.learn all_trainer`
+  showed nothing. A test server copy (the game's own learn spell copied byte for byte to a new ID above 40000 teaches
+  nothing; the designed rows renumbered to 39000/39001 are taught by the quest and kept after a new login) confirmed it.
+  * New spells (the spell, talent, class and quest designers; **Add new** in the server's `spell_template`) now get IDs
+    from a **Spell ID range** of their own: **Settings > Spell ID range** (`wds settings set spell-ids`), 35000-39999 by
+    default, at most 40000 (the game's own spells end at 33392). The other rows keep the custom ID range 900000-999999.
+  * **Change ID** and **Fix all spell IDs** in the Spell designer (`wds spells renumber <spell>` / `--all`) move spells
+    you made with an unusable ID into the range, with everything that names them: learn spells, skill lines, talent
+    ranks, item sets and creature spell lists in the game's tables; quests, trainer rows, starting spells, items and
+    creatures on the server. Spells made with 0.12.0-0.13.2 need this once (then save, deliver, apply and restart the
+    world server).
+  * The checks show an error for a spell ID or trigger spell above 40000 (the spell designer, the quest checks and the
+    Server data checks of `spell_template`, `quest_template`, `npc_trainer`, `skill_line_ability`,
+    `playercreateinfo_spell`, `spell_learn_spell`, items and creatures); **Set reward spell** refuses such a spell; a
+    learn spell above 40000 is no longer reused for a trainer or quest.
+* **Spell designer tab: a new spell's visual or a talent's rank spells could seem missing** (*SpellVisual ... does not
+  exist in the game's table*, *There is no Spell with ID ...*) when the tab was loaded twice at once (a tab switch and a
+  command): two design sessions were opened and the designer of one could be paired with the session of the other. The
+  tab now loads once (seen in the screenshot run).
+* Manual: the spell designer said *Spell IDs up to 999999 work in 1.12*; it now explains what a spell needs to be
+  learnable on VMaNGOS (IDs, the learn spell, trainer rows and quest columns, the skill line for class trainers).
+
+### Changed
+
+* Manual pictures 119-136 (the designers and the quest chains) made again: the Spell designer shows **New ID**,
+  **Change ID** and **Fix all spell IDs**, and the spells have IDs from 35000.
+* Known issues: *A designed spell given as a quest reward is not learned* is fixed (above); the quest-chain entry says
+  the reward spell is learned now.
+* The in-game test runner (`tests\ingame`) knows the spell ID range (its server safety rule, the leftover check) and its
+  test spell now has a skill line, so the class trainer's window lists it.
+
+## 0.13.2 (2026-10-16)
+
+Fixes found by the first test of the designers in the real game (`tests\ingame\run_designers.ps1`: a spell, a talent and
+a quest chain made with the designers, applied to a running VMaNGOS server and tried with a game master character).
+
+### Fixed
+
+* **Talent designer: a new talent made the rest of its tree disappear in the game.** *Add talent here* (`wds talents add`)
+  put the new talent's row at the end of `Talent.dbc` (the next free ID). The 1.12 game reads each talent tree as one
+  group of rows that follow each other and starts the tree again at every row where the tree changes, so it showed only
+  the new talent: in the test the Warlock's Destruction tree had 1 talent instead of 17. A new talent's row now goes
+  right after the other rows of its tree, and **Save to my workspace** (and every `wds talents` command that changes
+  a tree, as they save) puts the rows of every tree together again, which also repairs a `Talent.dbc` saved by
+  0.12.0-0.13.1 (the save says how many rows it moved).
+  **Check the tree** warns about a tree whose rows are in separate groups (for example after adding rows in the Data
+  tables tab).
+* **Spell designer: the learn spell made for a trainer copied the spell's description.** The 1.12 trainer window shows
+  a learn spell's own description when it has one, filled in with the learn spell's numbers (*causing 1 to 0 Shadow
+  damage*), and the taught spell's description only when it is empty. New learn spells are now copies of the game's
+  own (Shadow Bolt (Rank 2)'s learn spell 1381: no description, effect 1 without a target, 100 yards, the learn glow)
+  instead of a spell of the app's own making (effect 1 on *Unit*, range *self*); the spell checks warn about a learn
+  spell whose description has `$` numbers (empty it). Still open: in the game test the server did not teach a designed
+  spell given as a quest reward (see Known issues).
+* **Spell designer: no warning that a class trainer hides a spell without a skill line.** The game's trainer window of
+  a class (or pet) trainer leaves out every spell that has no skill line (`SkillLineAbility`), although the server sends
+  it: in the test the trainer window was empty. *Add to trainer* said so once; now the spell's checks warn too, as long
+  as a class trainer teaches it and it has no skill line.
+* **Quest chains, Test in game:** the GM commands `.quest add` and `.quest complete` need an administrator account on
+  VMaNGOS (GM level 4 or higher); a game master (level 3) only gets *There is no such subcommand*. The text now says so
+  and gives the game master's way: `.damage 100000` on each creature to kill, which counts as the character's kill.
+
+### Changed
+
+* Known issues: the designers and the quest-chain designer were tried in the running game; the entries *not tried in
+  the running game* are replaced by what the test found (a reward spell is not learned; talent rows added in the Data
+  tables tab; a new quest giver keeps the copied NPC's AI name).
+
+### Tests
+
+* `DesignerTests`: a talent added to the Destruction tree stays with its tree (checked with the client's own way of
+  reading `Talent.dbc`: the last group of a tree is what the game shows), the move is one undo step, and the saved file
+  shows all 17 talents; a tree split as 0.13.1 saved it is reported by the check and put together by the save, every
+  other tree as in the game's own file; a new learn spell is a copy of the game's own (no implicit target, its range,
+  its visual, no description, the taught spell's icon).
+* `DesignerServerTests`: the class-trainer warning (and its end once the spell has a skill line), the learn spell's
+  empty description and the warning for a learn spell's description with `$` numbers.
+
 ## 0.13.1 (2026-10-14)
 
 A fix found by the first hot-reload test in the real game.

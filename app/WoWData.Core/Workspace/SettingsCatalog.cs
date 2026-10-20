@@ -29,7 +29,8 @@ public static class SettingsCatalog
         new("server.password", "Password", "that user's password: stored encrypted for your Windows user, never printed", Secret: true),
         new("server.database", "World database", "the world database (the one with creature_template), usually mangos"),
         new("server.patch", "Content patch of the server", "the content patch the world server runs: 0 (1.2) to 10 (1.12); empty: WowPatch of mangosd.conf, else 10"),
-        new("server.custom-ids", "Custom ID range", "the IDs new server rows get (Add, Duplicate as new): from-to, for example 900000-999999"),
+        new("server.custom-ids", "Custom ID range", "the IDs new server rows get (Add, Duplicate as new): from-to, for example 900000-999999 (spells have their own range: spell-ids)"),
+        new("spell-ids", "Spell ID range", "the IDs new spells get (the spell, talent, class and quest designers, Add in spell_template): from-to within 1-40000, for example 35000-39999 (VMaNGOS casts no spell above 40000, the 1.12 game knows none above 65535)"),
         new("hot-reload", "Hot reload in the running game", "on or off, for the game folder (stored there as wowhotreload.txt): the running game reloads changed files without a restart; needs the project's client (wowcode.dll from the HR1 update on) and is read when the game starts"),
     };
 
@@ -58,6 +59,7 @@ public static class SettingsCatalog
         "server.database" => s.Server.Database,
         "server.patch" => s.ServerPatch?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "",
         "server.custom-ids" => $"{s.ServerCustomIdStart}-{s.ServerCustomIdEnd}",
+        "spell-ids" => $"{s.SpellIdStart}-{s.SpellIdEnd}",
         _ => "",
     };
 
@@ -142,6 +144,17 @@ public static class SettingsCatalog
                 s.ServerCustomIdEnd = b;
                 break;
             }
+            case "spell-ids":
+            {
+                var m = System.Text.RegularExpressions.Regex.Match(value.Trim(), @"^(\d+)\s*-\s*(\d+)$");
+                if (!m.Success || !long.TryParse(m.Groups[1].Value, out var a) || !long.TryParse(m.Groups[2].Value, out var b) || a < 1 || b < a)
+                    throw new ArgumentException("spell-ids is a range from-to of whole numbers, for example 35000-39999.");
+                if (b > ServerData.SpellIdLimits.MaxCastable)
+                    throw new ArgumentException($"spell-ids ends at {ServerData.SpellIdLimits.MaxCastable} at most: the VMaNGOS server never casts a spell with a higher ID (MAX_SPELL_ID), so such a spell could not be learned or used.");
+                s.SpellIdStart = a;
+                s.SpellIdEnd = b;
+                break;
+            }
         }
     }
 
@@ -173,6 +186,10 @@ public static class SettingsCatalog
             case "server.custom-ids":
                 s.ServerCustomIdStart = d.ServerCustomIdStart;
                 s.ServerCustomIdEnd = d.ServerCustomIdEnd;
+                break;
+            case "spell-ids":
+                s.SpellIdStart = d.SpellIdStart;
+                s.SpellIdEnd = d.SpellIdEnd;
                 break;
         }
     }

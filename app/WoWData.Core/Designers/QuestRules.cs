@@ -274,8 +274,13 @@ public static class QuestRules
             for (int k = 1; k <= 4; k++)
                 if (d.Q(row, "RewItemId" + k) is var ri and not 0 && !d.Ed.LinkExists("item", ri)) Add(id, DesignSeverity.Error, $"reward-item{k}", $"Reward item {k}: item {ri} does not exist.");
             foreach (var col in new[] { "RewSpell", "RewSpellCast" })
+            {
                 if (d.Q(row, col) is var sp and not 0 && !d.Ed.LinkExists("spell", sp))
                     Add(id, DesignSeverity.Error, col == "RewSpell" ? "spell" : "spell-cast", $"Spell {sp} does not exist on the server: the quest gives no spell.");
+                // 0.13.3 (found in game): a reward spell above 40000 is never cast, so the quest teaches nothing
+                if (d.Q(row, col) is var big and > 0 && !SpellIdLimits.Castable(big))
+                    Add(id, DesignSeverity.Error, col == "RewSpell" ? "spell" : "spell-cast", SpellIdLimits.Problem(big));
+            }
             if (d.Q(row, "RewSpell") is var rs and not 0 && d.Q(row, "RewSpellCast") == 0 && d.Spells.Exists(rs) && d.Spells.LearnSpellsOf(rs).Count > 0)
                 Add(id, DesignSeverity.Note, "spell", $"The reward spell {d.SpellName(rs)} is cast on the player as it is; to teach it, use its learn spell as \"Spell cast on the player\" (\"Reward spell... (learn)\").");
             for (int k = 1; k <= 5; k++)

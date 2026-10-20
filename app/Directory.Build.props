@@ -6,7 +6,7 @@
     build_installer.ps1 passes -p:Version=<x.y.z> -p:WdsBuild=<stamp> for a release; a developer build says "dev".
   -->
   <PropertyGroup>
-    <Version>0.13.1</Version>
+    <Version>0.13.3</Version>
     <WdsBuild Condition="'$(WdsBuild)' == ''">dev</WdsBuild>
     <SourceRevisionId>$(WdsBuild)</SourceRevisionId>
     <Product>WoW Data Studio</Product>

@@ -139,7 +139,7 @@ public class QuestDesignerTests
         });
         Assert.Equal(2, res.Quests.Count);
         long intro = res.Quests[0], drill = res.Quests[1];
-        Assert.True(res.Spell >= 900000);
+        Assert.InRange(res.Spell, 35000, 40000);   // 0.13.3: the spell ID range
         var s = d.Summary(drill);
         Assert.Equal((intro, 0L, QuestForm.AllianceRaces, 1L, 20L), (s.Prev, s.NextInChain, s.Races, s.Classes, s.Level));
         Assert.Equal(drill, d.Summary(intro).NextInChain);

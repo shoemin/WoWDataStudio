@@ -90,6 +90,7 @@
                     </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <TextBlock Text="Content patch of the server" VerticalAlignment="Center" />
                     <TextBox Grid.Column="1" Text="{Binding ServerPatch, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,2"
@@ -98,7 +99,11 @@
                     <TextBlock Grid.Row="2" Text="Custom ID range" VerticalAlignment="Center" />
                     <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding CustomIds, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,2"
                              ToolTip="New items, creatures, quests... get the first free ID of this range (from-to)." />
-                    <TextBlock Grid.Row="3" Grid.Column="1" Text="New rows (Add new, Duplicate as new) get the first free ID of this range, for example 900000-999999." Foreground="{StaticResource TextMuted}" FontSize="12" TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="3" Grid.Column="1" Text="New rows (Add new, Duplicate as new) get the first free ID of this range, for example 900000-999999. Spells have their own range (below)." Foreground="{StaticResource TextMuted}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8" />
+                    <TextBlock Grid.Row="4" Text="Spell ID range" VerticalAlignment="Center" />
+                    <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding SpellIds, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,2"
+                             ToolTip="New spells (the designers, Add in spell_template) get the first free ID of this range (from-to, at most 40000)." />
+                    <TextBlock Grid.Row="5" Grid.Column="1" Text="New spells get the first free ID of this range, for example 35000-39999. It ends at 40000 at most: the VMaNGOS server casts no spell above 40000 (so it could never be learned or used), and the 1.12 game knows no spell above 65535." Foreground="{StaticResource TextMuted}" FontSize="12" TextWrapping="Wrap" />
                 </Grid>
             </StackPanel>
         </Border>

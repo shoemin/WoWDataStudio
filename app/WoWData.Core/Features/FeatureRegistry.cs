@@ -160,6 +160,7 @@ public static class FeatureRegistry
         new("sdata.wdb", "Server data", "Clear the game's cache (WDB)...", "server clear-wdb"),
         new("sdata.patch", "Server data", "Content patch of the server", "settings set"),
         new("sdata.custom-ids", "Server data", "Custom ID range", "settings set"),
+        new("sdata.spell-ids", "Server data", "Spell ID range", "settings set"),
         new("sdata.dbc-link", "Server data", "Edit it in the Server data tab", "server show"),
         new("sdata.undo", "Server data", "Discard changes", "", FeatureFront.GuiOnly, "the editor's unsaved state (Undo, Redo, Discard changes): every \"wds server\" edit is saved at once; use --dry-run to look first and \"wds changes revert\" to undo"),
         new("sdata.show-in-browse", "Server data", "Show in Browse", "", FeatureFront.GuiOnly, "navigation to the Browse tab's 3D viewer and to the Data tables tab (\"wds find info item:25\" and \"wds dbc get\" on the command line)"),
@@ -180,6 +181,8 @@ public static class FeatureRegistry
         new("spells.trainer", "Spell designer", "Add to trainer", "spells learn"),
         new("spells.skill-line", "Spell designer", "Add to skill line", "spells learn"),
         new("spells.sync", "Spell designer", "Sync with the server", "spells sync"),
+        new("spells.renumber", "Spell designer", "Change ID", "spells renumber"),
+        new("spells.renumber-all", "Spell designer", "Fix all spell IDs", "spells renumber"),
         new("spells.visual-3d", "Spell designer", "Show in 3D", "", FeatureFront.GuiOnly, "viewing: the effect models in the designer's 3D view (\"wds models render\" draws a model to PNG)"),
         new("spells.undo", "Spell designer", "Discard changes", "", FeatureFront.GuiOnly, "the editor's unsaved state: every \"wds spells\" command saves at once; use --dry-run to look first and \"wds changes revert\" to undo"),
 

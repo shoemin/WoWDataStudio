@@ -413,7 +413,7 @@ internal static class QuestCommands
                 new OptionSpec("spell", "spell", "a spell the player learns (its learn spell is cast; 0 removes it)"), new OptionSpec("cast-only", null, "with --spell: cast the spell on the player instead of teaching it"),
                 new OptionSpec("clear", null, "remove the item, choice and reputation rewards first"), Common.DryRun,
             },
-            Examples = new[] { "wds quests reward 900001 --spell 900010 --xp 1200 --money 1g", "wds quests reward 900001 --choice 2488 --choice 2490 --choice 2491" },
+            Examples = new[] { "wds quests reward 900001 --spell 35010 --xp 1200 --money 1g", "wds quests reward 900001 --choice 2488 --choice 2490 --choice 2491" },
             Run = async inv =>
             {
                 var r = new CliResult();

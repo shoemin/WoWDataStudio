@@ -79,7 +79,7 @@ public class DesignerTests : IDisposable
     {
         var (_, s, d) = Open();
         long id = d.Clone(686, "Shadow Lance");
-        Assert.Equal(900000, id);   // the first free ID of the custom range
+        Assert.Equal(35000, id);   // 0.13.3: the first free ID of the spell ID range (VMaNGOS casts no spell above 40000)
         var t = d.Spells;
         var row = t.Find(id)!;
         long N(string c) => t.Number(row, t.Layout.Column(c)!);
@@ -134,7 +134,7 @@ public class DesignerTests : IDisposable
         var (ws, s, d) = Open();
         long a = d.New("Shadow Lance", rank: "Rank 1");
         long b = d.Clone(686, "Shadow Lance", rank: "Rank 2");
-        Assert.Equal((900000, 900001), (a, b));
+        Assert.Equal((35000, 35001), (a, b));
         Assert.Throws<DesignException>(() => d.New("Twice", a));
         Assert.True(d.Set(a, "effect1", "School damage").Ok);
         Assert.True(d.Set(a, "effect1-target-a", "Unit enemy").Ok);
@@ -149,10 +149,74 @@ public class DesignerTests : IDisposable
         // a fresh session reads them back from the workspace
         var (_, s2, d2) = (ws, new DesignSession(new DbcService(TestEnv.Client, ws), null, (900000, 999999)), (SpellDesigner?)null);
         d2 = new SpellDesigner(s2);
-        Assert.Equal("Shadow Lance (Rank 1) [900000]", d2.Title(900000));
-        Assert.Equal("Deals 20 to 30 Shadow damage.", d2.Tooltip(900000).Text);
+        Assert.Equal("Shadow Lance (Rank 1) [35000]", d2.Title(35000));
+        Assert.Equal("Deals 20 to 30 Shadow damage.", d2.Tooltip(35000).Text);
         Assert.Equal(d.Spells.Write(), d2.Spells.Write());
-        Assert.Equal(900002, s2.FreeCustomId("Spell"));
+        Assert.Equal(35002, s2.FreeSpellId());
+    }
+
+    // ------------------------------------------------------------------ 0.13.3: spell IDs the server casts
+
+    /// <summary>VMaNGOS casts no spell above 40000 (MAX_SPELL_ID) and the 1.12 game knows none above 65535: new spells
+    /// come from the spell ID range, other IDs are refused, old ones are errors and "Fix all spell IDs" moves them with
+    /// their references (learn spell trigger, skill line, talent rank).</summary>
+    [Fact]
+    public void NewSpellsGetIdsTheServerCasts()
+    {
+        var (_, s, d) = Open();
+        Assert.Equal((35000L, 39999L), s.SpellIds);
+        Assert.Equal(35000, d.New("A"));
+        Assert.Equal(35001, d.Clone(686, "B"));
+        var e = Assert.Throws<DesignException>(() => d.New("C", 900000));
+        Assert.Contains("MAX_SPELL_ID 40000", e.Message);
+        Assert.Contains("48032", e.Message);                         // 900000 & 0xFFFF: what the 1.12 game would read
+        Assert.Throws<DesignException>(() => d.Clone(686, "D", 40001));
+        Assert.Equal(40000, d.New("E", 40000));                      // 40000 itself is cast (Id > MAX_SPELL_ID returns)
+        // the setting: a range up to 40000
+        var set = new AppSettings();
+        Assert.Equal("35000-39999", SettingsCatalog.Get(set, "spell-ids"));
+        Assert.Throws<ArgumentException>(() => SettingsCatalog.Set(set, "spell-ids", "35000-50000"));
+        Assert.Throws<ArgumentException>(() => SettingsCatalog.Set(set, "spell-ids", "banana"));
+        SettingsCatalog.Set(set, "spell-ids", "36000-36009");
+        Assert.Equal((36000L, 36009L), (set.SpellIdStart, set.SpellIdEnd));
+        SettingsCatalog.Unset(set, "spell-ids");
+        Assert.Equal(35000, set.SpellIdStart);
+        var s2 = new DesignSession(s.Dbc, null, (900000, 999999), null, (36000, 36001));
+        var d2 = new SpellDesigner(s2);
+        Assert.Equal(36000, d2.New("F"));
+        Assert.Equal(36001, d2.New("G"));
+        Assert.Contains("is full", Assert.Throws<DesignException>(() => d2.New("H")).Message);
+
+        // a spell of 0.12.0-0.13.2 (900000), its learn spell (900001), a skill line and a talent rank naming it
+        var (_, s3, d3) = Open();
+        var ss = s3.Session("Spell");
+        ss.Duplicate(d3.Row(686), 900000);
+        var (lr, _) = ss.Duplicate(d3.Row(1381), 900001);
+        s3.SetNumber("Spell", lr, "EffectTriggerSpell1", 900000);
+        var (sr, _) = s3.Session("SkillLineAbility").AddRow(s3.NextId("SkillLineAbility", max: 65535));
+        s3.SetNumber("SkillLineAbility", sr, "Spell", 900000);
+        s3.SetNumber("SkillLineAbility", sr, "SkillLine", 593);
+        var tal = s3.Table("Talent");
+        var trow = tal.Rows.First(r => tal.Number(r, tal.Layout.Column("SpellRank1")!) != 0);
+        s3.SetNumber("Talent", trow, "SpellRank1", 900000);
+        Assert.Equal(new List<long> { 900000, 900001 }, d3.UnusableSpells());
+        Assert.Contains(d3.Check(900000), p => p.IsError && p.Field == "ID");
+        var r = d3.ChangeIds();
+        Assert.True(r.Ok, r.Message);
+        Assert.Contains("Talent", r.Message);
+        Assert.Equal((35000L, 35001L), (d3.Moved[900000], d3.Moved[900001]));
+        Assert.Equal(35000, d3.Spells.Number(d3.Row(35001), d3.Spells.Layout.Column("EffectTriggerSpell1")!));
+        Assert.Equal(35000, s3.Table("SkillLineAbility").Number(sr, s3.Table("SkillLineAbility").Layout.Column("Spell")!));
+        Assert.Equal(35000, tal.Number(trow, tal.Layout.Column("SpellRank1")!));
+        Assert.Null(d3.Spells.Find(900000));
+        Assert.Null(d3.Spells.Find(900001));
+        Assert.Empty(d3.UnusableSpells());
+        Assert.True(d3.ChangeIds().Ok);                               // nothing left: says so
+        Assert.False(d3.ChangeId(686).Ok);                             // the game's own spells stay
+        var moved = d3.ChangeId(35000, 35500, withLearnSpells: false);
+        Assert.True(moved.Ok, moved.Message);
+        Assert.Equal(35500, d3.Spells.Number(d3.Row(35001), d3.Spells.Layout.Column("EffectTriggerSpell1")!));
+        Assert.Equal(35500, d3.Moved[900000]);
     }
 
     // ------------------------------------------------------------------ checks
@@ -282,6 +346,15 @@ public class DesignerTests : IDisposable
         Assert.Equal(36, t.Number(d.Row(learn), t.Layout.Column("Effect1")!));
         Assert.Equal(id, t.Number(d.Row(learn), t.Layout.Column("EffectTriggerSpell1")!));
         Assert.Equal("Shadow Lance", d.Name(learn));
+        // 0.13.2 (found in game): like the game's own learn spells (a copy of Shadow Bolt (Rank 2)'s 1381): effect 1 has no
+        // implicit target, the range is not "self", no description, the learn glow; the icon is the taught spell's
+        Assert.Equal(0, t.Number(d.Row(learn), t.Layout.Column("EffectImplicitTargetA1")!));
+        Assert.Equal(t.Number(d.Row(1381), t.Layout.Column("RangeIndex")!), t.Number(d.Row(learn), t.Layout.Column("RangeIndex")!));
+        Assert.NotEqual(1, t.Number(d.Row(learn), t.Layout.Column("RangeIndex")!));
+        Assert.Equal(t.Number(d.Row(1381), t.Layout.Column("SpellVisual")!), t.Number(d.Row(learn), t.Layout.Column("SpellVisual")!));
+        Assert.Equal(t.Number(d.Row(686), t.Layout.Column("SpellIconID")!), t.Number(d.Row(learn), t.Layout.Column("SpellIconID")!));
+        Assert.Equal("", t.Text(d.Row(learn), t.Layout.Column("Description")!, 0));
+        Assert.DoesNotContain(d.Check(learn), p => p.IsError || p.Field == "Description" || p.Field == "Effect 1");
         Assert.Equal(learn, d.EnsureLearnSpell(id, out created));
         Assert.False(created);
         Assert.False(d.AddToTrainer(id, "3156", 20, 2500).Ok);   // trainers need the server database
@@ -310,6 +383,75 @@ public class DesignerTests : IDisposable
             }
         Assert.Equal(27, trees);
         Assert.Contains("Mortal Strike 0/1 ^133", t.Grid(161));
+    }
+
+    /// <summary>The 1.12 client's reading of Talent.dbc (TalentInfo_Initialize @004f2c00): each time the tree ID changes
+    /// from one row to the next, the tree starts again at that row, so a tree shows only its LAST run of rows.</summary>
+    private static int TalentsTheGameShows(DbcTable t, long tab)
+    {
+        var col = t.Layout.Column("TabID")!;
+        int shown = 0;
+        long prev = -1;
+        foreach (var r in t.Rows)
+        {
+            long cur = t.Number(r, col);
+            if (cur == prev) { if (cur == tab) shown++; }
+            else if (cur == tab) shown = 1;
+            prev = cur;
+        }
+        return shown;
+    }
+
+    [Fact]
+    public void ANewTalentStaysWithItsTreeAsTheGameNeeds()
+    {
+        // 0.13.2 (found in game, 0.13.1): a talent added to the Warlock's Destruction tree (301) went to the end of
+        // Talent.dbc (the next free ID), and the game then showed ONLY that talent in the tree
+        var (ws, s, d) = Open();
+        var t = new TalentDesigner(s, d);
+        var talents = s.Table("Talent");
+        Assert.Equal(16, TalentsTheGameShows(talents, 301));
+        Assert.Empty(t.SplitTrees());   // the game's own file: every tree is one run of rows
+        long tal = t.AddTalent(301, 0, 0, t.MakeRankSpells(17778, "Test Talent", 1));
+        Assert.Empty(t.SplitTrees());
+        Assert.Equal(17, TalentsTheGameShows(talents, 301));
+        var col = talents.Layout.Column("TabID")!;
+        int at = talents.Rows.IndexOf(talents.Find(tal)!);
+        Assert.Equal(301, talents.Number(talents.Rows[at - 1], col));
+        Assert.NotEqual(301, talents.Number(talents.Rows[at + 1], col));
+        Assert.True(s.Session("Talent").Editor.Undo());   // the move is one undo step: back at the end of the file
+        Assert.Equal(1, TalentsTheGameShows(talents, 301));
+        Assert.True(s.Session("Talent").Editor.Redo());
+        Assert.Equal(17, TalentsTheGameShows(talents, 301));
+        t.Save();
+        var saved = new DbcEditSession(new DbcService(TestEnv.Client, ws), "Talent").Table;
+        Assert.Equal(17, TalentsTheGameShows(saved, 301));
+        Assert.Equal(talents.Rows.Count, saved.Rows.Count);
+    }
+
+    [Fact]
+    public void SavingRegroupsATreeSplitByAnOlderVersion()
+    {
+        // a Talent.dbc saved by 0.12.0-0.13.1 (or edited row by row in the Data tables tab): a Destruction row at the end
+        var (ws, s, d) = Open();
+        var t = new TalentDesigner(s, d);
+        var ranks = t.MakeRankSpells(17778, "Test Talent", 1);
+        var row = s.AddRow("Talent");
+        s.SetNumber("Talent", row, "TabID", 301);
+        s.SetNumber("Talent", row, "SpellRank1", ranks[0]);
+        var talents = s.Table("Talent");
+        Assert.Equal(1, TalentsTheGameShows(talents, 301));
+        Assert.Equal((301L, 2, 1, 17), t.SplitTrees().Single());
+        Assert.Contains(t.Check(301), p => p.Severity == DesignSeverity.Warning && p.Message.Contains("only the last group (1 of 17 talents)"));
+        var res = t.Save();
+        Assert.Contains(res.Notes, n => n.Contains("1 row(s) moved"));
+        Assert.Empty(t.SplitTrees());
+        var saved = new DbcEditSession(new DbcService(TestEnv.Client, ws), "Talent").Table;
+        Assert.Equal(17, TalentsTheGameShows(saved, 301));
+        var game = s.Session("Talent").GameTable!;   // every other tree as in the game's own file
+        var col = game.Layout.Column("TabID")!;
+        foreach (var tab in game.Rows.Select(r => game.Number(r, col)).Distinct())
+            Assert.Equal(TalentsTheGameShows(game, tab) + (tab == 301 ? 1 : 0), TalentsTheGameShows(saved, tab));
     }
 
     [Fact]

@@ -19,8 +19,9 @@ public sealed record SkillLineEntry(long Id, long SkillLine, string SkillName, l
 /// lines) and save everything in one change set: the game's Spell.dbc (and the helper tables it needed: SpellIcon,
 /// SpellCastTimes, SpellDuration, SpellRange, SpellRadius, SpellVisual...) and the server's spell_template, kept in sync
 /// field by field with the same mapping as the client / server check (<see cref="ServerConsistency"/>).
-/// New spells take free IDs from your custom ID range (Settings: Custom ID range), free in both Spell.dbc and
-/// spell_template.
+/// New spells take free IDs from the spell ID range (Settings: Spell ID range, 35000-39999 by default; 0.12.0-0.13.2 used
+/// the custom ID range 900000+, which VMaNGOS never casts: <see cref="SpellIdLimits"/>), free in both Spell.dbc and
+/// spell_template. <see cref="ChangeId"/> moves a spell made with an unusable ID.
 /// </summary>
 public sealed class SpellDesigner
 {
@@ -36,6 +37,13 @@ public sealed class SpellDesigner
     public DbcRow Row(long id) => Spells.Find(id) ?? throw new DesignException($"There is no spell {id} in Spell.dbc.");
 
     public bool Exists(long id) => Spells.Find(id) != null;
+
+    /// <summary>0.13.3: refuses a spell ID the server never casts (above 40000) or the game cannot know (above 65535).</summary>
+    private static void RequireUsableId(long id)
+    {
+        if (id <= 0) throw new DesignException("A spell ID is a whole number from 1.");
+        if (!SpellIdLimits.Castable(id)) throw new DesignException(SpellIdLimits.Problem(id));
+    }
 
     public string Name(long id) => Spells.Find(id) is { } r ? Spells.Text(r, Spells.Layout.Column("Name")!, 0) : $"#{id}";
 
@@ -75,7 +83,8 @@ public sealed class SpellDesigner
     /// <summary>A new, empty spell: instant, self-cast, on the global cooldown, mana, with a name and nothing else.</summary>
     public long New(string name, long? id = null, string rank = "")
     {
-        long nid = id ?? Session.FreeCustomId("Spell", "spell_template", "entry");
+        long nid = id ?? Session.FreeSpellId();
+        RequireUsableId(nid);
         if (Spells.Find(nid) != null) throw new DesignException($"Spell {nid} already exists ({Name(nid)}). Each spell needs its own ID.");
         if (Session.Server?.Schema.Table("spell_template") is { } st && Session.Server.Object(st, nid) != null)
             throw new DesignException($"The server already has a spell {nid} in spell_template. Choose another ID.");
@@ -104,7 +113,8 @@ public sealed class SpellDesigner
     public long Clone(long source, string? name = null, long? id = null, string? rank = null)
     {
         var src = Row(source);
-        long nid = id ?? Session.FreeCustomId("Spell", "spell_template", "entry");
+        long nid = id ?? Session.FreeSpellId();
+        RequireUsableId(nid);
         if (Spells.Find(nid) != null) throw new DesignException($"Spell {nid} already exists ({Name(nid)}). Each spell needs its own ID.");
         if (Session.Server?.Schema.Table("spell_template") is { } st && Session.Server.Object(st, nid) != null)
             throw new DesignException($"The server already has a spell {nid} in spell_template. Choose another ID.");
@@ -130,6 +140,129 @@ public sealed class SpellDesigner
             .Where(x => w.All(x.Name.ToLowerInvariant().Contains))
             .OrderBy(x => string.Equals(x.Name, words.Trim(), StringComparison.OrdinalIgnoreCase) ? 0 : 1).ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ThenBy(x => x.Id)
             .Take(max).ToList();
+    }
+
+    // ------------------------------------------------------------------ changing a spell's ID (0.13.3)
+
+    /// <summary>The spells you made (not in the game's own Spell.dbc) whose ID the server never casts (above 40000),
+    /// taught spells first and their learn spells after them (the order <see cref="ChangeIds"/> moves them in).</summary>
+    public List<long> UnusableSpells()
+    {
+        var game = Session.Session("Spell").GameTable;
+        var t = Spells;
+        var list = t.Rows.Select(r => t.Key(r)!.Value).Where(id => !SpellIdLimits.Castable(id) && game?.Find(id) == null).ToList();
+        bool IsLearn(long id) => t.Number(Row(id), t.Layout.Column("Effect1")!) == 36;
+        return list.OrderBy(id => IsLearn(id) ? 1 : 0).ThenBy(id => id).ToList();
+    }
+
+    /// <summary>
+    /// 0.13.3: give a spell you made a new ID (by default the first free one of the spell ID range, Settings: Spell ID
+    /// range). Its game row and its server row move, and every reference follows: in the game's tables the spells that
+    /// teach or trigger it (learn spells), its skill lines (SkillLineAbility), talent ranks (Talent), item sets and
+    /// creature spell lists; on the server the quests (reward spell, spell cast on the player, source spell), trainer rows,
+    /// playercreateinfo_spell, spell_learn_spell, items and creatures. For the spells of 0.12.0-0.13.2, made with IDs from
+    /// 900000, which VMaNGOS never casts (<see cref="SpellIdLimits"/>). <paramref name="withLearnSpells"/>: its learn spells
+    /// with unusable IDs move too. The game's own spells cannot be moved. Nothing is saved yet: Save keeps it.
+    /// </summary>
+    public DesignResult ChangeId(long oldId, long? newId = null, bool withLearnSpells = true)
+    {
+        try
+        {
+            var notes = new List<string>();
+            long nid = Move(oldId, newId, notes);
+            if (withLearnSpells)
+                foreach (var l in LearnSpellsOf(nid).Where(l => !SpellIdLimits.Castable(l) && Session.Session("Spell").GameTable?.Find(l) == null))
+                {
+                    long ln = Move(l, null, notes);
+                    notes.Add($"Its learn spell {l} is now {ln}.");
+                }
+            return DesignResult.Done($"{Name(nid)} is now spell {nid} (was {oldId}).{(notes.Count > 0 ? " " + string.Join(" ", notes) : "")} \"Save to my workspace\" keeps it; apply it to the server again and restart mangosd.");
+        }
+        catch (DesignException e) { return DesignResult.Refused(e.Message); }
+    }
+
+    /// <summary>0.13.3: <see cref="ChangeId"/> for several spells, or for every one of <see cref="UnusableSpells"/>.</summary>
+    public DesignResult ChangeIds(IEnumerable<long>? spells = null)
+    {
+        var list = (spells ?? UnusableSpells()).ToList();
+        if (list.Count == 0) return DesignResult.Done("Every spell you made has a usable ID (at most 40000).");
+        var lines = new List<string>();
+        foreach (var id in list)
+        {
+            if (!Exists(id)) continue;   // moved already as the learn spell of one before it
+            var r = ChangeId(id);
+            if (!r.Ok) return DesignResult.Refused($"Spell {id}: {r.Message}" + (lines.Count > 0 ? $" (moved before it: {string.Join("; ", lines)})" : ""));
+            lines.Add(r.Message);
+        }
+        return DesignResult.Done(string.Join(" ", lines));
+    }
+
+    /// <summary>The spells <see cref="ChangeId"/> moved in this session: old ID -> new ID.</summary>
+    public IReadOnlyDictionary<long, long> Moved => _moved;
+    private readonly Dictionary<long, long> _moved = new();
+
+    private long Move(long oldId, long? newId, List<string> notes)
+    {
+        var src = Row(oldId);
+        if (Session.Session("Spell").GameTable?.Find(oldId) != null)
+            throw new DesignException($"Spell {oldId} ({Name(oldId)}) is one of the game's own spells: only spells you made can get a new ID.");
+        long nid = newId ?? Session.FreeSpellId();
+        RequireUsableId(nid);
+        if (nid == oldId) throw new DesignException($"Spell {oldId} already has the ID {nid}.");
+        if (Spells.Find(nid) != null) throw new DesignException($"Spell {nid} already exists ({Name(nid)}). Choose a free ID.");
+        var ed = Session.Server;
+        var st = ed?.Schema.Table("spell_template");
+        if (st != null && ed!.Object(st, nid) != null) throw new DesignException($"The server already has a spell {nid} in spell_template. Choose a free ID.");
+
+        var extras = new Dictionary<string, string?>(Extras(oldId), StringComparer.OrdinalIgnoreCase);
+        Session.Session("Spell").Duplicate(src, nid);
+        _extras[nid] = extras;
+        // the game's tables that link to spells (dbc_layouts: "-> Spell")
+        int refs = 0;
+        foreach (var table in new[] { "Spell", "SkillLineAbility", "Talent", "ItemSet", "CreatureSpellData" })
+        {
+            if (Session.Lookup(table) is not { } peek) continue;
+            var cols = peek.Layout.Columns.Where(c => string.Equals(c.ForeignKey, "Spell", StringComparison.OrdinalIgnoreCase)).ToList();
+            if (cols.Count == 0 || !peek.Rows.Any(r => cols.Any(c => peek.Number(r, c) == oldId))) continue;
+            var t = Session.Table(table);
+            foreach (var r in t.Rows.ToList())
+                foreach (var c in cols.Where(c => t.Number(r, t.Layout.Column(c.Name)!) == oldId))
+                {
+                    Session.SetNumber(table, r, c.Name, nid);
+                    refs++;
+                    if (t.Key(r) is not { } key) continue;
+                    if (table == "Spell") _touched.Add(key);
+                    else if (table == "SkillLineAbility") _skillRows.Add(key);
+                    else if (table == "Talent") notes.Add($"Talent {key} now names spell {nid} (the server reads its own Talent.dbc).");
+                }
+        }
+        Session.Session("Spell").DeleteRows(new[] { src });
+        _touched.Remove(oldId);
+        _extras.Remove(oldId);
+        _touched.Add(nid);
+        if (refs > 0) notes.Add($"{refs} reference(s) in the game's tables follow.");
+
+        if (ed != null && st != null)
+        {
+            SyncServer(new[] { nid });
+            foreach (var v in ed.Versions(st, oldId)) ed.Delete(st.Name, new[] { st.KeyText(v) });
+            int srv = 0;
+            foreach (var (table, col) in SpellIdLimits.SpellColumns)
+            {
+                if (table == "spell_template" && col == "entry" || table == "skill_line_ability") continue;   // the row moved above; skill lines follow the game's rows
+                if (ed.Schema.Table(table) is not { } t || !t.Has(col)) continue;
+                foreach (var r in ed.Rows(t, RowFilter.Eq(col, oldId)))
+                {
+                    var res = ed.Set(t.Name, t.KeyText(r), new[] { (col, (string?)nid.ToString(CultureInfo.InvariantCulture)) }, $"{t.Name}: spell {oldId} is now {nid}");
+                    if (!res.Ok) throw new DesignException($"The server refused {t.Name} {t.KeyText(r)}: {res.Message}");
+                    srv++;
+                }
+            }
+            if (srv > 0) notes.Add($"{srv} server row(s) follow (quests, trainers...).");
+        }
+        foreach (var k in _moved.Where(kv => kv.Value == oldId).Select(kv => kv.Key).ToList()) _moved[k] = nid;
+        _moved[oldId] = nid;
+        return nid;
     }
 
     // ------------------------------------------------------------------ editing
@@ -175,6 +308,8 @@ public sealed class SpellDesigner
         void Add(DesignSeverity s, string field, string msg) => res.Add(new DesignProblem(s, field, msg));
         var lookup = Session.Lookups;
 
+        // 0.13.3 (found in game): VMaNGOS casts no spell above 40000, the 1.12 game knows none above 65535
+        if (!SpellIdLimits.Castable(id)) Add(DesignSeverity.Error, "ID", SpellIdLimits.Problem(id));
         if (t.Text(row, t.Layout.Column("Name")!, 0).Trim().Length == 0) Add(DesignSeverity.Error, "Name", "The spell has no name: the game shows an empty spell book entry and cast bar.");
         if (N("SpellIconID") != 0 && lookup("SpellIcon")?.Find(N("SpellIconID")) == null) Add(DesignSeverity.Warning, "Icon", $"SpellIcon {N("SpellIconID")} does not exist: the game shows a question mark.");
         foreach (var (col, table) in new[] { ("CastingTimeIndex", "SpellCastTimes"), ("RangeIndex", "SpellRange"), ("DurationIndex", "SpellDuration") })
@@ -259,12 +394,24 @@ public sealed class SpellDesigner
                 CheckItem($"Reagent {i}", N($"Reagent{i}"));
                 if (N($"ReagentCount{i}") <= 0) Add(DesignSeverity.Warning, $"Reagent {i} count", "A reagent with a count of 0 is not used up.");
             }
+        // 0.13.2 (found in game): what the 1.12 trainer window does with learn spells and their taught spells
+        if (N("Effect1") == 36 && N("EffectTriggerSpell1") is var taught and > 0 && t.Text(row, t.Layout.Column("Description")!, 0).Contains('$'))
+            Add(DesignSeverity.Warning, "Description", $"A learn spell's own description is what the trainer window shows (with the learn spell's numbers, " +
+                $"not those of spell {taught}). Leave it empty, as the game's own learn spells do: the trainer then shows the description of spell {taught}.");
+        if (Session.Server != null && SkillLines(id).Count == 0)
+            foreach (var tr in Trainers(id))
+                if (ClassTrainer(tr) is { } why)
+                {
+                    Add(DesignSeverity.Warning, "Trainer", $"{tr.TrainerName} {why}: the game's trainer window hides a spell that has no skill line (SkillLineAbility) there. Add one (\"Skill line\").");
+                    break;
+                }
         if (Session.Server == null) Add(DesignSeverity.Note, "Server", Session.ServerNote + " Items, creatures and the trigger spells on the server were not checked.");
         return res;
 
         void CheckTrigger(int e, string g, long trig)
         {
             if (trig <= 0) Add(DesignSeverity.Error, g, "This effect needs a trigger spell (the spell it casts or teaches).");
+            else if (!SpellIdLimits.Castable(trig)) Add(DesignSeverity.Error, g, $"The trigger spell: {SpellIdLimits.Problem(trig)}");
             else if (Spells.Find(trig) == null) Add(DesignSeverity.Error, g, $"The trigger spell {trig} does not exist in Spell.dbc.");
             else if (Session.Server?.Schema.Table("spell_template") is { } st && Session.Server.Object(st, trig) == null && !_touched.Contains(trig))
                 Add(DesignSeverity.Error, g, $"The server has no spell {trig} (spell_template): casting this spell would fail there.");
@@ -296,7 +443,7 @@ public sealed class SpellDesigner
     /// and icon, effect 1 = Learn spell on the target (the server only accepts such spells in trainer lists).</summary>
     public long EnsureLearnSpell(long spell, out bool created)
     {
-        var existing = LearnSpellsOf(spell).FirstOrDefault(l => Session.Server?.Schema.Table("spell_template") is not { } st || Session.Server.Object(st, l) != null || _touched.Contains(l));
+        var existing = LearnSpellsOf(spell).FirstOrDefault(l => SpellIdLimits.Castable(l) && (Session.Server?.Schema.Table("spell_template") is not { } st || Session.Server.Object(st, l) != null || _touched.Contains(l)));
         if (existing != 0)
         {
             created = false;
@@ -304,28 +451,56 @@ public sealed class SpellDesigner
         }
         var src = Row(spell);
         var t = Spells;
-        long id = Session.FreeCustomId("Spell", "spell_template", "entry");
-        var row = Session.AddRow("Spell", id);
-        void N(string c, long v) => Session.SetNumber("Spell", row, c, v);
-        Session.Set("Spell", row, "Name", t.Text(src, t.Layout.Column("Name")!, 0));
-        Session.Set("Spell", row, "NameSubtext", t.Text(src, t.Layout.Column("NameSubtext")!, 0));
-        N("SpellIconID", t.Number(src, t.Layout.Column("SpellIconID")!));
-        N("CastingTimeIndex", SpellForm.CastTimeRow(Session, 0, out _));
-        N("RangeIndex", SpellForm.RangeRow(Session, 0, 0, out _));
-        N("SpellLevel", t.Number(src, t.Layout.Column("SpellLevel")!));
-        N("BaseLevel", t.Number(src, t.Layout.Column("BaseLevel")!));
-        N("EquippedItemClass", -1);
-        N("DefenseType", 0);
-        N("StanceBarOrder", -1);
-        N("Effect1", 36);
-        N("EffectImplicitTargetA1", 25);   // Unit: the player learning it
-        N("EffectTriggerSpell1", spell);
-        N("EffectBaseDice1", 1);
-        Session.Set("Spell", row, "Description", t.Text(src, t.Layout.Column("Description")!, 0));
-        _extras[id] = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase) { ["effectBonusCoefficient1"] = "-1", ["effectBonusCoefficient2"] = "-1", ["effectBonusCoefficient3"] = "-1", ["customFlags"] = "0" };
+        // 0.13.2 (found in game): a copy of one of the game's own learn spells (effect 1 Learn spell with no implicit
+        // target, 100 yards, the learn glow, no description), with this spell's trigger, name, rank and icon. 0.12.0-0.13.1
+        // made its own (effect 1's target "Unit", range "self", the spell's description): the server did not teach the
+        // spell from a quest reward with it (the character got it only as a disabled spell)
+        long id;
+        DbcRow row;
+        if (LearnSpellModel() is { } model)
+        {
+            id = Clone(model, t.Text(src, t.Layout.Column("Name")!, 0), rank: t.Text(src, t.Layout.Column("NameSubtext")!, 0));
+            row = Row(id);
+        }
+        else
+        {
+            id = Session.FreeSpellId();
+            row = Session.AddRow("Spell", id);
+            Session.Set("Spell", row, "Name", t.Text(src, t.Layout.Column("Name")!, 0));
+            Session.Set("Spell", row, "NameSubtext", t.Text(src, t.Layout.Column("NameSubtext")!, 0));
+            Session.SetNumber("Spell", row, "CastingTimeIndex", SpellForm.CastTimeRow(Session, 0, out _));
+            Session.SetNumber("Spell", row, "RangeIndex", SpellForm.RangeRow(Session, 0, 100, out _));
+            Session.SetNumber("Spell", row, "EquippedItemClass", -1);
+            Session.SetNumber("Spell", row, "StanceBarOrder", -1);
+            Session.SetNumber("Spell", row, "Effect1", 36);
+            _extras[id] = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase) { ["effectBonusCoefficient1"] = "-1", ["effectBonusCoefficient2"] = "-1", ["effectBonusCoefficient3"] = "-1", ["customFlags"] = "0" };
+        }
+        Session.SetNumber("Spell", row, "SpellIconID", t.Number(src, t.Layout.Column("SpellIconID")!));
+        Session.SetNumber("Spell", row, "EffectTriggerSpell1", spell);
+        // no description, as the game's own learn spells (Shadow Bolt's 1381, 1382 ...): the 1.12 trainer window shows a
+        // learn spell's OWN description when it has one, filled in with the learn spell's numbers ("causing 1 to 0 Shadow
+        // damage"), and the taught spell's description only when it is empty (Script_GetTrainerServiceDescription)
+        Session.Set("Spell", row, "Description", "");
         _touched.Add(id);
         created = true;
         return id;
+    }
+
+    /// <summary>
+    /// 0.13.2: the game's own learn spell the new ones are copied from: Shadow Bolt (Rank 2)'s 1381 when the game's table
+    /// has it as such, else the first learn spell of the game's own file with no implicit target, a range other than
+    /// "self" and no description (the kind of almost every trainer and quest learn spell of 1.12 and of VMaNGOS).
+    /// </summary>
+    private long? LearnSpellModel()
+    {
+        var g = Session.Session("Spell").GameTable;
+        if (g == null) return null;
+        long N(DbcRow r, string c) => g.Number(r, g.Layout.Column(c)!);
+        bool Fits(DbcRow r) => N(r, "Effect1") == 36 && N(r, "EffectImplicitTargetA1") == 0 && N(r, "RangeIndex") > 1 && N(r, "EffectTriggerSpell1") > 0 &&
+                               g.Text(r, g.Layout.Column("Description")!, 0).Length == 0 && Spells.Find(g.Key(r)!.Value) != null;
+        var r1381 = g.Find(1381);
+        var model = r1381 != null && Fits(r1381) ? r1381 : g.Rows.FirstOrDefault(Fits);
+        return model == null ? null : g.Key(model);
     }
 
     /// <summary>The trainer entries that teach a spell (through any of its learn spells), with your server edits.</summary>
@@ -349,6 +524,27 @@ public sealed class SpellDesigner
             }
         }
         return res;
+    }
+
+    /// <summary>
+    /// 0.13.2: "is a class trainer" / "is a pet trainer" (also for a shared list a class or pet trainer uses), else null.
+    /// The 1.12 trainer window groups a class or pet trainer's spells under the skill line of the taught spell and drops
+    /// a spell without one (TrainerFrame_SetServices); the server sends it (found in game: an empty window).
+    /// </summary>
+    private string? ClassTrainer(TrainerEntry tr)
+    {
+        if (Session.Server is not { } ed || ed.Schema.Table("creature_template") is not { } ct || !ct.Has("trainer_type")) return null;
+        IEnumerable<string?[]> creatures;
+        if (tr.Table == "npc_trainer") creatures = ed.Object(ct, tr.Trainer) is { } one ? new[] { one } : Array.Empty<string?[]>();
+        else if (ct.Has("trainer_id")) creatures = ed.Rows(ct, RowFilter.Where(new FilterTerm("trainer_id", FilterOp.Eq, tr.Trainer.ToString(CultureInfo.InvariantCulture))), 5);
+        else return null;
+        foreach (var c in creatures)
+        {
+            if ((WorldValue.Long(c[ct.IndexOf("npc_flags")]) & 0x10) == 0) continue;
+            long type = WorldValue.Long(c[ct.IndexOf("trainer_type")]);
+            if (type is 0 or 3) return (tr.Table == "npc_trainer" ? "is a " : "(a list of a ") + (type == 0 ? "class trainer" : "pet trainer") + (tr.Table == "npc_trainer" ? "" : ")");
+        }
+        return null;
     }
 
     /// <summary>

@@ -546,12 +546,13 @@ public sealed class ServerEditor
         return new ServerEditResult(true, $"{n} of {list.Count} rows changed.", warnings.Distinct().ToList(), n);
     }
 
-    /// <summary>A free ID for a new row: the first unused number of your custom ID range (Settings: server.custom-ids),
-    /// or the next number after the highest when the column cannot hold that range.</summary>
+    /// <summary>A free ID for a new row: the first unused number of your custom ID range (Settings: server.custom-ids; for
+    /// spell_template the spell ID range, spell-ids), or the next number after the highest when the column cannot hold that range.</summary>
     public long SuggestId(WorldTable t, string? column = null)
     {
         var col = t.Column(column ?? Service.IdColumn(t)) ?? throw new ServerDataException($"{t.Name} has no ID column.");
-        var (start, end) = Service.CustomIds;
+        // 0.13.3: a new spell gets an ID of the spell range (VMaNGOS casts no spell above 40000: SpellIdLimits)
+        var (start, end) = t.Name.Equals("spell_template", StringComparison.OrdinalIgnoreCase) && col.Name.Equals("entry", StringComparison.OrdinalIgnoreCase) ? Service.SpellIds : Service.CustomIds;
         var (_, max) = col.IntegerRange;
         var used = new HashSet<long>();
         bool inRange = start <= end && max >= end;

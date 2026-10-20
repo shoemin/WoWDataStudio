@@ -1645,14 +1645,14 @@ wds spells fields --group Casting --json
 
 #### wds spells new
 
-A new spell (instant, self, mana, on the global cooldown) with a free ID of your custom range, then --set fields; saved into the workspace (and the server's spell_template).
+A new spell (instant, self, mana, on the global cooldown) with a free ID of your spell ID range (35000-39999 by default), then --set fields; saved into the workspace (and the server's spell_template).
 
 ```
 wds spells new <name> [options]
 ```
 
 * `--rank <text>`: the rank text ("Rank 1")
-* `--id <n>`: this ID instead of the first free one of your custom range
+* `--id <n>`: this ID (at most 40000) instead of the first free one of your spell ID range
 * `--set <field=value>`: a field of the form ("wds spells fields" lists them; friendly units: seconds, yards, "instant", an icon file name) (repeatable)
 * `--dry-run`: show what would happen; change nothing
 
@@ -1663,7 +1663,7 @@ wds spells new Test --dry-run --json
 
 #### wds spells clone
 
-A copy of an existing spell ("a spell like Shadow Bolt") with a free ID of your custom range, a new name and rank, then --set fields; saved like spells new.
+A copy of an existing spell ("a spell like Shadow Bolt") with a free ID of your spell ID range, a new name and rank, then --set fields; saved like spells new.
 
 ```
 wds spells clone <source> [options]
@@ -1671,7 +1671,7 @@ wds spells clone <source> [options]
 
 * `--name <text>`: the new spell's name
 * `--rank <text>`: its rank text
-* `--id <n>`: this ID instead of the first free one
+* `--id <n>`: this ID (at most 40000) instead of the first free one
 * `--set <field=value>`: a field of the form ("wds spells fields" lists them; friendly units: seconds, yards, "instant", an icon file name) (repeatable)
 * `--dry-run`: show what would happen; change nothing
 
@@ -1692,8 +1692,8 @@ wds spells set <spell> [field] [value] [options]
 * `--dry-run`: show what would happen; change nothing
 
 ```
-wds spells set 900000 cast-time 2
-wds spells set 900000 --set effect1-value=40-48 --set icon=Spell_Shadow_ShadowBolt
+wds spells set 35000 cast-time 2
+wds spells set 35000 --set effect1-value=40-48 --set icon=Spell_Shadow_ShadowBolt
 ```
 
 #### wds spells check
@@ -1705,7 +1705,7 @@ wds spells check <spells...>
 ```
 
 ```
-wds spells check 900000
+wds spells check 35000
 wds spells check 686 133 --json
 ```
 
@@ -1779,10 +1779,10 @@ wds spells visual <spell> [options]
 
 ```
 wds spells visual 686
-wds spells visual 900000 --use spell:686
-wds spells visual 900000 --missile spell:133 --impact spell:686
-wds spells visual 900000 --duplicate --tint #8040FF --scale 1.5
-wds spells visual 900000 --find frostbolt
+wds spells visual 35000 --use spell:686
+wds spells visual 35000 --missile spell:133 --impact spell:686
+wds spells visual 35000 --duplicate --tint #8040FF --scale 1.5
+wds spells visual 35000 --find frostbolt
 ```
 
 #### wds spells learn
@@ -1805,9 +1805,9 @@ wds spells learn <spell> [options]
 * `--dry-run`: show what would happen; change nothing
 
 ```
-wds spells learn 900000
-wds spells learn 900000 --trainer 3156 --level 20 --cost 25s
-wds spells learn 900000 --skill-line 355 --class Warlock
+wds spells learn 35000
+wds spells learn 35000 --trainer 3156 --level 20 --cost 25s
+wds spells learn 35000 --skill-line 355 --class Warlock
 ```
 
 #### wds spells sync
@@ -1821,8 +1821,27 @@ wds spells sync <spells...> [options]
 * `--dry-run`: show what would happen; change nothing
 
 ```
-wds spells sync 900000 900001
-wds spells sync 900000 --dry-run
+wds spells sync 35000 35001
+wds spells sync 35000 --dry-run
+```
+
+#### wds spells renumber
+
+"Change ID": give a spell you made a usable ID (VMaNGOS casts no spell above 40000, the 1.12 game knows none above 65535): the first free one of the spell ID range or --to; its learn spells, skill lines, talents, quests and trainer rows follow; --all moves every spell of yours above 40000.
+
+```
+wds spells renumber [spell] [options]
+```
+
+* `--to <n>`: this ID (at most 40000) instead of the first free one of the spell ID range
+* `--all`: every spell you made whose ID is above 40000 (taught spells first, then their learn spells)
+* `--keep-learn-spells`: leave its learn spells where they are
+* `--dry-run`: show what would happen; change nothing
+
+```
+wds spells renumber 900000
+wds spells renumber 900000 --to 35010
+wds spells renumber --all --dry-run
 ```
 
 ### The talent designer
@@ -2023,7 +2042,7 @@ wds classes assign <class> <spell> [options]
 * `--dry-run`: show what would happen; change nothing
 
 ```
-wds classes assign warlock 900000 --level 20 --trainer all --cost 25s
+wds classes assign warlock 35000 --level 20 --trainer all --cost 25s
 wds classes assign 9 686 --level 2
 ```
 
@@ -2339,7 +2358,7 @@ wds quests reward <quest> [options]
 * `--dry-run`: show what would happen; change nothing
 
 ```
-wds quests reward 900001 --spell 900010 --xp 1200 --money 1g
+wds quests reward 900001 --spell 35010 --xp 1200 --money 1g
 wds quests reward 900001 --choice 2488 --choice 2490 --choice 2491
 ```
 
@@ -2931,6 +2950,7 @@ app's tests fail when the app, the command line and this table differ.
 | sdata.wdb | **Clear the game's cache (WDB)...** | `wds server clear-wdb` |
 | sdata.patch | **Content patch of the server** | `wds settings set` |
 | sdata.custom-ids | **Custom ID range** | `wds settings set` |
+| sdata.spell-ids | **Spell ID range** | `wds settings set` |
 | sdata.dbc-link | **Edit it in the Server data tab** | `wds server show` |
 | sdata.undo | **Discard changes** | (app only: the editor's unsaved state (Undo, Redo, Discard changes): every "wds server" edit is saved at once; use --dry-run to look first and "wds changes revert" to undo) |
 | sdata.show-in-browse | **Show in Browse** | (app only: navigation to the Browse tab's 3D viewer and to the Data tables tab ("wds find info item:25" and "wds dbc get" on the command line)) |
@@ -2949,6 +2969,8 @@ app's tests fail when the app, the command line and this table differ.
 | spells.trainer | **Add to trainer** | `wds spells learn` |
 | spells.skill-line | **Add to skill line** | `wds spells learn` |
 | spells.sync | **Sync with the server** | `wds spells sync` |
+| spells.renumber | **Change ID** | `wds spells renumber` |
+| spells.renumber-all | **Fix all spell IDs** | `wds spells renumber` |
 | spells.visual-3d | **Show in 3D** | (app only: viewing: the effect models in the designer's 3D view ("wds models render" draws a model to PNG)) |
 | spells.undo | **Discard changes** | (app only: the editor's unsaved state: every "wds spells" command saves at once; use --dry-run to look first and "wds changes revert" to undo) |
 | talents.trees | **Talent trees** | `wds talents trees` |
@@ -3103,14 +3125,14 @@ server, or use the `.reload` command the apply prints.
 
 ```
 wds spells clone 686 --name "Shadow Lance" --rank "Rank 1" --set cast-time=2 --set effect1-value=40-48
-wds spells learn 900000 --trainer 3156 --level 20 --cost 25s
-wds spells learn 900000 --skill-line 593 --class Warlock
-wds server check spells --ids 900000
+wds spells learn 35000 --trainer 3156 --level 20 --cost 25s
+wds spells learn 35000 --skill-line 593 --class Warlock
+wds server check spells --ids 35000
 wds changes build-patch
 wds server apply --yes
 ```
 
-The first free ID of your custom range is used (here 900000). `server check` finds no difference between the game's
+The first free ID of your spell ID range is used (here 35000; spells stay at or below 40000, the highest ID the VMaNGOS server casts). `server check` finds no difference between the game's
 `Spell.dbc` and the server's `spell_template`; the release patch carries the game's side and `server apply` writes the
 server's rows (the world server must be stopped; it reads spells at start).
 

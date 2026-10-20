@@ -158,15 +158,33 @@ public sealed partial class SpellDesignerViewModel : ObservableObject
         StatusIsError = error;
     }
 
-    /// <summary>Open the design session (the game's tables, and the server database when it is on).</summary>
-    public async Task EnsureLoadedAsync()
+    /// <summary>Open the design session (the game's tables, and the server database when it is on).
+    /// 0.13.3: one load at a time. Two callers at once (a tab switch and a command) used to open two sessions, and the
+    /// designer of one could end up paired with the session of the other: a new spell's visual or rank spells then
+    /// seemed missing ("SpellVisual ... does not exist", "There is no Spell with ID ..."), seen in the screenshot run.</summary>
+    public Task EnsureLoadedAsync()
     {
-        if (IsLoaded) return;
-        await Task.Run(OpenSession);
-        IsLoaded = true;
+        if (IsLoaded) return Task.CompletedTask;
+        return _loadTask ??= LoadAsync();
     }
 
-    private void OpenSession()
+    private Task? _loadTask;
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var (session, designer, text) = await Task.Run(OpenSession);
+            Session = session;
+            Designer = designer;
+            ServerText = text;
+            IsLoaded = true;
+            RefreshUnusable();
+        }
+        finally { _loadTask = null; }
+    }
+
+    private (DesignSession Session, SpellDesigner Designer, string ServerText) OpenSession()
     {
         var dbc = _session.Dbc ?? throw new InvalidOperationException("No game folder is open.");
         ServerEditor? ed = null;
@@ -181,9 +199,9 @@ public sealed partial class SpellDesignerViewModel : ObservableObject
             catch (ServerDataException e) { note = $"The server database could not be reached ({e.Message}): only the game's tables are edited."; }
         }
         else note = "The server database is turned off (Settings): only the game's tables are edited; \"Sync with the server\" brings it in line later.";
-        Session = new DesignSession(dbc, ed, (_session.Settings.ServerCustomIdStart, _session.Settings.ServerCustomIdEnd), note);
-        Designer = new SpellDesigner(Session);
-        ServerText = ed != null ? $"Server: {ed.Service.Database} on {ed.Service.Db.Settings.Host}:{ed.Service.Db.Settings.Port}. Saving writes spell_template (and trainers, skill lines) into your workspace in step with the game's tables." : note!;
+        var session = new DesignSession(dbc, ed, (_session.Settings.ServerCustomIdStart, _session.Settings.ServerCustomIdEnd), note, (_session.Settings.SpellIdStart, _session.Settings.SpellIdEnd));
+        var text = ed != null ? $"Server: {ed.Service.Database} on {ed.Service.Db.Settings.Host}:{ed.Service.Db.Settings.Port}. Saving writes spell_template (and trainers, skill lines) into your workspace in step with the game's tables." : note!;
+        return (session, new SpellDesigner(session), text);
     }
 
     /// <summary>Start again (after a save or a discard, and when the game folder or the server changed).</summary>
@@ -570,6 +588,58 @@ public sealed partial class SpellDesignerViewModel : ObservableObject
         }
         Designer.Touch(CurrentId);
         SetStatus($"{Designer.Title(CurrentId)}: the server's spell_template follows the game's row when you save.");
+    }
+
+    // ------------------------------------------------------------------ change ID (0.13.3)
+
+    /// <summary>The ID "Change ID" gives the open spell (empty: the first free one of the spell ID range).</summary>
+    [ObservableProperty] private string _newId = "";
+    /// <summary>The spells you made with IDs the server never casts (above 40000), in words; empty when there are none.</summary>
+    [ObservableProperty] private string _unusableText = "";
+    public bool HasUnusable => UnusableText.Length > 0;
+    partial void OnUnusableTextChanged(string value) => OnPropertyChanged(nameof(HasUnusable));
+
+    private void RefreshUnusable()
+    {
+        var list = Designer?.UnusableSpells() ?? new List<long>();
+        UnusableText = list.Count == 0 ? "" : $"{list.Count} spell(s) you made have IDs above 40000, which the VMaNGOS server never casts (and the game cannot know above 65535): " +
+            string.Join(", ", list.Take(8)) + (list.Count > 8 ? ", ..." : "") + ". \"Fix all spell IDs\" gives them free IDs of the spell ID range.";
+    }
+
+    [RelayCommand]
+    private void ChangeId()
+    {
+        if (Designer == null || CurrentId == 0) return;
+        long target;
+        if (NewId.Trim().Length == 0)
+        {
+            try { target = Session!.FreeSpellId(); }
+            catch (DesignException e) { SetStatus(e.Message, true); return; }
+        }
+        else if (!long.TryParse(NewId.Trim(), out target))
+        {
+            SetStatus("New ID: a whole number of at most 40000, or empty for the first free ID of the spell ID range.", true);
+            return;
+        }
+        var r = Designer.ChangeId(CurrentId, target);
+        SetStatus(r.Message, !r.Ok);
+        if (!r.Ok) return;
+        NewId = "";
+        CurrentId = target;
+        Refresh();
+        RefreshUnusable();
+        SetStatus(r.Message, false);
+    }
+
+    [RelayCommand]
+    private void FixAllIds()
+    {
+        if (Designer == null) return;
+        var r = Designer.ChangeIds();
+        if (r.Ok && CurrentId != 0 && Designer.Moved.TryGetValue(CurrentId, out var moved)) CurrentId = moved;
+        if (CurrentId != 0 && Designer.Exists(CurrentId)) Refresh();
+        RefreshUnusable();
+        SetStatus(r.Message, !r.Ok);
     }
 
     // ------------------------------------------------------------------ save, discard

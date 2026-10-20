@@ -79,7 +79,7 @@ internal static class ClassCommands
             Summary = "give a class's spell a level: its trainer rows of the class and its own level follow; --trainer all adds it to every class trainer that lacks it",
             Args = new[] { "<class>", "<spell>" },
             Options = new[] { new OptionSpec("level", "n", "the level (1-255)"), new OptionSpec("trainer", "who", "all (every trainer of the class), or creature entries / list:N, comma-separated"), new OptionSpec("cost", "price", "the price: copper or 25s / 1g 50s"), Common.DryRun },
-            Examples = new[] { "wds classes assign warlock 900000 --level 20 --trainer all --cost 25s", "wds classes assign 9 686 --level 2" },
+            Examples = new[] { "wds classes assign warlock 35000 --level 20 --trainer all --cost 25s", "wds classes assign 9 686 --level 2" },
             Run = async inv =>
             {
                 var r = new CliResult();

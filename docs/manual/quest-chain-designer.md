@@ -134,7 +134,10 @@ Items, choices, money, experience and reputation are fields of **Rewards**. A **
 its ID, keep **The player learns it (else: it is cast on the player)** ticked and click **Set reward spell**. The
 quest window shows the spell; the quest casts its *learn* spell, which the designer makes with the
 [Spell designer](spell-designer.md) when the spell has none (in the game's `Spell.dbc` and the server's
-`spell_template`, in step). **Open in the Spell designer** opens the spell there to shape it.
+`spell_template`, in step). **Open in the Spell designer** opens the spell there to shape it. The spell and its learn
+spell must have IDs of at most 40000: the VMaNGOS server casts no spell above 40000, so the quest would teach nothing.
+**Set reward spell** refuses such a spell and **Check the chain** shows an error (fix it with **Change ID** in the
+[Spell designer](spell-designer.md#spell-ids-what-the-game-and-the-server-accept)).
 
 ### The text preview
 
@@ -156,7 +159,8 @@ Any other letter after a `$` is printed as it is (the checks warn about it).
 
 ## Build a chain
 
-All new quests get the first free ID of your **Custom ID range** ([Settings](settings.md); 900000-999999 by default).
+All new quests get the first free ID of your **Custom ID range** ([Settings](settings.md); 900000-999999 by default);
+spells made for them (a reward spell, its learn spell) get IDs of the **Spell ID range** (35000-39999 by default).
 
 * **Add quests**: type the **New quest's title**, then
   * **Add quest after**: the new quest needs the open one done; the NPC that takes the open one back offers it next
@@ -254,6 +258,9 @@ often have givers of one faction: that is only a note ("Only the Horde can take 
 5. **Test in game** explains how to try the quest: log in with a GM character, `.go creature id <giver>` (or `.go xyz`
    to its spawn) to stand next to the giver, `.quest add <quest>` to take it at once, `.quest complete <quest>` to
    finish it, `.quest remove <quest>` to start again. The app never starts the game.
+   On VMaNGOS `.quest add` and `.quest complete` need an administrator account (GM level 4 or higher); a game
+   master (level 3) has only `.quest status` and `.quest remove`: select each creature the quest asks for and type
+   `.damage 100000` (it counts as your kill).
 
 ![Apply to server: the rows of the designed chain](../screenshots/135_quest_apply.png)
 

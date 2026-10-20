@@ -211,6 +211,10 @@ public static class ServerValidation
                 if (t.Has("name") && string.IsNullOrWhiteSpace(V("name")) || t.Has("map_name") && string.IsNullOrWhiteSpace(V("map_name"))) Warn(t.Has("name") ? "name" : "map_name", "It has no name.");
                 break;
         }
+        // 0.13.3: VMaNGOS casts no spell above 40000 (MAX_SPELL_ID), the 1.12 game knows none above 65535
+        foreach (var (table, col) in SpellIdLimits.SpellColumns)
+            if (t.Name.Equals(table, StringComparison.OrdinalIgnoreCase) && t.Has(col) && L(col) is var sid && !SpellIdLimits.Castable(sid) && sid > 0)
+                Err(col, SpellIdLimits.Problem(sid));
         if (t.Name.EndsWith("_loot_template", StringComparison.OrdinalIgnoreCase))
         {
             var chance = D("ChanceOrQuestChance");

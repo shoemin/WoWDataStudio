@@ -79,6 +79,8 @@ public sealed class ServerDataService
     public string PatchText => Settings.ServerPatch != null ? $"patch {Patch} (your setting)" : ConfPatch != null ? $"patch {Patch} (WowPatch in mangosd.conf)" : $"patch {Patch} (1.12, the default)";
 
     public (long Start, long End) CustomIds => (Settings.ServerCustomIdStart, Settings.ServerCustomIdEnd);
+    /// <summary>0.13.3: the IDs new spells get (Settings: Spell ID range): spell_template's Add suggests from here.</summary>
+    public (long Start, long End) SpellIds => (Settings.SpellIdStart, Settings.SpellIdEnd);
 
     // ------------------------------------------------------------------ tables, kinds, versions
 

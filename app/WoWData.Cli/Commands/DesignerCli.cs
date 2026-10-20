@@ -34,7 +34,7 @@ internal static class DesignerCli
         }
         else note = "The server database is turned off (Settings): only the game's tables are edited; \"wds spells sync\" brings the server in line later.";
         if (note != null) r?.Warnings.Add(note);
-        var d = new DesignSession(dbc, ed, (s.Settings.ServerCustomIdStart, s.Settings.ServerCustomIdEnd), note);
+        var d = new DesignSession(dbc, ed, (s.Settings.ServerCustomIdStart, s.Settings.ServerCustomIdEnd), note, (s.Settings.SpellIdStart, s.Settings.SpellIdEnd));
         return new Ctx(s, d, new SpellDesigner(d));
     }
 

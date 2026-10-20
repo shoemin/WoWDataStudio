@@ -41,27 +41,49 @@ public class DesignerCliTests
         Assert.Empty(new Workspace(env.Paths).List());
         var clone = env.Json("spells", "clone", "686", "--name", "Shadow Lance", "--rank", "Rank 1", "--set", "cast-time=2", "--set", "effect1-value=40-48", "--set", "description=Deals $s1 Shadow damage.");
         Assert.True(clone.Code == 0, clone.ToString());
-        Assert.Equal(900000, clone.Data.GetProperty("data").GetProperty("id").GetInt64());
+        Assert.Equal(35000, clone.Data.GetProperty("data").GetProperty("id").GetInt64());
         Assert.Equal("Deals 40 to 48 Shadow damage.", clone.Data.GetProperty("data").GetProperty("tooltip").GetString());
         Assert.True(clone.Data.GetProperty("serverSkipped").GetBoolean());
-        Assert.Equal(ExitCode.ValidationFailed, env.Run("spells", "set", "900000", "school", "Banana").Code);
-        Assert.Equal(ExitCode.Usage, env.Run("spells", "set", "900000", "no-such-field", "1").Code);
-        Assert.Equal(ExitCode.ValidationFailed, env.Run("spells", "set", "900000", "effect1", "Apply aura").Code);   // refused: an aura without a type
-        Assert.Equal(0, env.Run("spells", "set", "900000", "--set", "cooldown=6", "--set", "range=35").Code);
-        Assert.Equal(0, env.Json("spells", "check", "900000").Code);
+        Assert.Equal(ExitCode.ValidationFailed, env.Run("spells", "set", "35000", "school", "Banana").Code);
+        Assert.Equal(ExitCode.Usage, env.Run("spells", "set", "35000", "no-such-field", "1").Code);
+        Assert.Equal(ExitCode.ValidationFailed, env.Run("spells", "set", "35000", "effect1", "Apply aura").Code);   // refused: an aura without a type
+        Assert.Equal(0, env.Run("spells", "set", "35000", "--set", "cooldown=6", "--set", "range=35").Code);
+        Assert.Equal(0, env.Json("spells", "check", "35000").Code);
         var newSpell = env.Json("spells", "new", "Empty Thing");
-        Assert.Equal(900001, newSpell.Data.GetProperty("data").GetProperty("id").GetInt64());
+        Assert.Equal(35001, newSpell.Data.GetProperty("data").GetProperty("id").GetInt64());
 
         // visual and learning (client side)
-        var vis = env.Json("spells", "visual", "900000", "--missile", "spell:133");
+        var vis = env.Json("spells", "visual", "35000", "--missile", "spell:133");
         Assert.True(vis.Code == 0, vis.ToString());
-        Assert.Equal(ExitCode.Usage, env.Run("spells", "visual", "900000", "--tint", "#ff0000").Code);   // --tint goes with --duplicate
-        Assert.Equal(ExitCode.ValidationFailed, env.Run("spells", "visual", "900000", "--cast", "banana").Code);
-        var learn = env.Json("spells", "learn", "900000", "--skill-line", "593", "--class", "Warlock");
+        Assert.Equal(ExitCode.Usage, env.Run("spells", "visual", "35000", "--tint", "#ff0000").Code);   // --tint goes with --duplicate
+        Assert.Equal(ExitCode.ValidationFailed, env.Run("spells", "visual", "35000", "--cast", "banana").Code);
+        var learn = env.Json("spells", "learn", "35000", "--skill-line", "593", "--class", "Warlock");
         Assert.True(learn.Code == 0, learn.ToString());
         Assert.Equal(0x100, learn.Data.GetProperty("data").GetProperty("skillLines")[0].GetProperty("classMask").GetInt64());
-        Assert.Equal(ExitCode.Error, env.Run("spells", "learn", "900000", "--trainer", "3156").Code);   // trainers need the server
-        Assert.Equal(ExitCode.Error, env.Run("spells", "sync", "900000").Code);
+        Assert.Equal(ExitCode.Error, env.Run("spells", "learn", "35000", "--trainer", "3156").Code);   // trainers need the server
+        Assert.Equal(ExitCode.Error, env.Run("spells", "sync", "35000").Code);
+
+        // 0.13.3: "Change ID" for a spell with an ID the server never casts (as 0.12.0-0.13.2 made them), and the setting
+        Assert.Equal(0, env.Run("dbc", "duplicate", "Spell", "686", "--id", "900005").Code);
+        var bad = env.Json("spells", "check", "900005");
+        Assert.Contains(bad.Data[0].GetProperty("problems").EnumerateArray(), p => p.GetProperty("field").GetString() == "ID");
+        var dryAll = env.Json("spells", "renumber", "--all", "--dry-run");
+        Assert.True(dryAll.Code == 0, dryAll.ToString());
+        Assert.False(dryAll.Data.GetProperty("saved").GetBoolean());
+        Assert.Equal(900005, dryAll.Data.GetProperty("data").GetProperty("unusableBefore")[0].GetInt64());
+        Assert.Equal(ExitCode.ValidationFailed, env.Run("spells", "renumber", "686").Code);                   // the game's own spell
+        Assert.Equal(ExitCode.ValidationFailed, env.Run("spells", "renumber", "900005", "--to", "40001").Code);
+        Assert.Equal(ExitCode.Usage, env.Run("spells", "renumber").Code);
+        var ren = env.Json("spells", "renumber", "900005", "--to", "35100");
+        Assert.True(ren.Code == 0, ren.ToString());
+        Assert.Contains("is now spell 35100 (was 900005)", ren.Data.GetProperty("data").GetProperty("message").GetString());
+        Assert.Equal(0, ren.Data.GetProperty("data").GetProperty("unusableAfter").GetArrayLength());
+        Assert.Equal(ExitCode.NotFound, env.Run("spells", "show", "900005").Code);
+        Assert.Equal(0, env.Run("spells", "show", "35100").Code);
+        Assert.NotEqual(0, env.Run("settings", "set", "spell-ids", "35000-50000").Code);
+        Assert.Equal(0, env.Run("settings", "set", "spell-ids", "36000-36999").Code);
+        Assert.Equal(36000, env.Json("spells", "new", "Ranged Thing", "--dry-run").Data.GetProperty("data").GetProperty("id").GetInt64());
+        Assert.Equal(0, env.Run("settings", "unset", "spell-ids").Code);
 
         // talents
         var trees = env.Json("talents", "trees", "warrior");
@@ -87,7 +109,7 @@ public class DesignerCliTests
         var cls = env.Json("classes", "show", "warlock", "--level", "1-4");
         Assert.Contains(cls.Data.GetProperty("spells").EnumerateArray(), s => s.GetProperty("spell").GetInt64() == 686);
         Assert.Equal(ExitCode.NotFound, env.Run("classes", "show", "banana").Code);
-        Assert.Equal(0, env.Run("classes", "assign", "warlock", "900000", "--level", "20").Code);
+        Assert.Equal(0, env.Run("classes", "assign", "warlock", "35000", "--level", "20").Code);
         Assert.Equal(ExitCode.Usage, env.Run("classes", "mask", "SkillLineAbility", "1", "--class", "1").Code);   // --add or --remove
         Assert.Equal(ExitCode.Usage, env.Run("classes", "mask", "Spell", "133", "--class", "1", "--add").Code);
         var nc = env.Json("classes", "new", "Knight", "--token", "KNIGHT", "--copy-from", "Paladin", "--races", "Human", "--dry-run");
@@ -112,20 +134,20 @@ public class DesignerCliTests
             var clone = env.Json("spells", "clone", "686", "--name", "Shadow Lance");
             Assert.True(clone.Code == 0, clone.ToString());
             Assert.Contains("spell_template", clone.Data.GetProperty("serverTables").EnumerateArray().Select(x => x.GetString()));
-            var learn = env.Json("spells", "learn", "900000", "--trainer", "3156", "--level", "20", "--cost", "25s");
+            var learn = env.Json("spells", "learn", "35000", "--trainer", "3156", "--level", "20", "--cost", "25s");
             Assert.True(learn.Code == 0, learn.ToString());
             Assert.Equal(2500, learn.Data.GetProperty("data").GetProperty("trainers")[0].GetProperty("cost").GetInt64());
-            Assert.Equal(ExitCode.NotFound, env.Run("spells", "learn", "900000", "--trainer", "99999999").Code);
-            Assert.Equal(0, env.Json("server", "check", "spells", "--ids", "900000,900001").Data.GetProperty("issues").GetArrayLength());
+            Assert.Equal(ExitCode.NotFound, env.Run("spells", "learn", "35000", "--trainer", "99999999").Code);
+            Assert.Equal(0, env.Json("server", "check", "spells", "--ids", "35000,35001").Data.GetProperty("issues").GetArrayLength());
             // the game's row edited alone (Data tables): the server differs until "spells sync"
-            Assert.Equal(0, env.Run("dbc", "set", "Spell", "900000", "ManaCost", "99").Code);
-            Assert.Equal(1, env.Json("server", "check", "spells", "--ids", "900000").Data.GetProperty("issues").GetArrayLength());
-            Assert.Equal(0, env.Run("spells", "sync", "900000").Code);
-            Assert.Equal(0, env.Json("server", "check", "spells", "--ids", "900000").Data.GetProperty("issues").GetArrayLength());
+            Assert.Equal(0, env.Run("dbc", "set", "Spell", "35000", "ManaCost", "99").Code);
+            Assert.Equal(1, env.Json("server", "check", "spells", "--ids", "35000").Data.GetProperty("issues").GetArrayLength());
+            Assert.Equal(0, env.Run("spells", "sync", "35000").Code);
+            Assert.Equal(0, env.Json("server", "check", "spells", "--ids", "35000").Data.GetProperty("issues").GetArrayLength());
             var show = env.Json("classes", "show", "warlock", "--source", "trainer");
-            Assert.Contains(show.Data.GetProperty("spells").EnumerateArray(), s => s.GetProperty("spell").GetInt64() == 900000 && s.GetProperty("level").GetInt64() == 20);
+            Assert.Contains(show.Data.GetProperty("spells").EnumerateArray(), s => s.GetProperty("spell").GetInt64() == 35000 && s.GetProperty("level").GetInt64() == 20);
             // nothing reached the database: only "server apply --yes" writes it
-            Assert.Equal(0L, Convert.ToInt64(ServerTestDb.Scalar(db, "SELECT COUNT(*) FROM spell_template WHERE entry=900000")));
+            Assert.Equal(0L, Convert.ToInt64(ServerTestDb.Scalar(db, "SELECT COUNT(*) FROM spell_template WHERE entry=35000")));
         }
         finally
         {
@@ -153,7 +175,7 @@ public class DesignerCliTests
             sp.NewName = "Shadow Lance";
             sp.NewRank = "Rank 1";
             sp.CloneCommand.ExecuteAsync(null).GetAwaiter().GetResult();
-            Assert.Equal(900000, sp.CurrentId);
+            Assert.Equal(35000, sp.CurrentId);
             SpellFieldView F(string id) => sp.Groups.SelectMany(g => g.Fields).First(f => f.F.Id == id);
             sp.SetField(F("cast-time"), "2");
             sp.SetField(F("effect1-value"), "40-48");
@@ -163,6 +185,14 @@ public class DesignerCliTests
             Assert.False(sp.StatusIsError, sp.Status);
             Assert.Contains(F("attributes").Flags, x => x.Name == "Passive" && x.IsOn);
             Assert.Equal("Sends a shadowy bolt at the enemy, causing 40 to 48 Shadow damage.", sp.TooltipText);
+            sp.SaveCommand.ExecuteAsync(null).GetAwaiter().GetResult();
+            Assert.False(sp.StatusIsError, sp.Status);
+            // 0.13.3: "Change ID" (wds spells renumber --to)
+            Assert.False(sp.HasUnusable);
+            sp.NewId = "35100";
+            sp.ChangeIdCommand.Execute(null);
+            Assert.False(sp.StatusIsError, sp.Status);
+            Assert.Equal(35100, sp.CurrentId);
             sp.SaveCommand.ExecuteAsync(null).GetAwaiter().GetResult();
             Assert.False(sp.StatusIsError, sp.Status);
             var ct = browser.Classes;
@@ -185,6 +215,7 @@ public class DesignerCliTests
             Assert.False(ct.StatusIsError, ct.Status);
         });
         Assert.Equal(0, cli.Run("spells", "clone", "686", "--name", "Shadow Lance", "--rank", "Rank 1", "--set", "cast-time=2", "--set", "effect1-value=40-48", "--set", "icon=Spell_Shadow_ScourgeBuild", "--set", "attributes=+Passive").Code);
+        Assert.Equal(0, cli.Run("spells", "renumber", "35000", "--to", "35100").Code);
         var tree = cli.Json("talents", "add-tree", "warrior", "Stance Disciplines", "--icon", "Ability_Warrior_DefensiveStance", "--background", "WarriorProtection");
         long tab = tree.Data.GetProperty("data").GetProperty("id").GetInt64();
         Assert.Equal(0, cli.Run("talents", "add", tab.ToString(), "--tier", "0", "--column", "0", "--make-ranks", "12295", "--name", "Riposte Drill", "--count", "1").Code);
@@ -195,6 +226,34 @@ public class DesignerCliTests
         Assert.Contains(@"DBFilesClient\Spell.dbc", files, StringComparer.OrdinalIgnoreCase);
         Assert.Contains(@"DBFilesClient\Talent.dbc", files, StringComparer.OrdinalIgnoreCase);
         foreach (var p in files) Assert.True(gw.ReadEdited(p)!.AsSpan().SequenceEqual(cw.ReadEdited(p)), p);
+    }
+}
+
+public class SpellDesignerLoadTests
+{
+    /// <summary>0.13.3 (seen in the screenshot run): two loads at once (a tab switch and a command) opened two design
+    /// sessions, and the designer of one could be paired with the session of the other; now one load serves both.</summary>
+    [Fact]
+    public void TwoLoadsAtOnceGiveOneSession()
+    {
+        using var gui = new CliTestEnv("designer_load");
+        UiTestsHelper.RunSta(() =>
+        {
+            var paths = new AppPaths(gui.Home);
+            using var session = new AppSession(paths, AppSettings.Load(paths));
+            session.OpenAsync(gui.Client, false, null).GetAwaiter().GetResult();
+            var main = new MainViewModel(session);
+            var sp = new BrowserViewModel(session, main).Spells;
+            var a = sp.EnsureLoadedAsync();
+            var b = sp.EnsureLoadedAsync();
+            Assert.Same(a, b);
+            a.GetAwaiter().GetResult();
+            Assert.NotNull(sp.Session);
+            Assert.Same(sp.Session, sp.Designer!.Session);
+            var first = sp.Session;
+            sp.EnsureLoadedAsync().GetAwaiter().GetResult();
+            Assert.Same(first, sp.Session);
+        });
     }
 }
 

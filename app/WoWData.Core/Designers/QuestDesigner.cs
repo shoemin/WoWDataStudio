@@ -605,6 +605,7 @@ public sealed partial class QuestDesigner
                 return DesignResult.Done("The reward spell was removed.");
             }
             if (!Spells.Exists(spell)) return DesignResult.Refused($"There is no spell {spell} in the game's Spell.dbc.");
+            if (!SpellIdLimits.Castable(spell)) return DesignResult.Refused(SpellIdLimits.Problem(spell));
             long cast = 0;
             string extra = "";
             if (learn)
@@ -662,6 +663,9 @@ public sealed partial class QuestDesigner
         else lines.Add("4. The quest has no giver yet: give it one, or add it directly:");
         lines.Add($"5. Or add the quest directly to the selected player (or yourself): .quest add {quest}");
         lines.Add($"   Done at once: .quest complete {quest}   Start again: .quest remove {quest}   Find it: .lookup quest {s.Title}");
+        // 0.13.2 (found in game): VMaNGOS gives .quest add / .quest complete to administrators only (SEC_BASIC_ADMIN = 4);
+        // a game master (3) gets "There is no such subcommand" and sees only status and remove
+        lines.Add("   (.quest add and .quest complete need an administrator account, GM level 4 or higher; a game master (level 3) has only .quest status and .quest remove: select each creature to kill and type .damage 100000, which counts as your kill.)");
         if (s.Prev != 0) lines.Add($"   It needs \"{Title(Math.Abs(s.Prev))}\" ({Math.Abs(s.Prev)}) {(s.Prev > 0 ? "done" : "in the quest log")} first: .quest add {Math.Abs(s.Prev)} then .quest complete {Math.Abs(s.Prev)}.");
         var ender = Enders(quest).FirstOrDefault(x => x.Kind == "creature");
         if (ender != null && ender.Id != g?.Id) lines.Add($"6. Hand it in to {ender.Name}: .go creature id {ender.Id}");

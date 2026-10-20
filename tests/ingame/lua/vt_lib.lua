@@ -84,3 +84,44 @@ function VT_Icons(list)
   end
   f:Show()
 end
+-- 2026-10-16 (designers test, second run): helpers the first run lacked.
+-- GetItemCount does not exist in the 1.12 API: count an item in the backpack and the four bags.
+function VT_ItemCount(id)
+  local n = 0
+  for b = 0, 4 do
+    for s = 1, (GetContainerNumSlots(b) or 0) do
+      local link = GetContainerItemLink(b, s)
+      if link then
+        local _, _, iid = string.find(link, 'item:(%d+)')
+        if tonumber(iid) == id then local _, c = GetContainerItemInfo(b, s); n = n + (c or 1) end
+      end
+    end
+  end
+  return n
+end
+function VT_FreeSlots()
+  local n = 0
+  for b = 0, 4 do for s = 1, (GetContainerNumSlots(b) or 0) do if not GetContainerItemLink(b, s) then n = n + 1 end end end
+  return n
+end
+-- a live unit of that name targeted?
+function VT_Live(name) return UnitExists('target') and UnitName('target') == name and not UnitIsDead('target') end
+-- the last error message of the game ("Target needs to be in front of you", "Out of range" ...), from VT_Events' frame
+VT_LastError = nil
+function VT_TrackErrors()
+  if VTErrFrame then return end
+  VTErrFrame = CreateFrame('Frame', 'VTErrFrame')
+  VTErrFrame:RegisterEvent('UI_ERROR_MESSAGE')
+  VTErrFrame:SetScript('OnEvent', function() VT_LastError = arg1 end)
+end
+-- a GM command typed into the chat (the test account is a game master on this realm): logged, then sent
+function VT_Gm(cmd) SC_Note('GM command: ' .. cmd); SendChatMessage(cmd, 'SAY') end
+-- the fallback when TargetNearestEnemy found nothing: the nearest unit of that name (TargetByName), kept only when alive
+-- and within 28 yd (CheckInteractDistance 4); returns true when a live one is targeted
+function VT_TargetByNameLive(name)
+  ClearTarget(); TargetByName(name)
+  if VT_Live(name) and CheckInteractDistance('target', 4) then SC_Note('targeted by name: ' .. name); return true end
+  if UnitExists('target') then SC_Note('by name: ' .. tostring(UnitName('target')) .. ' dead=' .. tostring(UnitIsDead('target')) .. ' near=' .. tostring(CheckInteractDistance('target', 4))) end
+  ClearTarget()
+  return false
+end

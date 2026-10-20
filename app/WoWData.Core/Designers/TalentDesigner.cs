@@ -166,7 +166,67 @@ public sealed class TalentDesigner
         long id = Talents.Key(row)!.Value;
         Place(row, tier, column);
         SetRanksCore(row, ranks);
+        KeepWithTree(row, tab);
         return id;
+    }
+
+    /// <summary>
+    /// 0.13.2: a new talent's row goes right after the other rows of its tree. The 1.12 client reads a tree's talents as
+    /// ONE run of consecutive Talent.dbc rows: each time the tree ID changes from one row to the next it starts the tree
+    /// again at that row (TalentInfo_Initialize @004f2c00), so a row added at the end of the file (the next free ID) made
+    /// the game show only that talent in its tree (found in game, 0.13.1).
+    /// </summary>
+    private void KeepWithTree(DbcRow row, long tab)
+    {
+        var t = Talents;
+        var tabCol = t.Layout.Column("TabID")!;
+        int last = -1;
+        for (int i = 0; i < t.Rows.Count; i++)
+            if (!ReferenceEquals(t.Rows[i], row) && t.Number(t.Rows[i], tabCol) == tab) last = i;
+        if (last < 0) return;   // the first talent of a new tree: anywhere is one run
+        int from = t.Rows.IndexOf(row);
+        int to = from < last ? last : last + 1;   // the index right after the tree's last row, once this row is taken out
+        Session.Session("Talent").Editor.MoveRow(row, to, $"Talent {t.Key(row)}: next to the other talents of tree {tab}");
+    }
+
+    /// <summary>
+    /// The trees whose Talent.dbc rows are not one run of consecutive rows: (tree, number of runs). The game shows only
+    /// the LAST run of such a tree.
+    /// </summary>
+    public List<(long Tab, int Runs, int Shown, int Total)> SplitTrees()
+    {
+        var t = Talents;
+        var tabCol = t.Layout.Column("TabID")!;
+        var runs = new List<(long Tab, int Count)>();
+        foreach (var r in t.Rows)
+        {
+            long tab = t.Number(r, tabCol);
+            if (runs.Count > 0 && runs[^1].Tab == tab) runs[^1] = (tab, runs[^1].Count + 1);
+            else runs.Add((tab, 1));
+        }
+        return runs.GroupBy(x => x.Tab).Where(g => g.Count() > 1)
+            .Select(g => (g.Key, g.Count(), g.Last().Count, g.Sum(x => x.Count))).ToList();
+    }
+
+    /// <summary>
+    /// 0.13.2: put every tree's Talent.dbc rows together again (each tree where its first row is, the rows in their
+    /// order); the talent designer's Save does this. Returns how many rows moved.
+    /// </summary>
+    public int RegroupTrees()
+    {
+        if (SplitTrees().Count == 0) return 0;
+        var t = Talents;
+        var tabCol = t.Layout.Column("TabID")!;
+        var order = t.Rows.GroupBy(r => t.Number(r, tabCol)).SelectMany(g => g).ToList();   // groups in order of first appearance
+        var editor = Session.Session("Talent").Editor;
+        int moved = 0;
+        for (int i = 0; i < order.Count; i++)
+        {
+            if (ReferenceEquals(t.Rows[i], order[i])) continue;
+            editor.MoveRow(order[i], i, $"Talent {t.Key(order[i])}: next to the other talents of tree {t.Number(order[i], tabCol)}");
+            moved++;
+        }
+        return moved;
     }
 
     private void Place(DbcRow row, int tier, int column)
@@ -294,6 +354,9 @@ public sealed class TalentDesigner
         }
         else Add(DesignSeverity.Warning, "Tree", "No background picture (Interface\\TalentFrame\\<name>).");
         if (tree.Talents.Count > MaxTalents) Add(DesignSeverity.Error, "Talents", $"{tree.Talents.Count} talents: the 1.12 talent frame shows at most {MaxTalents} per tree (MAX_NUM_TALENTS).");
+        foreach (var split in SplitTrees().Where(x => x.Tab == tab))
+            Add(DesignSeverity.Warning, "Talents", $"The tree's rows in Talent.dbc are in {split.Runs} separate groups: the game shows only the last group " +
+                $"({split.Shown} of {split.Total} talents). Save with the talent designer to put them together.");
 
         var byId = tree.Talents.ToDictionary(n => n.Id);
         var cells = new Dictionary<(int, int), TalentNode>();
@@ -408,6 +471,9 @@ public sealed class TalentDesigner
 
     public DesignSaveResult Save(string? label = null, bool force = false)
     {
+        // 0.13.2: every tree's rows together (the game reads a tree as one run of rows); also repairs a Talent.dbc saved
+        // by 0.12.0-0.13.1, whose new talents went to the end of the file
+        int regrouped = Session.IsOpen("Talent") ? RegroupTrees() : 0;
         if (!force)
         {
             var tabs = Session.IsOpen("TalentTab") ? Tabs.Rows.Select(r => Tabs.Key(r)!.Value) : Enumerable.Empty<long>();
@@ -418,7 +484,9 @@ public sealed class TalentDesigner
             errors.AddRange(Spells.Touched.Where(Spells.Exists).SelectMany(id => Spells.Check(id).Where(p => p.IsError).Select(p => $"{Spells.Title(id)}: {p.Text}")));
             if (errors.Count > 0) throw new DesignException($"Not saved: {errors.Count} problem(s):\n" + string.Join("\n", errors.Take(10)));
         }
-        return Spells.Save(label ?? "Talent designer", force: true);
+        var res = Spells.Save(label ?? "Talent designer", force: true);
+        if (regrouped > 0) res.Notes.Add($"Talent.dbc: {regrouped} row(s) moved next to the other talents of their tree (the game reads each tree as one group of rows).");
+        return res;
     }
 
     /// <summary>Is the tree new or changed in this session (compared with the game's tables)?</summary>

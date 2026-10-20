@@ -41,7 +41,12 @@ prerequisites.
 3. To make the rank spells, use **Make rank spells**: a **Template spell ID** (a spell to copy, for example a passive
    talent spell of the class), a **Name**, the number of **Ranks** and the **Values per rank** (`1,2,3,4,5`: the value
    of effect 1 in each rank). Click **Make rank spells**: the spells *Name (Rank 1)* ... are made with free IDs of your
-   custom range and their IDs are filled in. Then **Add talent here**.
+   spell ID range (35000-39999 by default; the server casts no spell above 40000) and their IDs are filled in. Then **Add talent here**.
+   The new talent's row goes into `Talent.dbc` right after the other talents of its tree: the 1.12 game reads each
+   tree as **one group of rows** that follow each other, and starts the tree again at every row where the tree changes,
+   so it shows only the last group (version 0.13.1 and older put a new talent at the end of the file, and the game then
+   showed only that talent in its tree). **Save to my workspace** puts the rows of every tree together again, also in a
+   `Talent.dbc` saved by an older version or edited row by row in the Data tables tab.
 4. For a talent, change its **Rank spells**, its **Prerequisite (talent ID:rank)** (for example `1705:1`: talent 1705
    at rank 1 must be learned first; empty = none), or its **Tier** and **Column** to move it, and click **Apply talent
    changes**. **Remove talent** removes it. **Open rank 1 in the Spell designer** opens its first rank spell to edit its
@@ -60,7 +65,9 @@ needs 5 points spent in the tree per row above it; trainers may not teach talent
 * a prerequisite in another tree, in a lower row, with a rank it does not have, or prerequisites that go in a circle;
 * an arrow that passes under another talent, a bent arrow (prerequisite in another column), too many arrow pieces;
 * a tier that cannot be reached (the rows above offer fewer than 5 points per row);
-* a missing icon or background picture.
+* a missing icon or background picture;
+* a tree whose rows in `Talent.dbc` are in separate groups (a warning: the game shows only the last group; **Save to my
+  workspace** puts them together).
 
 The 27 trees of the game itself pass the check without errors.
 

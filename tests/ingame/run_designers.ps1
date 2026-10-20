@@ -9,7 +9,9 @@
 #
 #   .\run_designers.ps1 -Run <run> -Plan      read-only: every safety check, then the steps it WOULD take (nothing is started or written)
 #   .\run_designers.ps1 -Run <run>            the real run (about 60-70 minutes)
-#   -States before,srvonly,loose,patch3,afterundo (default: all)   -Only q1,t1,c1,k1 (default: all viewpoints)
+#   -States before,srvonly,loose,patch3,afterundo (default: all)   -Only q1,t1,c1,k1 (default: all viewpoints; also by name:
+#   quest = q1, trainer = t1, cast = c1, talent = k1; e.g. -Only quest -> only the quest chain's sessions, with the whole apply / undo
+#   cycle and every safety check)
 # Watch run_designers.console.txt (tee the console there), never run_designers.log with a tool that holds it open.
 #
 # Steps: 1 safety checks + preflight (prepared items ok, dry run and restore test passed, server plan accepted)  2 snapshots (Client + Client1..6
@@ -24,6 +26,8 @@
 param([Parameter(Mandatory)][string]$Run, [switch]$Plan,
       [string[]]$States = @('before', 'srvonly', 'loose', 'patch3', 'afterundo'), [string[]]$Only = @())
 $ErrorActionPreference = 'Stop'
+# 2026-10-16: -Only by name as well (quest, trainer, cast, talent)
+$Only = @($Only | ForEach-Object { $_ -split ',' } | Where-Object { $_ } | ForEach-Object { switch ($_.Trim().ToLowerInvariant()) { 'quest' { 'q1' } 'trainer' { 't1' } 'cast' { 'c1' } 'talent' { 'k1' } default { $_.Trim() } } })
 $here = $PSScriptRoot
 $base = '<your WoW Custom Client folder>'
 $decomp = "$base\WoWDecomp"
@@ -146,7 +150,7 @@ function Restart-WorldServer([string]$why) {
     Log ("world server up again after {0:N0} s" -f ((Get-Date) - $t0).TotalSeconds)
     # what the server said about the test rows at start (its log folder): a quest, trainer or spell row it refused shows here
     foreach ($lf in Get-ChildItem "$base\Server\logs" -File -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -gt $t0 }) {
-        $hits = @(Select-String -LiteralPath $lf.FullName -Pattern '\b9000\d\d\b' -ErrorAction SilentlyContinue | Select-Object -First 30)
+        $hits = @(Select-String -LiteralPath $lf.FullName -Pattern '\b(9000\d\d|3[5-9]\d\d\d)\b' -ErrorAction SilentlyContinue | Select-Object -First 30)
         if ($hits.Count) { Log "  server log $($lf.Name) mentions the test IDs:"; $hits | ForEach-Object { Log "    $($_.Line)" } }
     }
 }
@@ -330,7 +334,8 @@ finally {
             if ($loose.Count) { Fail "loose files left in Client_visual\Data: $($loose.Count)" }
             if (-not (Test-Path "$base\Client\wowauto.txt")) { Fail 'Client\wowauto.txt is missing!' }
             if (-not $Plan) {
-                $n = (Q mangos 'select (select count(*) from spell_template where entry between 900000 and 999999) + (select count(*) from creature_template where entry between 900000 and 999999) + (select count(*) from quest_template where entry between 900000 and 999999) + (select count(*) from creature where guid between 900000 and 999999) + (select count(*) from npc_trainer where entry between 900000 and 999999)').Trim()
+                # 0.13.3: spells (and their skill line rows) in the spell ID range 35000-39999 too
+                $n = (Q mangos 'select (select count(*) from spell_template where entry between 900000 and 999999 or entry between 35000 and 39999) + (select count(*) from creature_template where entry between 900000 and 999999) + (select count(*) from quest_template where entry between 900000 and 999999) + (select count(*) from creature where guid between 900000 and 999999) + (select count(*) from npc_trainer where entry between 900000 and 999999) + (select count(*) from skill_line_ability where spell_id between 35000 and 39999)').Trim()
                 if ($n -ne '0') { Fail "test rows still on the server: $n" } else { Log '  no row of the custom ID range left on the server' }
             } } }
     )) {

@@ -20,6 +20,10 @@ or applied directly, backed up and undoable.
   else 10 (1.12).
 * **Custom ID range** (Settings): new items, creatures, quests... get the first free ID of this range (by default
   900000-999999), far from the IDs of the game's own content.
+* **Spell ID range** (Settings): a new `spell_template` row gets the first free ID of this range (by default
+  35000-39999). The VMaNGOS server casts no spell above 40000 (and the 1.12 game knows none above 65535), so the checks
+  show an error for a spell ID above 40000 in `spell_template`, quests (reward spell, spell cast on the player, source
+  spell), trainer rows, skill lines, starting spells, items and creatures.
 
 Click the **Server data** tab (or **Tools > Server data (world database)**). The top line says what it is connected to
 (*World database root@127.0.0.1:3306/mangos: mangos (VMaNGOS, schema migration ...)*), which content patch the server

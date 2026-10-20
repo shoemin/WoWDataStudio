@@ -132,9 +132,9 @@ internal static class SpellCommands
         yield return new CommandSpec
         {
             Path = "spells new",
-            Summary = "a new spell (instant, self, mana, on the global cooldown) with a free ID of your custom range, then --set fields; saved into the workspace (and the server's spell_template)",
+            Summary = "a new spell (instant, self, mana, on the global cooldown) with a free ID of your spell ID range (35000-39999 by default), then --set fields; saved into the workspace (and the server's spell_template)",
             Args = new[] { "<name>" },
-            Options = new[] { new OptionSpec("rank", "text", "the rank text (\"Rank 1\")"), new OptionSpec("id", "n", "this ID instead of the first free one of your custom range"), DesignerCli.SetOpt, Common.DryRun },
+            Options = new[] { new OptionSpec("rank", "text", "the rank text (\"Rank 1\")"), new OptionSpec("id", "n", "this ID (at most 40000) instead of the first free one of your spell ID range"), DesignerCli.SetOpt, Common.DryRun },
             Examples = new[] { "wds spells new \"Shadow Lance\" --rank \"Rank 1\" --set school=Shadow --set cast-time=2.5 --set range=30", "wds spells new Test --dry-run --json" },
             Run = async inv =>
             {
@@ -150,9 +150,9 @@ internal static class SpellCommands
         yield return new CommandSpec
         {
             Path = "spells clone",
-            Summary = "a copy of an existing spell (\"a spell like Shadow Bolt\") with a free ID of your custom range, a new name and rank, then --set fields; saved like spells new",
+            Summary = "a copy of an existing spell (\"a spell like Shadow Bolt\") with a free ID of your spell ID range, a new name and rank, then --set fields; saved like spells new",
             Args = new[] { "<source>" },
-            Options = new[] { new OptionSpec("name", "text", "the new spell's name"), new OptionSpec("rank", "text", "its rank text"), new OptionSpec("id", "n", "this ID instead of the first free one"), DesignerCli.SetOpt, Common.DryRun },
+            Options = new[] { new OptionSpec("name", "text", "the new spell's name"), new OptionSpec("rank", "text", "its rank text"), new OptionSpec("id", "n", "this ID (at most 40000) instead of the first free one"), DesignerCli.SetOpt, Common.DryRun },
             Examples = new[] { "wds spells clone 686 --name \"Shadow Lance\" --set cast-time=2 --set effect1-value=40-48", "wds spells clone 133 --name \"Blue Fireball\" --dry-run" },
             Run = async inv =>
             {
@@ -173,7 +173,7 @@ internal static class SpellCommands
             Args = new[] { "<spell>", "[field]", "[value]" },
             Options = new[] { DesignerCli.SetOpt, Common.DryRun },
             Details = "Fields are listed by \"wds spells fields\": cast-time 2.5 (seconds; \"instant\"), cooldown 8, range 30 (yards; \"self\", \"melee\", \"8-30\"), duration 18 (\"until cancelled\"), icon Spell_Shadow_ShadowBolt (a file name or a SpellIcon ID), effect1-value 10-20, effect1 \"School damage\", school Shadow, attributes \"+Passive\" (add a flag) ...",
-            Examples = new[] { "wds spells set 900000 cast-time 2", "wds spells set 900000 --set effect1-value=40-48 --set icon=Spell_Shadow_ShadowBolt" },
+            Examples = new[] { "wds spells set 35000 cast-time 2", "wds spells set 35000 --set effect1-value=40-48 --set icon=Spell_Shadow_ShadowBolt" },
             Run = async inv =>
             {
                 var r = new CliResult();
@@ -199,7 +199,7 @@ internal static class SpellCommands
             Path = "spells check",
             Summary = "what the 1.12 client or server cannot handle in a spell (errors), and what is probably a mistake (warnings), in plain words",
             Args = new[] { "<spells...>" },
-            Examples = new[] { "wds spells check 900000", "wds spells check 686 133 --json" },
+            Examples = new[] { "wds spells check 35000", "wds spells check 686 133 --json" },
             Run = async inv =>
             {
                 var r = new CliResult();
@@ -307,7 +307,7 @@ internal static class SpellCommands
                 new OptionSpec("find", "words", "list the visuals of spells with these words in their name (the picker)"),
                 Common.DryRun,
             },
-            Examples = new[] { "wds spells visual 686", "wds spells visual 900000 --use spell:686", "wds spells visual 900000 --missile spell:133 --impact spell:686", "wds spells visual 900000 --duplicate --tint #8040FF --scale 1.5", "wds spells visual 900000 --find frostbolt" },
+            Examples = new[] { "wds spells visual 686", "wds spells visual 35000 --use spell:686", "wds spells visual 35000 --missile spell:133 --impact spell:686", "wds spells visual 35000 --duplicate --tint #8040FF --scale 1.5", "wds spells visual 35000 --find frostbolt" },
             Run = async inv =>
             {
                 var r = new CliResult();
@@ -385,7 +385,7 @@ internal static class SpellCommands
                 new OptionSpec("remove-skill-line", "id", "take it out of this skill line"),
                 Common.DryRun,
             },
-            Examples = new[] { "wds spells learn 900000", "wds spells learn 900000 --trainer 3156 --level 20 --cost 25s", "wds spells learn 900000 --skill-line 355 --class Warlock" },
+            Examples = new[] { "wds spells learn 35000", "wds spells learn 35000 --trainer 3156 --level 20 --cost 25s", "wds spells learn 35000 --skill-line 355 --class Warlock" },
             Run = async inv =>
             {
                 var r = new CliResult();
@@ -440,7 +440,7 @@ internal static class SpellCommands
             Summary = "make the server's spell_template rows of spells match the game's Spell.dbc rows (after editing the game's side alone), saved into the workspace",
             Args = new[] { "<spells...>" },
             Options = new[] { Common.DryRun },
-            Examples = new[] { "wds spells sync 900000 900001", "wds spells sync 900000 --dry-run" },
+            Examples = new[] { "wds spells sync 35000 35001", "wds spells sync 35000 --dry-run" },
             Run = async inv =>
             {
                 var r = new CliResult();
@@ -457,6 +457,37 @@ internal static class SpellCommands
                 r.Line($"spell_template of {string.Join(", ", ids.Select(c.Spells.Title))} from the game's rows.");
                 if (inv.DryRun) c.Spells.SyncServer(ids);
                 return DesignerCli.Finish(inv, r, () => c.Spells.Save(), () => new { ids }, c.D);
+            },
+        };
+        yield return new CommandSpec
+        {
+            Path = "spells renumber",
+            Summary = "\"Change ID\": give a spell you made a usable ID (VMaNGOS casts no spell above 40000, the 1.12 game knows none above 65535): the first free one of the spell ID range or --to; its learn spells, skill lines, talents, quests and trainer rows follow; --all moves every spell of yours above 40000",
+            Args = new[] { "[spell]" },
+            Options = new[] { new OptionSpec("to", "n", "this ID (at most 40000) instead of the first free one of the spell ID range"), new OptionSpec("all", null, "every spell you made whose ID is above 40000 (taught spells first, then their learn spells)"), new OptionSpec("keep-learn-spells", null, "leave its learn spells where they are"), Common.DryRun },
+            Examples = new[] { "wds spells renumber 900000", "wds spells renumber 900000 --to 35010", "wds spells renumber --all --dry-run" },
+            Run = async inv =>
+            {
+                var r = new CliResult();
+                var c = await DesignerCli.Open(inv, r);
+                DesignResult res;
+                var before = c.Spells.UnusableSpells();
+                if (inv.Flag("all"))
+                {
+                    if (inv.Args.Count > 0 || inv.Opt("to") != null) throw new CliError(ExitCode.Usage, "--all moves every unusable spell: give no spell and no --to with it.");
+                    res = c.Spells.ChangeIds();
+                }
+                else
+                {
+                    if (inv.Args.Count == 0) throw new CliError(ExitCode.Usage, "Give the spell to renumber, or --all." + (before.Count > 0 ? $" Spells of yours above 40000: {string.Join(", ", before.Take(20))}." : ""));
+                    long id = DesignerCli.Id(inv, 0);
+                    DesignerCli.Guard(() => c.Spells.Row(id));
+                    res = c.Spells.ChangeId(id, inv.IntOpt("to"), !inv.Flag("keep-learn-spells"));
+                }
+                if (!res.Ok) throw new CliError(res.Message.StartsWith("There is no", StringComparison.Ordinal) ? ExitCode.NotFound : ExitCode.ValidationFailed, res.Message);
+                r.Line(res.Message);
+                var after = c.Spells.UnusableSpells();
+                return DesignerCli.Finish(inv, r, () => c.Spells.Save("Spell designer: new spell IDs"), () => new { message = res.Message, unusableBefore = before, unusableAfter = after }, c.D);
             },
         };
     }

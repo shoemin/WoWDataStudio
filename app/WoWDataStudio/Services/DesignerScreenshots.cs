@@ -116,7 +116,7 @@ internal static class DesignerScreenshots
         sp.NewName = "Shadow Lance";
         sp.NewRank = "Rank 1";
         await sp.CloneCommand.ExecuteAsync(null);
-        Expect(sp.CurrentId == 900000, $"designers: the clone gets the first free custom ID ({sp.CurrentId})");
+        Expect(sp.CurrentId == 35000, $"designers: the clone gets the first free ID of the spell ID range ({sp.CurrentId})");
         SpellFieldView F(string id) => sp.Groups.SelectMany(g => g.Fields).First(f => f.F.Id == id);
         sp.SetField(F("cast-time"), "2");
         sp.SetField(F("cooldown"), "6");
@@ -217,8 +217,8 @@ internal static class DesignerScreenshots
         // ---- 125: the Warlock's spells by level
         ct.SelectedClass = ct.Classes.First(c => c.Id == 9);
         win.BrowserScreen.ClassesScreen.ShowInnerTab(1);
-        ct.SelectedSpell = ct.Spells.FirstOrDefault(s => s.Spell == 900000);
-        Expect(ct.Spells.Any(s => s.Spell == 900000 && s.Level == 20 && s.Source == WoWData.Core.Designers.SpellSource.Trainer), "designers: Shadow Lance comes from Nartok at level 20");
+        ct.SelectedSpell = ct.Spells.FirstOrDefault(s => s.Spell == 35000);
+        Expect(ct.Spells.Any(s => s.Spell == 35000 && s.Level == 20 && s.Source == WoWData.Core.Designers.SpellSource.Trainer), "designers: Shadow Lance comes from Nartok at level 20");
         await ScreenshotRunner.Settle(800);
         await Shot(win, outDir, "125_class_spells_by_level");
 

@@ -53,6 +53,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     // server data (0.9.0)
     [ObservableProperty] private string _serverPatch = "";
     [ObservableProperty] private string _customIds = "";
+    /// <summary>0.13.3: the IDs new spells get (spell-ids).</summary>
+    [ObservableProperty] private string _spellIds = "";
 
     /// <summary>The server-data fields into <paramref name="s"/> (checked like "wds settings set"); the reason when one is
     /// not allowed.</summary>
@@ -62,6 +64,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             SettingsCatalog.Set(s, "server.patch", ServerPatch);
             SettingsCatalog.Set(s, "server.custom-ids", CustomIds);
+            SettingsCatalog.Set(s, "spell-ids", SpellIds);
             return null;
         }
         catch (ArgumentException e)
@@ -70,7 +73,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
-    public bool ServerDataChanged(AppSettings s) => SettingsCatalog.Get(s, "server.patch") != ServerPatch.Trim() || SettingsCatalog.Get(s, "server.custom-ids") != CustomIds.Trim();
+    public bool ServerDataChanged(AppSettings s) => SettingsCatalog.Get(s, "server.patch") != ServerPatch.Trim() || SettingsCatalog.Get(s, "server.custom-ids") != CustomIds.Trim() || SettingsCatalog.Get(s, "spell-ids") != SpellIds.Trim();
 
     // maps and terrain
     [ObservableProperty] private string _noggitPath = "";
@@ -143,6 +146,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _serverDataDir = settings.ServerDataDir ?? "";
         _serverPatch = SettingsCatalog.Get(settings, "server.patch");
         _customIds = SettingsCatalog.Get(settings, "server.custom-ids");
+        _spellIds = SettingsCatalog.Get(settings, "spell-ids");
         _hotReload = _hotReloadOriginal = SettingsCatalog.Get(settings, "hot-reload", clientDir) == "on";
         ValidateClient();
         CheckMaps();

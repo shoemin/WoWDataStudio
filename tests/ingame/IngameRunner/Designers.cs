@@ -18,6 +18,9 @@ namespace IngameRunner;
 ///   IngameRunner designers server  CLIENT HOME RUNDIR plan|apply|undo|status [--port N --user U --no-password --state DIR]
 ///   IngameRunner designers wdb     CLIENT HOME RUNDIR                 "Clear the game's cache (WDB)" of CLIENT
 ///   IngameRunner designers dryrun  CLIENT HOME RUNDIR DUMP.sql        apply + undo against a throwaway MySQL loaded from DUMP.sql
+///   IngameRunner designers regroup CLIENT HOME RUNDIR                 2026-10-16 (0.13.2): the talent designer's Save on the prepared workspace
+///                                                                     (puts every tree's Talent.dbc rows together again; see TalentDesigner.RegroupTrees)
+///   IngameRunner designers scenarios CLIENT HOME RUNDIR               2026-10-16: RUNDIR\lua\*.lua and sessions_designers.json again from ids.json
 /// Never writes the live database except "server apply" / "server undo" (the run script's two steps). The prepare only READS the
 /// live world database (the designers' server editor), as the app does.
 /// </summary>
@@ -41,8 +44,22 @@ public static class Designers
     // where (Kalimdor, Valley of Trials): the hunting spot P between four Mottled Boar spawns (4691 and 7979 in front, 18 and 22 yd, facing
     // north), the quest giver 3.5 yd west of P and the trainer 3.5 yd east of P (both inside the 5 yd interaction distance)
     public const double PX = -695.0, PY = -4300.0, GX = -695.0, GY = -4296.5, TX = -695.0, TY = -4303.5;
+    // 2026-10-16: the boars' viewpoint B (run 20261014_2308's hot reload and the 0.10 run's b1/s2: 16 yd west of Mottled Boar spawn 4691,
+    // facing east, where TargetNearestEnemy finds the boars). From P the boars are 18-40 yd away to the north-west and north-east: outside
+    // the game's TargetNearestEnemy area (41 yd ahead, 10 yd around: CVars targetNearestDistance / targetNearestDistanceRadius), so the
+    // first run's c1 and q1 targeted no boar. c1 starts at B; q1 goes there for the kills (".go xyzo", a GM command) and back to P.
+    public const string BoarView = "-682.7,-4271,39.3,4.712";
+    // the three boar viewpoints (".go xyzo X Y Z O"): 16 yd from Mottled Boar spawns 4691 (west of it, facing east: BoarView), 7979 (west of
+    // it, facing east) and 8547 (east of it, facing west); z = the ground (the game's map) + 0.5
+    static readonly (double X, double Y, double O)[] BoarViews = { (-682.7, -4271.0, 4.712), (-681.0, -4301.1, 4.712), (-715.9, -4299.8, 1.571) };
+    static string GoView(QuestDesigner qd, double x, double y, double o) =>
+        string.Format(CultureInfo.InvariantCulture, "{0:0.0} {1:0.0} {2:0.0} {3:0.000}", x, y, (qd.GroundHeight(1, x, y) ?? throw new InvalidOperationException($"no ground at {x} {y}")) + 0.5, o);
     public static readonly string[] AllowedTables =
-        { "spell_template", "creature_template", "creature", "npc_trainer", "quest_template", "creature_questrelation", "creature_involvedrelation" };
+        { "spell_template", "creature_template", "creature", "npc_trainer", "quest_template", "creature_questrelation", "creature_involvedrelation", "skill_line_ability" };
+    /// <summary>0.13.3: the app's spell ID range (new spells; VMaNGOS casts no spell above 40000).</summary>
+    public const long SpellStart = 35000, SpellEnd = 39999;
+    /// <summary>The highest SkillLineAbility ID of the game and the server as shipped (a new skill line row comes after it).</summary>
+    public const long LastStockSkillLineAbility = 15030;
 
     static string LuaDir => Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, @"..\..\..\..\lua\designers"));
 
@@ -57,6 +74,9 @@ public static class Designers
             "server" => V010.Server(client, home, run, a.Skip(5).ToArray(), Safety),
             "wdb" => V010.Wdb(client, home, run),
             "dryrun" => DryRun(client, home, run, a[5]),
+            "regroup" => Regroup(client, home, run),
+            "learnfix" => LearnFix(client, home, run),
+            "scenarios" => Scenarios(client, home, run),
             "chartest" => CharTest(run, a[5]),
             _ => throw new ArgumentException("unknown designers command " + sub),
         };
@@ -88,7 +108,7 @@ public static class Designers
     {
         var svc = _s.ServerData ?? throw new InvalidOperationException("no server data service");
         _ = svc.Schema;   // the server database must be reachable (the designers then edit both sides)
-        var d = new DesignSession(_s.Dbc ?? throw new InvalidOperationException("no data tables"), svc.NewEditor(), (_s.Settings.ServerCustomIdStart, _s.Settings.ServerCustomIdEnd));
+        var d = new DesignSession(_s.Dbc ?? throw new InvalidOperationException("no data tables"), svc.NewEditor(), (_s.Settings.ServerCustomIdStart, _s.Settings.ServerCustomIdEnd), null, (_s.Settings.SpellIdStart, _s.Settings.SpellIdEnd));
         return (d, new SpellDesigner(d));
     }
 
@@ -102,6 +122,8 @@ public static class Designers
         var svc = _s.ServerData ?? throw new InvalidOperationException("no server data service");
         var (cs, ce) = svc.CustomIds;
         if (cs != 900000 || ce < 900100) throw new InvalidOperationException($"custom ID range is {cs}-{ce}, expected 900000-999999");
+        // 0.13.3: spells come from the spell ID range (VMaNGOS casts no spell above 40000)
+        if (svc.SpellIds != (SpellStart, SpellEnd)) throw new InvalidOperationException($"spell ID range is {svc.SpellIds.Start}-{svc.SpellIds.End}, expected {SpellStart}-{SpellEnd}");
         // a fresh start in this (isolated) workspace: every earlier edit of an earlier prepare is reverted
         foreach (var v in Ws.List().ToList()) Ws.Revert(v.Record.Path);
         Console.WriteLine($"workspace reset: {Ws.List().Count} changes left");
@@ -216,6 +238,8 @@ public static class Designers
         var add = sp.AddToTrainer(id, tEntry.ToString(CultureInfo.InvariantCulture), TrainerLevel, TrainerCost);
         Need(r, add, $"Add to trainer {tEntry}");
         _ids.Learn = sp.LearnSpellsOf(id).FirstOrDefault();
+        // 0.13.3: a skill line (the Warlock's Destruction, 593), so the class trainer's window lists the spell (TrainerFrame_SetServices)
+        Need(r, sp.AddSkillLine(id, 593, 0x100), "Add to skill line Destruction (Warlock)");
         foreach (var t in sp.Trainers(id)) r.Compare.Add($"trainer entry: {t.Table} {t.Key}: {t.TrainerName} teaches learn spell {t.LearnSpell} -> {t.Spell} at level {t.Level} for {SpellDesigner.Money(t.Cost)}");
         // what the tab shows: the tooltip preview, the checks, the changed fields against the original
         r.Compare.Add("tooltip preview: " + sp.Tooltip(id).Text.Replace("\n", " / "));
@@ -354,7 +378,8 @@ public static class Designers
     // ------------------------------------------------------------------ the run's safety rule for the server
 
     /// <summary>Only NEW rows, only in the tables the three items need, and every key in the custom ID range 900000-999999 (a
-    /// quest relation's or trainer row's key is two custom IDs: NPC + quest / NPC + learn spell). Nothing else is ever applied.</summary>
+    /// quest relation's or trainer row's key is two custom IDs: NPC + quest / NPC + learn spell); since 0.13.3 spell IDs in the
+    /// spell ID range 35000-39999 and a new skill line row after the game's own. Nothing else is ever applied.</summary>
     public static List<string> Safety(ServerDataService svc, ServerApplyPlan plan)
     {
         var bad = new List<string>();
@@ -365,8 +390,18 @@ public static class Designers
             foreach (var r in ch.Rows.Values)
             {
                 if (!r.IsAdded) { bad.Add($"{ch.Table.Name} {r.Key}: {r.KindText} (only new rows are allowed)"); continue; }
-                var ids = ch.Table.Key.Where(k => !skip.Contains(k)).Select(k => WorldValue.Long(r.After![ch.Table.IndexOf(k)])).ToList();
-                if (ids.Count == 0 || ids.Any(i => i < 900000 || i > 999999)) bad.Add($"{ch.Table.Name} {r.Key}: key outside the custom ID range 900000-999999");
+                // 0.13.3: a spell ID column holds an ID of the spell ID range; a new skill line row an ID after the game's own
+                bool SpellCol(string k) => ch.Table.Name == "spell_template" && k.Equals("entry", StringComparison.OrdinalIgnoreCase) || ch.Table.Name == "npc_trainer" && k.Equals("spell", StringComparison.OrdinalIgnoreCase);
+                var keys = ch.Table.Key.Where(k => !skip.Contains(k)).Select(k => (k, v: WorldValue.Long(r.After![ch.Table.IndexOf(k)]))).ToList();
+                if (ch.Table.Name == "skill_line_ability")
+                {
+                    if (keys.Any(x => x.v <= LastStockSkillLineAbility || x.v > 65535)) bad.Add($"{ch.Table.Name} {r.Key}: not a new skill line row (after {LastStockSkillLineAbility}, at most 65535)");
+                    long sid = WorldValue.Long(r.After![ch.Table.IndexOf("spell_id")]);
+                    if (sid < SpellStart || sid > SpellEnd) bad.Add($"{ch.Table.Name} {r.Key}: spell {sid} outside the spell ID range {SpellStart}-{SpellEnd}");
+                    continue;
+                }
+                if (keys.Count == 0 || keys.Any(x => SpellCol(x.k) ? x.v < SpellStart || x.v > SpellEnd : x.v < 900000 || x.v > 999999))
+                    bad.Add($"{ch.Table.Name} {r.Key}: key outside the custom ID range 900000-999999 (spells: the spell ID range {SpellStart}-{SpellEnd})");
             }
         }
         foreach (var c in plan.Conflicts) bad.Add("conflict: " + c);
@@ -482,11 +517,83 @@ public static class Designers
         {
             new { key = "q1", lua = "d_quest.lua", pos, camera = "9,12", stay = 230, why = "Q1: the giver's '!', the quest texts ($N / $c), the kills tracked, turn-in, the follow-up, the rewards (S1 learned, apples)" },
             new { key = "t1", lua = "d_trainer.lua", pos, camera = "6,10", stay = 170, why = "S1: the test trainer lists the spell (name, icon, cost); bought; the spell book and tooltip" },
-            new { key = "c1", lua = "d_cast.lua", pos, camera = "10,14", stay = 190, why = "S1: cast on Mottled Boars: the green x1.5 Fireball-shaped missile and impact (frame series), the damage in the combat log" },
+            new { key = "c1", lua = "d_cast.lua", pos = BoarView, camera = "10,14", stay = 190, why = "S1: cast on Mottled Boars: the green x1.5 Fireball-shaped missile and impact (frame series), the damage in the combat log" },
             new { key = "k1", lua = "d_talent.lua", pos, camera = "6,10", stay = 150, why = "T1: the Destruction tree: the new talent at tier 1 column 1, Shadowburn moved up, the tooltips" },
         };
         File.WriteAllText(Path.Combine(run, "sessions_designers.json"), JsonSerializer.Serialize(vps, J));
         Console.WriteLine($"viewpoints: {Path.Combine(run, "sessions_designers.json")} (P on the ground at z {z - 0.5:0.##})");
+    }
+
+    /// <summary>2026-10-16: the scenarios (and the viewpoints' boar position for c1) again, from RUNDIR\ids.json (no app step).</summary>
+    static int Scenarios(string client, string home, string run)
+    {
+        _ids = JsonSerializer.Deserialize<Ids>(File.ReadAllText(Path.Combine(run, "ids.json"))) ?? throw new InvalidOperationException("no ids.json");
+        _s = V010.Open(client, home);
+        WriteLua(run);
+        _s.Dispose();
+        var path = Path.Combine(run, "sessions_designers.json");
+        var vps = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!.AsArray();
+        foreach (var vp in vps)
+            if ((string?)vp!["key"] == "c1") vp["pos"] = BoarView;
+        File.WriteAllText(path, vps.ToJsonString(J));
+        Console.WriteLine($"viewpoints: {path} (c1 at the boars' viewpoint {BoarView})");
+        return 0;
+    }
+
+    /// <summary>
+    /// 2026-10-16 (0.13.2): the talent designer's Save on the prepared workspace, as a user of 0.13.2 does with a Talent.dbc
+    /// saved by 0.12.0-0.13.1: Check of the tree (the warning), Save (the rows of every tree together again), the result.
+    /// </summary>
+    static int Regroup(string client, string home, string run)
+    {
+        _run = run;
+        _s = V010.Open(client, home);
+        var (d, sp) = NewDesign();
+        var td = new TalentDesigner(d, sp);
+        string Runs()
+        {
+            var t = d.Table("Talent");
+            var col = t.Layout.Column("TabID")!;
+            var idx = t.Rows.Select((r, i) => (Tab: t.Number(r, col), i)).Where(x => x.Tab == TalentTree).Select(x => x.i).ToList();
+            return $"tree {TalentTree} rows at {string.Join(",", idx)} of {t.Rows.Count}";
+        }
+        Console.WriteLine("before: " + Runs() + "; split trees: " + string.Join("; ", td.SplitTrees().Select(x => $"{x.Tab}: {x.Runs} groups, the game shows {x.Shown} of {x.Total}")));
+        foreach (var p in td.Check(TalentTree).Where(p => p.Field == "Talents")) Console.WriteLine("check: " + p.Text);
+        var res = td.Save("Talent designer (0.13.2): trees together");
+        Console.WriteLine("save: " + res.Message);
+        Console.WriteLine("after: " + Runs() + "; split trees: " + td.SplitTrees().Count);
+        Console.WriteLine(td.Grid(TalentTree));
+        bool ok = td.SplitTrees().Count == 0;
+        _s.Dispose();
+        return ok ? 0 : 1;
+    }
+
+    /// <summary>
+    /// 2026-10-16: run 2 found that the quest reward did not teach S1 (the character got 900000 and 900001 only as disabled
+    /// spells). The learn spell made by 0.12.0-0.13.1 differs from the game's own learn spells in effect 1's target
+    /// ("Unit" 25 instead of none) and its range ("self" instead of 100 yards). This sets those two with the spell
+    /// designer (the user's way: Effect 1 > Target, Range) and saves (the server's row follows), for run 3.
+    /// </summary>
+    static int LearnFix(string client, string home, string run)
+    {
+        _run = run;
+        _ids = JsonSerializer.Deserialize<Ids>(File.ReadAllText(Path.Combine(run, "ids.json"))) ?? throw new InvalidOperationException("no ids.json");
+        _s = V010.Open(client, home);
+        var (d, sp) = NewDesign();
+        long l = _ids.Learn;
+        Console.WriteLine($"before: effect1-target-a {sp.Show(l, "effect1-target-a")}, range {sp.Show(l, "range")}, description [{sp.Show(l, "description")}]");
+        foreach (var (f, v) in new[] { ("effect1-target-a", "0"), ("range", "100"), ("description", "") })
+        {
+            var r = sp.Set(l, f, v);
+            Console.WriteLine($"set {f} = {v}: {r.Message}");
+            if (!r.Ok) { _s.Dispose(); return 1; }
+        }
+        foreach (var p in sp.Check(l)) Console.WriteLine("check: " + p.Text);
+        var res = sp.Save("Spell designer: learn spell like the game's own (target none, 100 yards)");
+        Console.WriteLine("save: " + res.Message);
+        Console.WriteLine($"after: effect1-target-a {sp.Show(l, "effect1-target-a")}, range {sp.Show(l, "range")}");
+        _s.Dispose();
+        return 0;
     }
 
     /// <summary>The scenarios with this run's IDs and names filled in (tests\ingame\lua\designers\*.lua -> RUNDIR\lua\).</summary>
@@ -503,6 +610,12 @@ public static class Designers
             ["__ITEM__"] = RewardItem.ToString(CultureInfo.InvariantCulture), ["__ITEMCOUNT__"] = RewardCount.ToString(CultureInfo.InvariantCulture),
             ["__COST__"] = TrainerCost.ToString(CultureInfo.InvariantCulture),
         };
+        // 2026-10-16: P (".go xyzo" back to the giver) and the three boar viewpoints
+        var (vd, vsp) = NewDesign();
+        var qd = new QuestDesigner(vd, vsp);
+        tokens["__P__"] = GoView(qd, PX, PY, 0.0);
+        for (int i = 0; i < BoarViews.Length; i++) tokens[$"__B{i + 1}__"] = GoView(qd, BoarViews[i].X, BoarViews[i].Y, BoarViews[i].O);
+        foreach (var k in new[] { "__P__", "__B1__", "__B2__", "__B3__" }) Console.WriteLine($"  {k} = .go xyzo {tokens[k]}");
         foreach (var f in Directory.EnumerateFiles(LuaDir, "*.lua"))
         {
             var text = File.ReadAllText(f);

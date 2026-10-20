@@ -476,18 +476,18 @@ designer made. Until then the new class's rows do nothing.
 
 *Status:* open (the class designer is experimental: it makes the data only).
 
-### The designers were not tried in the running game
+### Talent rows added in the Data tables tab can hide the rest of a tree
 
-*What happens:* the spells, trainers, skill lines, talent trees and visual copies the designers make are checked against
-the 1.12 client's code (our decompile), its talent frame and the VMaNGOS source, and tested against the game's tables and
-throwaway server databases, but not yet in the running game with a running server.
+*What happens:* the game reads each talent tree as one group of rows that follow each other in `Talent.dbc`. A row added
+in the Data tables tab goes to the end of the file, so its tree then shows only that talent in the game. The talent
+designer keeps the rows together (0.13.2) and its check warns, but the Data tables tab does not know this rule.
 
-*Who is affected:* everyone who uses the designers.
+*Who is affected:* anyone who adds talents in the Data tables tab instead of the talent designer.
 
-*Workaround:* test a designed spell or tree in the game (Test in game or the release patch, Apply to server, restart the
-world server) before you build on it.
+*Workaround:* add talents with **Classes and talents**; or open the tree there after editing and click **Save to my
+workspace** (it puts every tree's rows together again).
 
-*Status:* open (an in-game test is planned).
+*Status:* open.
 
 ### A duplicated visual's tint and size are an approximation
 
@@ -539,20 +539,34 @@ the server)*, and trainers cannot be added.
 
 ## Quest-chain designer
 
-### The quest designer was not tried in the running game
+### Only a simple chain was tried in the running game
 
-*What happens:* the chains, NPCs, talk options, area triggers and reward spells the Quest chains tab makes are checked
-against VMaNGOS's source (`ObjectMgr::LoadQuests`, the quest prerequisite and exclusive-group rules, the gossip and talk
-credit) and the 1.12 client's code (the quest cache and the quest window), and tested against throwaway server
-databases with real chains (the Whirlwind weapon, the Dreadsteed), but not yet in the running game with a running
-server.
+*What happens:* the first test in the running game (VMaNGOS, 2026-10-16) tried a two-quest chain with a new quest giver:
+the giver's `!` and `?`, the texts with `$N` / `$c` / `$B` filled in, the quest log, the kill objective counted and
+tracked, the turn-in, the next quest offered at once (next in chain), the money and item rewards: all as designed. A
+reward spell was shown but not learned: the spell IDs, fixed in 0.13.3 and tried in the game (the reward spell is learned
+at the turn-in). Branches,
+exclusive groups, talk and explore objectives, object givers and breadcrumbs were tested only against throwaway server
+databases, not in the game yet.
 
-*Who is affected:* everyone who builds quest chains.
+*Who is affected:* everyone who builds bigger chains.
 
 *Workaround:* apply the chain, clear the game's cache and try it with a GM character (**Test in game** lists the
 commands) before you build on it.
 
-*Status:* open (an in-game test is planned).
+*Status:* open.
+
+### A new quest giver copies the AI name of the NPC it looks like
+
+*What happens:* **New quest giver** copies the creature it looks like (Gornek in the test), with its AI name
+(`ai_name` `EventAI`), but not that creature's AI events. The world server then logs *CreatureEventAI: EventMap for Creature N is
+empty but creature is using CreatureEventAI* at start. The NPC works as a quest giver; it only does nothing on its own.
+
+*Who is affected:* everyone who makes a quest giver from a scripted NPC.
+
+*Workaround:* none needed; or clear `ai_name` of the new NPC in the Server data tab.
+
+*Status:* open.
 
 ### Hostile and friendly NPCs are worked out from the faction tables only
 

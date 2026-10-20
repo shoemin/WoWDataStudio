@@ -57,10 +57,21 @@
                     <TextBox Text="{Binding NewRank, UpdateSourceTrigger=PropertyChanged}" />
                     <WrapPanel Margin="0,8,0,0">
                         <Button Content="New spell" Command="{Binding NewSpellCommand}" Style="{StaticResource ToolButton}"
-                                ToolTip="A new, empty spell (instant, self, mana) with the first free ID of your custom ID range." />
+                                ToolTip="A new, empty spell (instant, self, mana) with the first free ID of your spell ID range (Settings; 35000-39999 by default)." />
                         <Button Content="Clone this spell" Command="{Binding CloneCommand}" Style="{StaticResource ToolButton}"
                                 ToolTip="A copy of the selected spell (every value, the icon and the visual) with a new ID and the new name." />
                     </WrapPanel>
+                    <TextBlock Text="New ID" FontWeight="SemiBold" Margin="0,4,0,2" />
+                    <TextBox Text="{Binding NewId, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="The ID &quot;Change ID&quot; gives the open spell: at most 40000. Empty: the first free ID of your spell ID range (Settings)." />
+                    <WrapPanel Margin="0,8,0,0">
+                        <Button Content="Change ID" Command="{Binding ChangeIdCommand}" Style="{StaticResource ToolButton}"
+                                ToolTip="Give the open spell (one you made) a new ID; its learn spells, skill lines, talents, quests and trainer rows follow. The VMaNGOS server casts no spell above 40000." />
+                        <Button Content="Fix all spell IDs" Command="{Binding FixAllIdsCommand}" Style="{StaticResource ToolButton}"
+                                ToolTip="Give every spell you made with an ID above 40000 a free ID of your spell ID range (taught spells first, then their learn spells)." />
+                    </WrapPanel>
+                    <TextBlock Text="{Binding UnusableText}" Foreground="{StaticResource Bad}" FontSize="12" TextWrapping="Wrap"
+                               Visibility="{Binding HasUnusable, Converter={StaticResource BoolVis}}" />
                 </StackPanel>
                 <ListBox ItemsSource="{Binding Results}" SelectedItem="{Binding SelectedResult}" DisplayMemberPath="Text" Margin="0,6,0,0" MouseDoubleClick="Results_DoubleClick" />
             </DockPanel>

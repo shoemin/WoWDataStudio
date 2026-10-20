@@ -166,6 +166,26 @@ public sealed class DbcEditor
         return copy;
     }
 
+    /// <summary>
+    /// 0.13.2: move a row to another place in the file (one undo step); <paramref name="index"/> is its index after the
+    /// move. The order of rows matters to the game for some tables: the 1.12 client reads each talent tree's Talent.dbc
+    /// rows as ONE run of consecutive rows (TalentInfo_Initialize), so the talent designer keeps a tree's rows together.
+    /// </summary>
+    public void MoveRow(DbcRow row, int index, string label)
+    {
+        int from = Table.Rows.IndexOf(row);
+        if (from < 0) throw new DbcException("The row is not in the table.");
+        index = Math.Clamp(index, 0, Table.Rows.Count - 1);
+        if (index == from) return;
+        Table.Rows.RemoveAt(from);
+        Table.Rows.Insert(index, row);
+        Table.Touch();
+        var ch = new DbcRowsChange { Label = label };
+        ch.Removed.Add((row, from));
+        ch.Added.Add((row, index));
+        Push(ch);
+    }
+
     public void DeleteRows(IEnumerable<DbcRow> rows, string label)
     {
         var set = rows.ToHashSet();

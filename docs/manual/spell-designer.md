@@ -38,9 +38,53 @@ models, and **Learning** (trainers and skill lines).
    copied: costs, cast time, range, the three effects, the icon, the visual. The server-only values (the spell power
    coefficient, VMaNGOS's own flags) come from the server's row of the original.
 
-*New spells get their ID from your custom ID range* (**Custom ID range** in [Settings](settings.md); 900000-999999
-by default): the first ID that neither the game's `Spell.dbc` nor the server's `spell_template` uses. The helper rows a
-spell needs (a new cast time, a new range...) get the next free ID of their own small table.
+*New spells get their ID from your spell ID range* (**Spell ID range** in [Settings](settings.md); 35000-39999 by
+default): the first ID that neither the game's `Spell.dbc` nor the server's `spell_template` uses. Spells do not use the
+**Custom ID range** of the other rows (900000-999999): see [Spell IDs](#spell-ids-what-the-game-and-the-server-accept).
+The helper rows a spell needs (a new cast time, a new range...) get the next free ID of their own small table.
+
+## Spell IDs: what the game and the server accept
+
+A spell can only be learned and used when its ID is *40000 or lower*:
+
+* The VMaNGOS world server never casts a spell above 40000. Its spell code stops at once, without a message in its log,
+  when the ID is above its limit (`MAX_SPELL_ID` 40000). Every way of learning a spell in the game *casts* a learn spell:
+  the quest giver casts it when you hand in the quest, the trainer casts it when you buy the spell, and the spell itself
+  is cast when you use it. So a learn spell above 40000 teaches nothing, and a spell above 40000 does nothing, also when
+  a creature, an item or another spell casts it.
+* The 1.12 game cannot know a spell above 65535 at all: the messages that put a spell into the spell book carry the ID in
+  16 bits, so spell 900000 arrives as spell 48032 (which does not exist) and nothing appears.
+* The game's own spells end at 33392, so 35000-39999 is free in the game and on the server.
+
+Versions 0.12.0 to 0.13.2 gave new spells IDs from 900000. Such spells (and their learn spells) cannot work: the checks
+show an error for them, saving is refused, and the designer tells you how to move them:
+
+* **Change ID** gives the open spell a new ID: the one you type under **New ID**, or (empty) the first free one of the
+  spell ID range. Everything that names the spell follows: the learn spells that teach it, its skill lines, talent ranks,
+  item sets and creature spell lists in the game's tables, and on the server the quests (reward spell, spell cast on the
+  player), trainer rows, starting spells, items and creatures. Its learn spells above 40000 get new IDs too.
+* **Fix all spell IDs** does this for every spell you made with an ID above 40000. The red line under the buttons lists
+  them.
+
+Then **Save to my workspace**, put the release patch or loose files into the game again, **Apply to server...** and
+restart the world server. The game's own spells cannot get a new ID.
+
+What a spell needs so that a player can learn it, and use it, on this server:
+
+1. An ID of at most 40000 (the spell, and its learn spell), in the game's `Spell.dbc` *and* in the server's
+   `spell_template` (with `build` 5875 or lower: the server reads the newest row up to 5875); the world server reads
+   spells only when it starts.
+2. A *learn spell* to teach it: effect 1 *Learn spell* whose trigger spell is your spell. A trainer row (`npc_trainer`)
+   must name the learn spell; a quest gives it as **Spell cast on the player** (`RewSpellCast`) with your spell as
+   **Reward spell** (`RewSpell`, the one the reward window shows). The designer makes the learn spell for you.
+3. For a class (or pet) trainer: a skill line (`SkillLineAbility`, in the game's table and in the server's
+   `skill_line_ability` with build 5875, IDs up to 65535). Without it the trainer's window hides the spell. Its classes
+   and races decide who may learn it, and the trainer row's level is the level needed.
+4. Not a talent's rank spell (the server refuses those as trainer and quest spells).
+5. To be used, it must be in the player's spell book (learned and active); the server refuses a cast of a spell the
+   player does not know.
+
+`wds spells renumber` does the same as **Change ID** (`--all` as **Fix all spell IDs**).
 
 ## The form
 
@@ -124,7 +168,8 @@ decompile and from VMaNGOS's spell handlers:
 * a summon without the creature, *Create item* without the item, an area target without a **Radius**, a channelled
   spell without a duration;
 * items, creatures and trigger spells that do not exist on the server (when it is connected);
-* rage or energy costs above 100, a family mask without a class, tooltip variables the game cannot fill in.
+* rage or energy costs above 100, a family mask without a class, tooltip variables the game cannot fill in;
+* a spell ID (or trigger spell) above 40000: the server never casts it ([Spell IDs](#spell-ids-what-the-game-and-the-server-accept)).
 
 Under each effect group, **What this effect does** explains the effect and its aura, what its **Misc value** holds (a
 creature to summon, a stat, a school mask...) and whether the 1.12 server handles it. `wds spells explain` lists all of
@@ -163,14 +208,19 @@ the effect models each part spawns (on the caster's hands, chest, feet...).
   **Level** and the **Cost** (copper, or `25s`, `1g 50s`), and click **Add to trainer**.
   * The 1.12 server only accepts trainer entries whose spell is a *learn* spell (its first effect is *Learn spell* and
     teaches your spell). The designer reuses the spell's learn spell or makes one (with the same name, rank and icon) in
-    both the game's table and `spell_template`.
+    both the game's table and `spell_template`. A new learn spell has no description, like the game's own: the trainer
+    window shows the learn spell's own description when it has one (filled in with the learn spell's numbers, *causing
+    1 to 0 Shadow damage*), and your spell's description when it is empty. The checks warn about a learn spell whose
+    description has `$` numbers (version 0.13.1 and older copied the spell's description into it: empty it).
   * A trainer with a shared trainer list (`trainer_id` in `creature_template`) gets the entry in that list
     (`npc_trainer_template`); the server refuses a spell that is in both. `list:N` puts it in list N directly.
   * The trainer needs the Trainer flag; the status line says when it does not have it.
 * **Add to skill line**: the skill line (`SkillLine` ID: a class's talent-tree tab like *Destruction* 593, a profession,
   a weapon skill...) and the **Classes** (names or IDs, comma-separated; empty = every class). It makes the
   `SkillLineAbility` row in the game's table and the same row, with the same ID, in the server's `skill_line_ability`.
-  Class trainers show a player only the spells of his class's skill lines, so a class spell needs both.
+  Class trainers show a player only the spells of his class's skill lines, so a class spell needs both: the game's
+  trainer window of a class (or pet) trainer leaves out a spell without a skill line, although the server sends it (seen
+  in the game: an empty trainer window). The checks warn when a class trainer teaches a spell that has no skill line.
 * **Sync with the server**: when you changed the game's side of a spell in the Data tables tab, the server's row follows
   it on the next save.
 
@@ -194,7 +244,7 @@ the effect models each part spawns (on the caster's hands, chest, feet...).
 
 1. In **Find a spell**, type `shadow bolt` and press <kbd>Enter</kbd>. Select *Shadow Bolt (Rank 1) [686]*.
 2. **New name** `Shadow Lance`, **Rank** `Rank 1`, then **Clone this spell**. The form shows *Shadow Lance (Rank 1)
-   [900000]*.
+   [35000]*.
 3. In **Casting**: **Cast time** `2`, **Cooldown** `6`, **Range** `35`.
 4. In **Effect 1**: **Value** `40-48`. The preview says *causing 40 to 48 Shadow damage*.
 5. Open **Effect 2**: **Effect type** *6 · Apply aura*. The checks show an error: *"Apply aura" needs an aura type*.
@@ -214,23 +264,23 @@ The same on the command line:
 
 ```
 wds spells clone 686 --name "Shadow Lance" --rank "Rank 1" --set cast-time=2 --set cooldown=6 --set range=35 --set effect1-value=40-48
-wds spells set 900000 --set effect2=6 --set effect2-aura=33 --set effect2-value=-30 --set effect2-target-a=6 --set duration=4
-wds spells visual 900000 --missile spell:133 --impact spell:133
-wds spells tooltip 900000
+wds spells set 35000 --set effect2=6 --set effect2-aura=33 --set effect2-value=-30 --set effect2-target-a=6 --set duration=4
+wds spells visual 35000 --missile spell:133 --impact spell:133
+wds spells tooltip 35000
 ```
 
 ## Worked example: a new spell at a trainer at level 20
 
 1. Open the spell (or make it as above).
 2. Under **Learning**, **Trainer** `3156`, **Level** `20`, **Cost** `25s`, then **Add to trainer**. The status line says
-   *Made the learn spell 900001* and *Shadow Lance is taught by Nartok at level 20 for 25s*.
+   *Made the learn spell 35001* and *Shadow Lance is taught by Nartok at level 20 for 25s*.
 3. **Skill line** `593`, **Classes** `Warlock`, then **Add to skill line**.
 4. **Save to my workspace**, then **Tools > Apply to server...** and restart the world server.
 5. In the game, a warlock of level 20 sees *Shadow Lance* at Nartok (after the game's cache is cleared).
 
 ```
-wds spells learn 900000 --trainer 3156 --level 20 --cost 25s
-wds spells learn 900000 --skill-line 593 --class Warlock
+wds spells learn 35000 --trainer 3156 --level 20 --cost 25s
+wds spells learn 35000 --skill-line 593 --class Warlock
 ```
 
 A quest can teach a spell too: **Reward spell** in the [Quest chains](quest-chain-designer.md) tab sets the spell and
@@ -246,10 +296,11 @@ spell to another level or to every trainer of the class.
   the designed spells.
 * Talents that change a spell (`Add flat modifier`, ...) find it through **Class (spell family)** and the family mask.
   A new class should have its own spell family (the class designer gives a new class one).
-* Spell IDs up to 999999 work in 1.12 (the game keeps an index the size of the highest ID: a very high ID costs memory).
+* Spell IDs: at most 40000 (the server casts no spell above it; the game knows none above 65535). See
+  [Spell IDs](#spell-ids-what-the-game-and-the-server-accept).
 * Limits: [Known issues](known-issues.md#spell-and-class-designers).
 
 ## Command line
 
-`wds spells find`, `show`, `fields`, `new`, `clone`, `set`, `check`, `tooltip`, `explain`, `icons`, `visual`, `learn`
-and `sync` do everything this tab does; see [The command line](command-line.md#the-spell-designer).
+`wds spells find`, `show`, `fields`, `new`, `clone`, `set`, `check`, `tooltip`, `explain`, `icons`, `visual`, `learn`,
+`sync` and `renumber` do everything this tab does; see [The command line](command-line.md#the-spell-designer).

@@ -58,11 +58,12 @@ public sealed class DesignSession
 {
     private readonly Dictionary<string, DbcEditSession> _tables = new(StringComparer.OrdinalIgnoreCase);
 
-    public DesignSession(DbcService dbc, ServerEditor? server, (long Start, long End) customIds, string? serverNote = null)
+    public DesignSession(DbcService dbc, ServerEditor? server, (long Start, long End) customIds, string? serverNote = null, (long Start, long End)? spellIds = null)
     {
         Dbc = dbc;
         Server = server;
         CustomIds = customIds;
+        SpellIds = spellIds ?? (SpellIdLimits.DefaultStart, SpellIdLimits.DefaultEnd);
         // the server's checks of links to the game's tables see the rows made here before they are saved
         if (server != null) server.GameTables = Lookup;
         ServerNote = serverNote ?? (server == null ? "The server database is not connected: only the game's tables are edited." : "");
@@ -72,6 +73,10 @@ public sealed class DesignSession
     /// <summary>The server's world database (null: not connected; the designers then edit the game's tables only).</summary>
     public ServerEditor? Server { get; }
     public (long Start, long End) CustomIds { get; }
+    /// <summary>0.13.3: the IDs new spells get (Settings: Spell ID range, 35000-39999 by default): VMaNGOS casts no spell
+    /// above 40000 and the 1.12 game knows none above 65535 (<see cref="SpellIdLimits"/>), so spells do not use the
+    /// custom ID range of the other rows.</summary>
+    public (long Start, long End) SpellIds { get; }
     public string ServerNote { get; }
     public bool HasServer => Server != null;
 
@@ -117,6 +122,23 @@ public sealed class DesignSession
         for (long v = start; v <= end; v++)
             if (!used.Contains(v)) return v;
         throw new DesignException($"Your custom ID range {start}-{end} is full for {dbcTable} (Settings: Custom ID range).");
+    }
+
+    /// <summary>0.13.3: the first spell ID of the spell ID range that neither the game's Spell.dbc nor the server's
+    /// spell_template (with your unsaved edits) uses.</summary>
+    public long FreeSpellId(IEnumerable<long>? taken = null)
+    {
+        var (start, end) = SpellIds;
+        end = Math.Min(end, SpellIdLimits.MaxCastable);
+        var t = Table("Spell");
+        var used = new HashSet<long>(taken ?? Array.Empty<long>());
+        foreach (var r in t.Rows)
+            if (t.Key(r) is { } k && k >= start && k <= end) used.Add(k);
+        if (Server != null && Server.Schema.Table("spell_template") is { } st)
+            used.UnionWith(Server.UsedIds(st, "entry", start, end));
+        for (long v = start; v <= end; v++)
+            if (!used.Contains(v)) return v;
+        throw new DesignException($"Your spell ID range {start}-{end} is full (Settings: Spell ID range; spells must stay at or below {SpellIdLimits.MaxCastable}).");
     }
 
     /// <summary>One more than the highest ID of the game's table and the server's table (for small tables whose IDs

@@ -40,6 +40,10 @@ public sealed class AppSettings
     /// <summary>The range new server rows get their IDs from ("Add" and "Duplicate as new" suggest the first free one).</summary>
     public long ServerCustomIdStart { get; set; } = 900000;
     public long ServerCustomIdEnd { get; set; } = 999999;
+    /// <summary>0.13.3: the range new spells get their IDs from (the designers, and Add in spell_template): VMaNGOS casts no
+    /// spell above 40000 and the 1.12 game knows none above 65535 (<see cref="ServerData.SpellIdLimits"/>).</summary>
+    public long SpellIdStart { get; set; } = ServerData.SpellIdLimits.DefaultStart;
+    public long SpellIdEnd { get; set; } = ServerData.SpellIdLimits.DefaultEnd;
     /// <summary>The view shown last in the Server data tab.</summary>
     public string? ServerLastView { get; set; }
 

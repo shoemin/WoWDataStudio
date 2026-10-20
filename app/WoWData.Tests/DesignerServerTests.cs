@@ -66,15 +66,15 @@ public class DesignerServerTests
         Assert.NotNull(d.ServerRow(695));                   // Shadow Bolt rank 2 is in the fixture's spell_template
         long lance = d.Clone(686, "Shadow Lance", rank: "Rank 1");
         long lance2 = d.Clone(695, "Shadow Lance", rank: "Rank 2");
-        Assert.Equal((900000, 900001), (lance, lance2));
+        Assert.Equal((35000, 35001), (lance, lance2));   // 0.13.3: the spell ID range (VMaNGOS casts no spell above 40000)
         Assert.True(d.Set(lance, "cast-time", "2").Ok);
         Assert.True(d.Set(lance, "effect1-value", "40-48").Ok);
         Assert.True(d.Set(lance, "description", "Hurls a lance of shadow, causing $s1 Shadow damage.").Ok);
         Assert.True(d.Set(lance, "server-bonus1", "0.75").Ok);
         // a server spell already uses an ID: the next free one is taken
-        ServerTestDb.Exec(c.Db, "INSERT INTO spell_template (entry, build, name) VALUES (900002, 5875, 'Taken')");
+        ServerTestDb.Exec(c.Db, "INSERT INTO spell_template (entry, build, name) VALUES (35002, 5875, 'Taken')");
         long n = d.New("Fresh");
-        Assert.Equal(900003, n);
+        Assert.Equal(35003, n);
         d.Set(n, "effect1", "Heal");
         d.Set(n, "effect1-target-a", "Unit caster");
         d.Set(n, "effect1-value", "50");
@@ -109,6 +109,88 @@ public class DesignerServerTests
         Assert.Equal(0L, Convert.ToInt64(ServerTestDb.Scalar(c.Db, $"SELECT COUNT(*) FROM spell_template WHERE entry={lance}")));
     }
 
+    /// <summary>
+    /// 0.13.3 (found in game): spells made by 0.12.0-0.13.2 got IDs from 900000, which VMaNGOS never casts (Spell::cast
+    /// returns when the ID is above MAX_SPELL_ID 40000), so their learn spell taught nothing from a quest or trainer.
+    /// "Change ID" / "Fix all spell IDs" moves them into the spell ID range with every reference: the learn spell's
+    /// trigger, the skill line, the trainer row, the reward quest, on both sides; the apply writes it to the server.
+    /// </summary>
+    [IsolatedDbFact]
+    public void SpellsAboveTheServersLimitMoveWithEveryReference()
+    {
+        using var c = new Ctx("renumber");
+        var (s, d) = c.Open();
+        // the state 0.13.2 left: S1 900000 (Shadow Bolt rank 2's copy), its learn spell 900001, a skill line row, all
+        // in the workspace, and on the server (applied): the two spells, the skill line, a trainer row and a reward quest
+        var ss = s.Session("Spell");
+        ss.Duplicate(d.Row(695), 900000);
+        var (lr, _) = ss.Duplicate(d.Row(1381), 900001);
+        s.SetNumber("Spell", lr, "EffectTriggerSpell1", 900000);
+        long slaId = s.NextId("SkillLineAbility", "skill_line_ability", "id", 65535);
+        var (sr, _) = s.Session("SkillLineAbility").AddRow(slaId);
+        s.SetNumber("SkillLineAbility", sr, "SkillLine", 593);
+        s.SetNumber("SkillLineAbility", sr, "Spell", 900000);
+        s.SetNumber("SkillLineAbility", sr, "ClassMask", 0x100);
+        d.Save(force: true);
+        foreach (var (e, trig) in new[] { (900000, 0), (900001, 900000) })
+            ServerTestDb.Exec(c.Db, "DROP TEMPORARY TABLE IF EXISTS t; CREATE TEMPORARY TABLE t AS SELECT * FROM spell_template WHERE entry = 695 LIMIT 1; " +
+                $"UPDATE t SET entry = {e}, build = 5875{(trig != 0 ? $", effect1 = 36, effectTriggerSpell1 = {trig}" : "")}; INSERT INTO spell_template SELECT * FROM t;");
+        ServerTestDb.Exec(c.Db, $"INSERT INTO skill_line_ability (id, build, skill_id, spell_id, class_mask) VALUES ({slaId}, 5875, 593, 900000, 256)");
+        ServerTestDb.Exec(c.Db, "INSERT INTO npc_trainer (entry, spell, spellcost, reqlevel, build_min, build_max) VALUES (3156, 900001, 100, 1, 0, 5875)");
+        ServerTestDb.Exec(c.Db, "INSERT INTO quest_template (entry, Title, RewSpell, RewSpellCast) VALUES (900100, 'WDS old reward', 900000, 900001)");
+
+        (s, d) = c.Open();
+        var ed = s.Server!;
+        Assert.Equal(new List<long> { 900000, 900001 }, d.UnusableSpells());
+        Assert.Contains(d.Check(900000), p => p.IsError && p.Field == "ID" && p.Message.Contains("MAX_SPELL_ID") && p.Message.Contains("48032"));
+        Assert.Contains(d.Check(900001), p => p.IsError && p.Message.Contains("trigger spell"));
+        var st = ed.Table("spell_template");
+        Assert.Contains(ServerValidation.CheckRow(ed, st, ed.Object(st, 900000)!), p => p.IsError && p.Column == "entry");
+        var qt = ed.Table("quest_template");
+        Assert.Contains(ServerValidation.CheckRow(ed, qt, ed.Object(qt, 900100)!), p => p.IsError && p.Column == "RewSpellCast");
+        d.Touch(900000);
+        Assert.Contains("MAX_SPELL_ID", Assert.Throws<DesignException>(() => d.Save()).Message);   // the errors block saving until the IDs are fixed
+        Assert.False(d.ChangeId(695).Ok);                  // the game's own spells stay where they are
+        Assert.False(d.ChangeId(900000, 40001).Ok);        // and nothing goes above 40000
+
+        var r = d.ChangeIds();
+        Assert.True(r.Ok, r.Message);
+        Assert.Equal(35000, d.Moved[900000]);
+        Assert.Equal(35001, d.Moved[900001]);
+        Assert.Empty(d.UnusableSpells());
+        Assert.Null(d.Spells.Find(900000));
+        Assert.Equal(35000, d.Spells.Number(d.Row(35001), d.Spells.Layout.Column("EffectTriggerSpell1")!));
+        Assert.Equal(new long[] { 35001 }, d.LearnSpellsOf(35000));
+        Assert.Equal(slaId, d.SkillLines(35000).Single().Id);
+        Assert.Empty(d.Check(35000).Where(p => p.IsError));
+        Assert.Empty(d.Check(35001).Where(p => p.IsError));
+        Assert.Empty(ed.Versions(st, 900000));
+        Assert.Equal(35001, d.Trainers(35000).Single().LearnSpell);
+        var q = ed.Object(qt, 900100)!;
+        Assert.Equal(("35000", "35001"), (q[qt.IndexOf("RewSpell")], q[qt.IndexOf("RewSpellCast")]));
+        var res = d.Save();
+        Assert.Contains("spell_template", res.ServerTables);
+
+        // a fresh session finds the moved rows, then the apply writes them to the (throwaway) server
+        (s, d) = c.Open();
+        Assert.Empty(d.UnusableSpells());
+        Assert.Empty(ServerConsistency.Check(s.Server!, "spells", new HashSet<long> { 35000, 35001 }));
+        var ap = new ServerApplier(c.Service());
+        var plan = ap.Plan();
+        Assert.Empty(plan.Conflicts);
+        ap.Apply(plan);
+        long Count(string sql) => Convert.ToInt64(ServerTestDb.Scalar(c.Db, sql));
+        Assert.Equal(0L, Count("SELECT COUNT(*) FROM spell_template WHERE entry IN (900000, 900001)"));
+        Assert.Equal(1L, Count("SELECT COUNT(*) FROM spell_template WHERE entry = 35001 AND effect1 = 36 AND effectTriggerSpell1 = 35000"));
+        Assert.Equal(1L, Count("SELECT COUNT(*) FROM npc_trainer WHERE entry = 3156 AND spell = 35001"));
+        Assert.Equal(0L, Count("SELECT COUNT(*) FROM npc_trainer WHERE spell = 900001"));
+        Assert.Equal(1L, Count("SELECT COUNT(*) FROM quest_template WHERE entry = 900100 AND RewSpell = 35000 AND RewSpellCast = 35001"));
+        Assert.Equal(1L, Count($"SELECT COUNT(*) FROM skill_line_ability WHERE id = {slaId} AND build = 5875 AND spell_id = 35000"));
+        // a new spell_template row of the Server data tab takes the spell ID range too
+        var (s3, _) = c.Open();
+        Assert.Equal(35002, s3.Server!.SuggestId(s3.Server.Table("spell_template")));
+    }
+
     [IsolatedDbFact]
     public void TrainersSkillLinesAndTheClassView()
     {
@@ -121,7 +203,16 @@ public class DesignerServerTests
         Assert.True(r.Ok, r.Message);
         Assert.Contains("Made the learn spell", r.Message);
         long learn = d.LearnSpellsOf(lance).Single();
+        // 0.13.2 (found in game): the class trainer's window hides a spell without a skill line, and the trainer shows a
+        // learn spell's own description: new learn spells have none (as the game's own), the checks say both
+        Assert.Contains(d.Check(lance), p => p.Severity == DesignSeverity.Warning && p.Message.Contains("is a class trainer") && p.Message.Contains("hides"));
+        Assert.Equal("", d.Spells.Text(d.Row(learn), d.Spells.Layout.Column("Description")!, 0));
+        Assert.DoesNotContain(d.Check(learn), p => p.Field == "Description");
+        Assert.True(d.Set(learn, "description", "Hurls a lance, causing $s1 Shadow damage.").Ok);
+        Assert.Contains(d.Check(learn), p => p.Field == "Description" && p.Message.Contains("trainer window shows"));
+        Assert.True(d.Set(learn, "description", "").Ok);
         Assert.True(d.AddSkillLine(lance, 593, 0x100).Ok);
+        Assert.DoesNotContain(d.Check(lance), p => p.Message.Contains("is a class trainer"));
         Assert.False(d.AddToTrainer(lance, "99999999", 20, 0).Ok);
         Assert.DoesNotContain(d.Check(lance), p => p.IsError);
         var res = d.Save();

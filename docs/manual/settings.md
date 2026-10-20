@@ -53,7 +53,8 @@ For the [Server data](server-data.md) tab.
 | Setting | What it is | When empty |
 |---|---|---|
 | **Content patch of the server** | the content patch your server runs, 0 (1.2) to 10 (1.12): VMaNGOS keeps a version of many rows per patch, and this decides which version the app shows as *the server uses this row* | `WowPatch` of the server's `mangosd.conf` (only that line is read), else 10 |
-| **Custom ID range** | the IDs new rows get (**Add new**, **Duplicate as new**): the first free one of the range, for example `900000-999999` | `900000-999999` |
+| **Custom ID range** | the IDs new rows get (**Add new**, **Duplicate as new**): the first free one of the range, for example `900000-999999` (not spells: see the next line) | `900000-999999` |
+| **Spell ID range** | the IDs new spells get (the spell, talent, class and quest designers, **Add new** in `spell_template`): the first free one of the range, at most 40000, for example `35000-39999`. The VMaNGOS server casts no spell above 40000 and the 1.12 game knows none above 65535, so a spell above it could never be learned or used ([The spell designer](spell-designer.md#spell-ids-what-the-game-and-the-server-accept)) | `35000-39999` |
 
 *Your password* is saved encrypted for your Windows user (Windows' own data protection): another Windows user, or
 another computer, cannot read it from the settings file. A password saved as plain text by an old version of the app is
