@@ -27,7 +27,7 @@ server's MySQL program (`mysqld.exe`, GPL) as a separate program to host it. Nei
 
 **No code copied** either. `WoWData.Core` is a port of our own Python code (above): MPQ reader/writer, DBC, BLP/DXT
 codecs, M2 reader/writer/validator/animation, model looks, index. The 3D renderer (`WoWDataStudio\Rendering`: shaders,
-skinning, M2 material state from our decompile) is our own; WoW Model Viewer / WMVx were not used. The PNG codec (`Imaging\Png.cs`, written from the PNG specification, W3C/ISO 15948), the image resize,
+skinning, M2 material state from our decompile) is our own; WoW Model Viewer / WMVx were not used. The PNG codec (`Imaging\Png.cs`, written from the PNG specification, W3C/ISO 15948), the bzip2 decoder (`Mpq\Bzip2.cs`, written from the public description of the bzip2 1.0 file format; no bzip2 library code; tested against Python's bz2 output), the image resize,
 the compare heat map and the median-cut palette (our own; Pillow's is not used) were written for this project.
 
 NuGet packages, **bundled** in the self-contained publish (`app\publish\bin`):
