@@ -13,6 +13,7 @@
   <!-- 0.7.0: the DBC layouts of the 1.12.1 client (DBC editor), a readable text file -->
   <ItemGroup>
     <EmbeddedResource Include="Dbc\Layouts\dbc_layouts_*.txt" LogicalName="WoWData.Core.Dbc.Layouts.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Db2\Layouts\db2_layouts_*.txt" LogicalName="WoWData.Core.Db2.Layouts.%(Filename)%(Extension)" />
     <!-- 0.9.0: what the tables of the VMaNGOS world database mean (Server data tab) -->
     <EmbeddedResource Include="ServerData\Layouts\server_layouts_vmangos.txt" LogicalName="WoWData.Core.ServerData.Layouts.server_layouts_vmangos.txt" />
   </ItemGroup>

@@ -40,6 +40,13 @@ the compare heat map and the median-cut palette (our own; Pillow's is not used) 
   its published description and checked against its published test value. No code from CascLib, TACTLib,
   CASCExplorer or any other CASC library was copied or consulted as code. It never decrypts (no encryption keys are
   used or shipped) and no listfile is shipped: a listfile is only read from a path the user chooses.
+* **DB2 reader** (`app\WoWData.Core\Db2`, read-only WDC3/WDC4/WDC5, WDB2 and WDBC tables of modern clients): our own
+  code, written from public format knowledge (wowdev.wiki-style descriptions of the headers, field storage info,
+  pallet/common data, sections, copy tables, relationship maps) and checked against the real files; no code from
+  DBCD, DBCDumpHost, WoWDBDefs or any other DB2 library was copied or consulted as code. The table-name to
+  FileDataID catalog comes from a static byte scan of the client executable (never run), ported from our own probe
+  script. No definition files are used or shipped: the column names in `Db2\Layouts\db2_layouts_70450.txt` were
+  measured by us (value matching against the 1.12/2.4.3/3.3.5a tables on shared IDs, link checks, the 1.60 terrain).
 
 NuGet packages, **bundled** in the self-contained publish (`app\publish\bin`):
 

@@ -1,0 +1,284 @@
+# WoW Data Studio: column names for DB2 tables of the "1.60" Classic beta client (1.60.1.70450, wow_classic_beta).
+# Experimental and read-only: used by the DB2 reader (WoWData.Core.Db2.Db2Layouts.ForBuild(70450) / Load) for the
+# tables a 1.60 -> 1.12 map conversion needs. Every other table opens with raw columns (col_N).
+#
+# Same format as Dbc\Layouts\dbc_layouts_5875.txt (one [Table] section, keys, then one line per column), with these
+# differences:
+#   * one line per FLATTENED column of the DB2 table (an array field of N elements is N columns: Name[N]);
+#   * the record ID and the parent ID (relationship map) are not columns, except where the file keeps the ID inside
+#     the record (WMOAreaTable);
+#   * "layout-hash:" is the header layout hash the names were measured on: a file with another hash keeps col_N;
+#   * storage words are informational: the real types (8/16/32/64-bit, signed, float, string) come from the client's
+#     own field table in WowB.exe (Db2Catalog). "string" and "float" must agree with it; "int" = signed, "uint" =
+#     unsigned or not measured;
+#   * DB2 strings are one language (enUS here), so there is no "loc".
+#   * col_N: N is the flattened column index (Db2Table.Columns), as the reader names unknown columns.
+#
+# Evidence (MEASURED, docs\research\CASC_INVESTIGATION.md and the probe in the scratch folder db2\probe):
+#   * value matching on shared IDs with the same table of 1.12.1 (5875), 2.4.3 (8606) and 3.3.5a (12340), read with
+#     their verified DBC layouts, and with WoD 6.2.3 and Era 1.15.9 raw columns; numbers compared as 32-bit values,
+#     floats within 0.1%, strings as text (case-insensitive). "x/y" = equal rows / shared rows where either side is
+#     not 0 or empty;
+#   * links: the share of non-zero values (and not -1) that are IDs of the linked 1.60 table;
+#   * FileDataID columns: the files they name were read from the local CASC storage (their magic);
+#   * the 1.60 terrain itself (MH2O instances of every map with tiles, 285,312 instances) and the 1.60 map survey
+#     (docs\research\MAP_SURVEY_160.md, per-chunk 1.12 liquid kinds against 1.60 liquid type IDs).
+# A name without "~" has such evidence (normally >= 95% value equality, or a fully resolving link plus a value
+# match). "~Name" is a best guess from the values (shown as not verified). No community definition file was used.
+
+@build 70450 1.60.1
+
+# ---------------------------------------------------------------------------------------------- named values
+
+@enum InstanceType
+  0 = Open world
+  1 = Dungeon
+  2 = Raid
+  3 = Battleground
+
+@enum LiquidKind
+  0 = Water
+  1 = Ocean
+  2 = Magma
+  3 = Slime
+
+@enum MapType
+  1 = Map with terrain tiles
+  2 = WMO-only map
+  3 = No WDT
+
+@enum LiquidVertexFormat
+  0 = Height + depth (5 bytes per vertex)
+  1 = Height + texture coordinates (8 bytes)
+  2 = Depth only (1 byte)
+  3 = Height + texture coordinates + depth (9 bytes)
+
+# ---------------------------------------------------------------------------------------------- tables
+
+[Map]
+category: World and maps
+about: The maps: continents, dungeons, raids, battlegrounds, and the 1.60 maps (numeric folders World\Maps\<ID>). Each row names its WDT by FileDataID.
+layout-hash: D43AFAC3
+fields: 26
+label: MapName
+evidence: 26 fields, 29 columns, 81 rows of which 8 are in encrypted sections (IDs 2970 2974 2981 2994 3001 3039 3049 3052). Directory 42/42 = 3.3.5a, 58/58 = Era; MapName 42/43 = 1.12; CorpseX/Y 28/29 = 2.4.3; InstanceType 33/34 = 1.12; AreaTableID 24/25 = 1.12 (link 27/27); LoadingScreenID 38/39 = 1.12 (link 65/65); IconScale 43/43 = 1.12; CorpseMapID 20/21 = 2.4.3 (link 11/11); MaxPlayers 26/29 = 3.3.5a; WdtFileDataID: all 69 local values are WDT files (Azeroth 775971, Kalimdor 782779) and the tile counts of the 12 1.60-only WDTs match the survey; col_8 = 1 on every row whose WDT has tiles, 2 on the WMO-only ones, 3 on the two rows without a WDT; col_23 links 73/73 to LiquidType and holds exactly the three ocean types that MH2O instances use with the special object value 42 (1250 continents, 2 instances, 1296 Darkspear Islands).
+Directory          string                     | The folder of the map's files: World\Maps\<Directory>\ (1.60 maps use their ID as the folder name).
+MapName            string
+MapDescription0    string                     | Battleground description (Horde: Alterac Valley "Crush the Alliance!"). 1.12 3/4.
+MapDescription1    string                     | Battleground description (Alliance). 1.12 3/4.
+~PvpShortDescription string                   | Only Darkspear Islands: "Capture the objectives".
+~PvpLongDescription string                    | Only Darkspear Islands: the objective list.
+CorpseX            float                      | Where a ghost who died inside appears, on CorpseMapID.
+CorpseY            float
+~MapType           uint enum(MapType)         | Measured: 1 = the WDT has tiles, 2 = WMO-only (MPHD 0x241) or test map, 3 = no WDT (Dalaran/Mulgore Skycuter).
+InstanceType       int enum(InstanceType)
+col_10             uint                       | 0 in every row.
+AreaTableID        uint -> AreaTable          | The area of the map (for instances).
+LoadingScreenID    int -> LoadingScreens
+~TimeOfDayOverride int                        | -1 = real time; 90, 900, 1380 (minutes) on a few maps.
+~ParentMapID       int                        | -1, or 0 (Eastern Kingdoms) on 2868 Eastern Plaguelands (Scarlet Raid Phase) and 2980 Dalaran City.
+~CosmeticParentMapID int                      | -1, or a Map ID: 1 (Kalimdor) on 2902 The Scarab Dais, 0 on 2959 City of Dalaran.
+col_16             uint                       | 0 in every row.
+IconScale          float                      | Size of the battleground icon on the world map.
+CorpseMapID        int -> Map                 | The map of the instance's entrance (-1 = none).
+MaxPlayers         uint                       | Largest group (5, 10, 20, 40); 0 on open-world maps.
+col_20             int                        | 0, 12, 17, 135, 136.
+col_21             int                        | A FileDataID on 2 maps (804935, 804940): binary files that are not BLP/WDT.
+WdtFileDataID      int                        | FileDataID of the map's World\Maps\<Directory>\<Directory>.wdt (0 = none).
+~OceanLiquidTypeID int -> LiquidType          | The ocean of the map: 1250 on Azeroth, Kalimdor and 3104, 1296 on Darkspear Islands, 2 elsewhere. MH2O instances of these types carry 42 instead of a LiquidObject ID.
+col_24             int                        | 0 in every row.
+col_25             int                        | 0 in every row.
+~Flags[3]          flags                      | Bit masks (equal to the three Era 1.15.9 columns 52/58, 42/47, 40/58).
+
+[AreaTable]
+category: World and maps
+about: Every zone and subzone: name, map, parent zone, exploration bit, music, sounds. Terrain chunks (MCNK) store these IDs; 1.60 adds 16xxx/17xxx areas.
+layout-hash: 9995B797
+fields: 24
+label: AreaName
+evidence: 24 fields, 28 columns, 1,421 rows of which 46 are in encrypted sections. AreaName 1076/1081 = 1.12; MapID 581/586 = 1.12 (link 792/825: the rest are maps not in Map.db2 or encrypted); ParentAreaID 957/959 = 1.12 (link 1191/1192); AreaBit 1073/1081; SoundProviderPrefUnderwater 567/568; ZoneMusic 445/450 (link 630/630); ExplorationLevel 569/570; IntroSound 56/63 (link 80/80 to ZoneIntroMusicTable); FactionGroupMask 62/62; LiquidTypeID1-4 equal to 1.12 on all 1,081 shared rows (the only non-zero value is 21 Naxxramas - Slime); col_0 equals AreaName without spaces and punctuation in 1,182 of 1,375 rows.
+~ZoneName          string                     | Internal name (AreaName without spaces in most rows: "DunMorogh").
+AreaName           string
+MapID              uint -> Map                | The map (continent or instance) the area is on.
+ParentAreaID       uint -> AreaTable          | For a subzone: the zone it belongs to (0 = a zone itself).
+AreaBit            int                        | The exploration bit (unique).
+~SoundProviderPref uint                       | 7/22 equal to 1.12.
+SoundProviderPrefUnderwater uint
+~AmbienceID        uint                       | 122/291 equal to 1.12 (renumbered); every value is a SoundAmbience ID (390/390).
+col_8              uint                       | 2172 or 170 on 1,289 rows: SoundAmbience IDs (1289/1289).
+ZoneMusic          uint -> ZoneMusic
+col_10             uint                       | 0, or 3562 on one row.
+ExplorationLevel   int
+IntroSound         uint                       | A ZoneIntroMusicTable ID (80/80); 56/63 equal to 1.12.
+col_13             uint                       | 0 in every row.
+FactionGroupMask   uint flags                 | 2 Alliance, 4 Horde, 6 both (as 1.12).
+col_15             float                      | 0, 0.8 or 1.
+col_16             int                        | 0, 1, 3, 13, 15.
+col_17             int                        | -1 in every row.
+col_18             uint                       | 0 in every row.
+col_19             uint                       | 0 in every row.
+col_20             uint                       | 0, 136, 137.
+col_21             int                        | 0 or 5237..5254 (not LiquidType IDs).
+~Flags1            flags                      | 920/1053 equal to the 3.3.5a Flags; 1166/1169 equal to Era.
+~Flags2            flags                      | 0 or 128.
+~LiquidTypeID[4]   uint -> LiquidType         | Liquid overrides (1.12 LiquidType1-4): only 21 (Naxxramas - Slime) on two rows.
+
+[LiquidType]
+category: World and maps
+about: The liquid types used by MH2O (terrain) and WMO liquids: name, kind, sound, spell, material (vertex format), textures and shader parameters.
+layout-hash: D1ECEEC9
+fields: 21
+label: Name
+evidence: 21 fields, 76 columns, 57 rows. Name 19/19 = 3.3.5a; Texture1 18/19 = 3.3.5a; Flags 18/19 = 3.3.5a; Type 14/14 (19/19 with zeros) = 3.3.5a Type (0 water, 1 ocean, 2 magma, 3 slime) and every row named Water/Ocean/Magma/Lava/Slime of IDs 1-21 agrees; SoundID 19/19; SpellID 19/19 rows; MaterialID 19/19 = 3.3.5a and links 57/57 to LiquidMaterial; darken/particle columns 4/4 - 14/14 = 3.3.5a "~" columns. Kind for a 1.12 conversion (MCLQ river/ocean/magma/slime): Type, except that the new "PBRWater" rows all have Type 0 and the two PBR oceans (1250, 1296) are marked by Flags bit 0x400 (5135, 5131); terrain check (1.12 MCLQ kind vs 1.60 MH2O type on chunks with one liquid on both sides): 1250 ocean in 207,006 of 207,006 chunks, 2 ocean 6,469/6,469, 5 water 1,056/1,056, 7 magma 109/109; the fel and tar liquids (1268, 1269, 1284, 1347-1349, Type 2) replace 1.12 water (383 chunks): a content change, not a mapping error.
+Name               string
+Texture[6]         texture                    | Surface textures (%d = animation frame) or procedural texture names.
+~Flags             flags                      | 15 water/ocean, 120 magma, 322 slime (as 3.3.5a); 0x400 only on the PBR oceans 1250 and 1296.
+Type               uint enum(LiquidKind)      | 0 water, 1 ocean, 2 magma, 3 slime. The PBR waters (12xx-13xx) are all 0, even the oceans: see Flags 0x400.
+SoundID            uint                       | A SoundEntries ID (1111 water, 1114 ocean, 3072 magma, 3880 slime).
+SpellID            uint                       | The spell the liquid casts (28801 on 21 Naxxramas - Slime).
+~MaxDarkenDepth    float
+~FogDarkenIntensity float
+~AmbDarkenIntensity float
+~DirDarkenIntensity float
+~LightID           uint                       | 6, 7 as 3.3.5a (slime, magma); 5614, 7430, 7852 on new rows.
+~ParticleScale     float
+~ParticleMovement  uint
+~ParticleTexSlots  uint
+MaterialID         uint -> LiquidMaterial     | Decides the vertex format of MH2O data (1 water, 2 magma/slime, 13 new lava/fel/tar, 130 PBR water).
+col_20             int                        | A colour-like 32-bit value (equal to Era).
+col_21             uint
+col_22             uint
+col_23             uint
+col_24             uint
+col_25             uint
+col_26             uint
+col_27             int
+col_28             int
+col_29             int
+~Float[38]         float                      | Shader parameters (the first ones equal 3.3.5a's ~Float1-3 on 17/19, 3/3, 9/9 rows).
+~Int[4]            uint                       | 3.3.5a ~Int1 6/6, ~Int2 9/9.
+col_72             float
+col_73             float
+col_74             float
+col_75             float
+
+[LiquidObject]
+category: World and maps
+about: The liquid objects MH2O instances point at (the second number of an instance): which liquid type, and how it flows.
+layout-hash: CB0D39E8
+fields: 5
+evidence: 5 fields, 57 rows + 1,213 copy-table rows (IDs 5921-21528). LiquidTypeID: in every MH2O instance of every 1.60 map with tiles whose second number is a LiquidObject ID (21,907 instances) this column equals the instance's liquid type; it links 1270/1270 to LiquidType. The value 42 used by 263,405 ocean instances (types 1250, 2, 1296) is not a LiquidObject ID. col_3 equals Era on 801/801 rows.
+~FlowDirection     float                      | 0, 90, 112, 180 ... (degrees, a guess from the values).
+~FlowSpeed         float                      | 0, 0.05, 0.2, 0.5, 1, 5.
+LiquidTypeID       int -> LiquidType
+col_3              uint                       | 0 or 1.
+col_4              uint                       | 0 in every row.
+
+[LiquidMaterial]
+category: World and maps
+about: How a liquid's vertex data is stored and drawn (referenced by LiquidType.MaterialID).
+layout-hash: 98E5D7AA
+fields: 2
+evidence: 2 fields, 4 rows + 1 copy (130 = copy of 1). LiquidVertexFormat agrees with the bytes per vertex the map survey measured in MH2O data: material 1/130 types 5 bytes (format 0), type 7 (material 2) 8 bytes (format 1), the material-13 types 1267-1269, 1284, 1347-1349 9 bytes (format 3); WoD 2/2.
+~Flags             int                        | 1 on materials 1, 13, 130, 146; 0 on 2.
+LiquidVertexFormat int enum(LiquidVertexFormat)
+
+[Light]
+category: World and maps
+about: The light zones of the world (a sphere with a falloff) and their light parameters.
+layout-hash: 5F16BC84
+fields: 5
+evidence: 5 fields, 14 columns, 635 rows of which 15 are in encrypted sections, 1 copy. Position and falloff are in yards: 1.12 stores X = (17066.666 - Y) x 36 (339/361), Y = Z x 36 (355/361), Z = (17066.666 - X) x 36 (338/361), FalloffStart x 36 (333/344), FalloffEnd x 36 (334/344); ContinentID 289/289 = 1.12; LightParamsID1-8 link 100% to LightParams (1.12 equality 43-49%: renumbered).
+X                  float                      | World X (yards; 0 on a map's default light).
+Y                  float                      | World Y.
+Z                  float                      | Height.
+FalloffStart       float                      | Yards.
+FalloffEnd         float
+ContinentID        int -> Map
+~LightParamsID[8]  uint                       | LightParams IDs (every value resolves); slots 1-5 continue 1.12's five (clear, underwater, ...).
+
+[WMOAreaTable]
+category: World and maps
+about: The names, music and sounds of places inside buildings (one row per WMO group / name set).
+layout-hash: C5A7B977
+fields: 15
+label: AreaName
+evidence: 15 fields, 52,643 rows; the ID is stored in the record (field 1, the header's ID index) and the relationship map's parent ID equals WMOID in 52,635 of 52,635 rows. AreaName 2543/2605 = 3.3.5a; WMOID 14766/14773 = 3.3.5a; NameSetID 4167/4167; WMOGroupID 14773/14773; SoundProviderPrefUnderwater 1120/1153 = 2.4.3; ZoneMusic 1484/1524 = 1.12; AreaTableID 3655/4375 = 3.3.5a and links 6681/6771 (the rest are encrypted AreaTable rows); Flags 975/1071 = 3.3.5a.
+AreaName           string
+ID                 id
+WMOID              uint                       | The building model's ID (stored in the root .wmo).
+NameSetID          uint
+WMOGroupID         int                        | The group of the model (-1 = the whole model).
+col_5              uint
+SoundProviderPrefUnderwater uint
+~AmbienceID        uint                       | 2355/3366 equal to 2.4.3; 62.6% are SoundAmbience IDs.
+col_8              uint
+ZoneMusic          uint                       | 1.12 ZoneMusic IDs (only 48.7% are in 1.60's ZoneMusic).
+col_10             uint
+~IntroSound        uint                       | 179/205 equal to 3.3.5a.
+col_12             uint
+AreaTableID        uint -> AreaTable
+~Flags             flags
+
+[LoadingScreens]
+category: World and maps
+about: The loading screen pictures (Map.LoadingScreenID).
+layout-hash: F6E51D7F
+fields: 10
+evidence: 10 fields, 60 rows of which 7 are in encrypted sections, 2 copies; Map.LoadingScreenID links 65/65. col_0 and col_4 are FileDataIDs of BLP2 textures (38 and 8 local files).
+~TextureFileDataID int                        | A BLP2 picture.
+col_1              int
+col_2              int
+col_3              int                        | 0 or 11.
+~TextureFileDataID2 int                       | A BLP2 picture (8 rows).
+col_5              int
+col_6              float
+col_7              float
+col_8              float
+col_9              float
+
+[GroundEffectTexture]
+category: World and maps
+about: Which ground clutter grows on a ground texture layer (MCLY effect ID).
+layout-hash: D93D5678
+fields: 5
+evidence: 5 fields, 383 rows + 1,798 copies. DoodadID1-4 614/641 .. 595/622 = 3.3.5a and link 100% to GroundEffectDoodad; ~Sound 1726/1744 = 1.12 ~Sound and every value is a TerrainType ID; ~Density only 852/1903 = 1.12.
+~Density           uint
+~Sound             uint                       | A TerrainType ID (footstep sound).
+DoodadID[4]        uint -> GroundEffectDoodad
+col_6              int
+col_7              int
+col_8              int
+col_9              int
+col_10             int
+col_11             int
+col_12             int
+col_13             int
+
+[GroundEffectDoodad]
+category: World and maps
+about: The ground clutter models.
+layout-hash: CFD94A21
+fields: 9
+evidence: 9 fields, 428 rows + 8 copies. ModelFileDataID equals the FileDataID of 1.12's DoodadPath (World\NoDXT\Detail\<path>, name hash in Era) in 224 of 224 rows; every sampled value is an MD21 model.
+ModelFileDataID    int                        | The M2 model.
+col_1              int                        | 0 or 1.
+col_2              float
+col_3              float
+col_4              float                      | 0.67 in every row.
+col_5              float                      | 1.33 in every row.
+col_6              float
+col_7              float                      | 360 in every row.
+col_8              int
+
+[ZoneMusic]
+category: Sounds and music
+about: The music sets of zones (AreaTable.ZoneMusic).
+layout-hash: 72572D05
+fields: 4
+label: SetName
+evidence: 4 fields, 7 columns, 165 rows; every column 99/99 = 2.4.3 (106/106 = Era); AreaTable.ZoneMusic links 630/630.
+SetName            string
+SilenceIntervalMin[2] uint                    | Milliseconds (day, night).
+SilenceIntervalMax[2] uint
+Sounds[2]          uint                       | SoundEntries IDs (day, night).
