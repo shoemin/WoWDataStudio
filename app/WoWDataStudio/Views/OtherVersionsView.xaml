@@ -82,7 +82,12 @@
             <!-- ============================== THE OPEN CLIENT ============================== -->
             <Border Grid.Column="2" Style="{StaticResource Card}" Padding="10">
                 <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="{Binding ClientSummary}" TextWrapping="Wrap" Margin="0,0,0,6" FontWeight="SemiBold" />
+                    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                        <Button DockPanel.Dock="Right" Content="Convert map..." Command="{Binding ConvertMapCommand}" Style="{StaticResource ToolButton}" Margin="8,0,0,0" VerticalAlignment="Top"
+                                Visibility="{Binding CanConvertMaps, Converter={StaticResource BoolVis}}"
+                                ToolTip="Convert a map of this client (a zone, tiles or the whole map) into your 1.12 game: one change set in your workspace, with a report of what was converted, reused and left out." />
+                        <TextBlock Text="{Binding ClientSummary}" TextWrapping="Wrap" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </DockPanel>
                     <TabControl x:Name="InnerTabs" Background="Transparent" BorderThickness="0">
                         <!-- files -->
                         <TabItem Header="Files" Padding="12,5">

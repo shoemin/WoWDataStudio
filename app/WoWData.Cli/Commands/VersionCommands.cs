@@ -1,4 +1,5 @@
 using WoWData.Core.Dbc;
+using WoWData.Core.Maps.Conversion;
 using WoWData.Core.Mpq;
 using WoWData.Core.Versions;
 
@@ -337,5 +338,126 @@ internal static class VersionCommands
                 }
             },
         };
+        yield return new CommandSpec
+        {
+            Path = "versions convert-map",
+            Summary = "\"Convert map...\": a map of the 1.60 client (a zone with its subzones, tiles or all) converted into your 1.12 workspace as one change set, with the conversion report; --dry-run only reports",
+            Args = new[] { "<client>", "<map>" },
+            Options = new[]
+            {
+                Folder, Listfile,
+                new OptionSpec("zone", "name-or-id", "only the tiles with ground of this zone (or its subzones): its name or AreaTable ID in that client"),
+                new OptionSpec("tiles", "x_y,...", "exactly these tiles (for example 32_48,33_48)"),
+                Common.DryRun,
+            },
+            Details = "<map> is the map's ID, folder or name in that client (wds versions rows <client> Map). Without --zone and --tiles the whole map is converted. " +
+                      "Nothing is written without --yes (without it the report is shown and the exit code is 5). Names come only from your 1.12 game's files " +
+                      "(found by their hashes in a Classic Era copy next to the client) and the listfile you chose; assets without a name go to World\\Converted\\<number>. " +
+                      "\"wds changes revert-set <id> --yes\" takes the whole conversion back.",
+            Examples = new[]
+            {
+                "wds versions convert-map _classic_beta_ Azeroth --zone \"Elwynn Forest\" --dry-run",
+                "wds versions convert-map _classic_beta_ 0 --tiles 32_48,33_48 --yes",
+                "wds versions convert-map _classic_beta_ \"Zephras Isle\" --yes --json",
+            },
+            Run = async inv =>
+            {
+                if (inv.Opt("zone") != null && inv.Opt("tiles") != null) throw new CliError(ExitCode.Usage, "give --zone or --tiles, not both.");
+                List<(int X, int Y)>? tiles = null;
+                if (inv.Opt("tiles") is { } tl)
+                {
+                    try { tiles = MapConverter.ParseTiles(tl); }
+                    catch (ArgumentException e) { throw new CliError(ExitCode.Usage, "--tiles: " + e.Message); }
+                }
+                var s = await inv.Ctx.SessionAsync();
+                if (s.Data == null || s.Workspace == null || s.Dbc == null) throw new CliError(ExitCode.Error, "Your 1.12 game is not open (wds setup client <folder>).");
+                List<ClientCopy>? found = null;
+                var text = inv.Arg(0).Trim().Trim('"');
+                if (!Directory.Exists(text) || inv.Opt("folder") != null || inv.Ctx.Settings.OtherClientsDir != null)
+                {
+                    try { found = Found(inv); }
+                    catch (CliError) when (Directory.Exists(text)) { }
+                }
+                var c = Pick(inv, inv.Arg(0), found);
+                var lf = inv.Opt("listfile") ?? inv.Ctx.Settings.OtherClientsListfile;
+                if (lf != null && !File.Exists(lf)) throw new CliError(ExitCode.NotFound, $"the listfile \"{lf}\" does not exist.");
+                inv.Ctx.Progress($"Opening {c.Name} ({c.Label}) and the names of your 1.12 files...");
+                MapConversionSource src;
+                try { src = MapConversionSource.Open(c, lf, s.Data, found, Path.Combine(inv.Ctx.Paths.Root, "cache", "names")); }
+                catch (NotSupportedException e) { throw new CliError(ExitCode.Refused, e.Message); }
+                catch (Exception e) when (e is IOException or InvalidDataException or WoWData.Core.Casc.CascMissingException) { throw new CliError(ExitCode.NotFound, $"{c.Name} could not be opened: {e.Message}"); }
+                using (src)
+                {
+                    var req = new MapConvertRequest { Map = inv.Arg(1), Zone = inv.Opt("zone"), Tiles = tiles };
+                    var target = new MapConvertTarget { Client = s.Data, Workspace = s.Workspace, Dbc = s.Dbc, Locale = s.GameLocale };
+                    bool write = inv.Yes && !inv.DryRun;
+                    string last = "";
+                    var progress = new SyncProgress<string>(p =>
+                    {
+                        // one line per step (not one per tile)
+                        var step = p.Split(':')[0];
+                        if (step == last) return;
+                        last = step;
+                        inv.Ctx.Progress(p);
+                    });
+                    MapConversionResult res;
+                    try { res = MapConverter.Run(src.Source, req, target, !write, progress); }
+                    catch (ArgumentException e) { throw new CliError(ExitCode.NotFound, e.Message); }
+                    catch (WoWData.Core.Workspace.WorkspaceException e) { return CliResult.Fail(ExitCode.ValidationFailed, e.Message); }
+                    var r = new CliResult().With(ConversionJson(res, c));
+                    foreach (var l in res.Lines()) r.Line(l);
+                    r.Line("Then:");
+                    foreach (var step in res.ServerSteps) r.Line("  " + step);
+                    if (!res.Ok)
+                    {
+                        foreach (var f in res.Validation.Errors.Take(10)) r.Line("  " + f.Plain);
+                        r.Code = ExitCode.ValidationFailed;
+                        r.Error = "The 1.12 check refused converted files: nothing can be saved.";
+                        return r;
+                    }
+                    if (res.ChangeSet is { } cs)
+                        r.Line($"Saved {Common.Plural(cs.Files.Count, "file")} into your workspace as one change set (\"{cs.Label}\", {cs.Id}); \"wds changes revert-set {cs.Id} --yes\" takes it back.");
+                    else if (!inv.DryRun) return Common.NeedsYes(r, "This writes the converted map into your workspace (one change set; your game folder is not changed).");
+                    return r;
+                }
+            },
+        };
     }
+
+    private static object ConversionJson(MapConversionResult res, ClientCopy c) => new
+    {
+        client = c.Name,
+        dryRun = res.DryRun,
+        source = new { id = res.Source.Id, directory = res.Source.Directory, name = res.Source.Name },
+        target = new { mapId = res.TargetMapId, directory = res.TargetDirectory, name = res.TargetName, newMap = res.NewMap },
+        selection = res.SelectionText,
+        tiles = res.Tiles.Select(t => $"{t.X}_{t.Y}"),
+        newTiles = res.NewTiles,
+        alsoCovers = res.AlsoCovers.Select(z => new { zone = z.Zone, chunks = z.Chunks }),
+        names = res.NamesText,
+        textures = new
+        {
+            reused = res.TexturesReused, reusedUses = res.TextureUsesReused,
+            converted = res.TexturesConverted.Select(t => new { path = t.Path, fileDataId = t.FileDataId, width = t.Width, height = t.Height, sourceWidth = t.SourceWidth, sourceHeight = t.SourceHeight, uses = t.Uses }),
+            missing = res.TexturesMissing,
+        },
+        doodads = new { kept = res.DoodadsKept, kept112 = res.DoodadsKept112, leftOut = res.DoodadsLeftOut },
+        wmos = new { kept = res.WmosKept, kept112 = res.WmosKept112, leftOut = res.WmosLeftOut },
+        leftOut = res.LeftOut.OrderByDescending(a => a.Placements).Select(a => new { name = a.Name, kind = a.Kind, placements = a.Placements }),
+        areas = new
+        {
+            kept = res.AreasKept, unknownChunks = res.UnknownAreaChunks,
+            added = res.NewAreas.Select(a => new { sourceId = a.SourceId, id = a.Id, name = a.Name, parentId = a.ParentId, mapId = a.MapId, areaBit = a.AreaBit, chunks = a.Chunks }),
+        },
+        shadows = new { reused = res.ShadowsReused, lostResculpted = res.ShadowsLostResculpted, source160Dropped = res.Shadows160Dropped },
+        minimaps = new { converted = res.Minimaps, missing = res.MinimapsMissing },
+        report = res.Report.Totals().ToDictionary(kv => kv.Key.ToString(), kv => kv.Value),
+        tables = res.TableNotes,
+        files = res.Files.Select(f => new { path = f.Path, kind = f.Kind, isNew = f.IsNew, size = f.Size, replacesYourEdit = f.ReplacesYourEdit }),
+        validation = new { ok = res.Ok, errors = res.Validation.Errors.Select(f => f.Plain), warnings = res.Validation.Warnings.Select(f => f.Plain) },
+        warnings = res.Warnings,
+        serverSteps = res.ServerSteps,
+        changeSet = res.ChangeSet == null ? null : new { id = res.ChangeSet.Id, label = res.ChangeSet.Label, files = res.ChangeSet.Files.Count },
+        seconds = Math.Round(res.Elapsed.TotalSeconds, 1),
+    };
 }

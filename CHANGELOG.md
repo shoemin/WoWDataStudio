@@ -60,6 +60,25 @@ recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
   0 failures; before, 17 WotLK files did not (8 game files in `lichking.MPQ`, including two Storm Peaks textures).
   Tests: `Bzip2Tests` (streams made by Python's bz2 module, run edges, multi-block, a corrupted stream must raise).
 
+* **Converting a map of the 1.60 client to 1.12 (experimental): Convert map... and `wds versions convert-map`.**
+  Milestones 5 and 6 of `docs\research\MAP_CONVERSION_DESIGN.md` (`WoWData.Core.Maps.Conversion`): a zone with its
+  subzones, a list of tiles or a whole map of the "1.60" Classic client goes into your 1.12 workspace as ONE change set
+  (**Revert this import** takes it back; the game folder is never written), after a preview (`--dry-run`) with the
+  conversion report. Tiles through the neutral model and the 1.12 writer: liquid kinds from 1.60's LiquidType table,
+  more than 4 texture layers blended into 4, vertex colours dropped, your 1.12 shadow kept on chunks whose ground did
+  not change (none elsewhere), your 1.12 ground effects kept where the texture stays. Ground textures your game has are
+  used by path, new ones converted (at most 512 x 512, base and `_s` file). Placements whose model 1.12 has are kept,
+  your 1.12 model is kept where 1.60 swapped it at the same unique ID, the rest is left out and listed. Areas 1.12 has
+  keep their ID; 1.60-only areas get AreaTable rows (their 1.60 ID, a free exploration bit of 1.12's 0-2047). WDT,
+  WDL (rebuilt from the heights: chunk corners truncated, measured exact on stock tiles), minimap tiles (512 to 256,
+  named by their MD5 like Blizzard's) with `md5translate.trs`; a map 1.12 does not have gets a Map row (its folder
+  named after the map, a loading screen 1.12 has) and a default Light row. Names only from the user's own 1.12 files
+  (hashed into a Classic Era copy found next to the 1.60 client) and the user's listfile. Everything is checked by the
+  1.12 checks before anything is written (`Workspace.SaveEdits`: one check pass, one change list write). Measured:
+  Elwynn Forest 23 tiles in 2.5 s, all of Eastern Kingdoms (736 tiles) in 11 s, Zephras Isle (72 tiles, a new map)
+  in 3 s; the report names the server steps (area_template / map_template rows, the release patch, Update server maps).
+  Tests: `MapConversionTests`.
+
 ### Fixed
 
 * The 0.13.3 entry below showed a broken path to its in-game test results.

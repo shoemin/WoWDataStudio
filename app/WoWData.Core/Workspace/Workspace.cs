@@ -331,6 +331,60 @@ public sealed class Workspace
     /// <summary>Save an edited file into the workspace (atomically) and record it under a change set.</summary>
     public ChangeRecord SaveEdit(string archivePath, byte[] data, OriginInfo origin, ChangeSet changeSet, string? sourceFile = null, string summary = "")
     {
+        CheckLoads(archivePath, data);
+        var path = ClientData.ResolveName(archivePath);
+        WriteWorkspaceFile(path, data);
+        lock (_lock)
+        {
+            Sync();
+            var rec = Record(path, data, origin, changeSet, sourceFile, summary);
+            Save();
+            return rec;
+        }
+    }
+
+    /// <summary>One file of <see cref="SaveEdits"/>: its game path, its bytes (loaded when needed), its origin and summary.</summary>
+    public sealed record PendingEdit(string Path, Func<byte[]> Load, OriginInfo Origin, string Summary);
+
+    /// <summary>
+    /// 0.14.0 (map conversion): many files saved as one change set. Every file is checked first (the same checks as
+    /// <see cref="SaveEdit"/>; one that would not load refuses the whole set and nothing is written), then they are
+    /// written and the change list is saved once.
+    /// </summary>
+    public List<ChangeRecord> SaveEdits(IReadOnlyList<PendingEdit> edits, ChangeSet changeSet, Action<int, int>? progress = null)
+    {
+        for (int i = 0; i < edits.Count; i++)
+        {
+            CheckLoads(edits[i].Path, edits[i].Load());
+            if (i % 50 == 0) progress?.Invoke(i, edits.Count * 2);
+        }
+        var recs = new List<ChangeRecord>(edits.Count);
+        lock (_lock)
+        {
+            Sync();
+            try
+            {
+                for (int i = 0; i < edits.Count; i++)
+                {
+                    var e = edits[i];
+                    var data = e.Load();
+                    var path = ClientData.ResolveName(e.Path);
+                    WriteWorkspaceFile(path, data);
+                    recs.Add(Record(path, data, e.Origin, changeSet, null, e.Summary));
+                    if (i % 50 == 0) progress?.Invoke(edits.Count + i, edits.Count * 2);
+                }
+            }
+            finally
+            {
+                if (recs.Count > 0) Save();
+            }
+        }
+        return recs;
+    }
+
+    /// <summary>The checks of a file before it is saved: a texture, model, map file or table the game would not load is refused.</summary>
+    private static void CheckLoads(string archivePath, byte[] data)
+    {
         if (archivePath.EndsWith(".blp", StringComparison.OrdinalIgnoreCase))
         {
             var problems = BlpEncoder.Validate(data);
@@ -345,43 +399,46 @@ public sealed class Workspace
         if (mapProblems.Count > 0) throw new WorkspaceException("The map file would not load correctly in the game: " + string.Join("; ", mapProblems));
         var dbcProblems = DbcProblems(data, archivePath);
         if (dbcProblems.Count > 0) throw new WorkspaceException("The table would not load correctly in the game: " + string.Join("; ", dbcProblems));
-        var path = ClientData.ResolveName(archivePath);
+    }
+
+    private void WriteWorkspaceFile(string path, byte[] data)
+    {
         var dest = WorkspaceFile(path);
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(dest)!);
         File.WriteAllBytes(dest + ".tmp", data);
         File.Move(dest + ".tmp", dest, true);
-        lock (_lock)
+    }
+
+    /// <summary>Records a written file under a change set (call under the lock; the caller saves the manifest).</summary>
+    private ChangeRecord Record(string path, byte[] data, OriginInfo origin, ChangeSet changeSet, string? sourceFile, string summary)
+    {
+        var key = Key(path);
+        Manifest.Files.TryGetValue(key, out var old);
+        if (old != null && old.ChangeSet != changeSet.Id && Manifest.ChangeSets.TryGetValue(old.ChangeSet, out var oldSet))
         {
-            Sync();
-            var key = Key(path);
-            Manifest.Files.TryGetValue(key, out var old);
-            if (old != null && old.ChangeSet != changeSet.Id && Manifest.ChangeSets.TryGetValue(old.ChangeSet, out var oldSet))
-            {
-                oldSet.Files.Remove(key);
-                if (oldSet.Files.Count == 0) Manifest.ChangeSets.Remove(oldSet.Id);
-            }
-            var rec = new ChangeRecord
-            {
-                Path = path,
-                Kind = ServerData.ServerChangeFiles.IsServerPath(path) ? "server" : path.EndsWith(".blp", StringComparison.OrdinalIgnoreCase) ? "texture" : path.EndsWith(".m2", StringComparison.OrdinalIgnoreCase) ? "model" : System.IO.Path.GetExtension(path).TrimStart('.').ToLowerInvariant(),
-                Original = origin,
-                WorkspaceSha256 = Sha256(data),
-                Size = data.Length,
-                SourceFile = sourceFile,
-                SourceSha256 = sourceFile != null && File.Exists(sourceFile) ? Sha256File(sourceFile) : null,
-                Edited = DateTime.Now,
-                ChangeSet = changeSet.Id,
-                Summary = summary,
-                Installed = old?.Installed,
-                Packed = old?.Packed,
-                ServerApplied = old?.ServerApplied,
-            };
-            Manifest.Files[key] = rec;
-            Manifest.ChangeSets[changeSet.Id] = changeSet;
-            if (!changeSet.Files.Contains(key)) changeSet.Files.Add(key);
-            Save();
-            return rec;
+            oldSet.Files.Remove(key);
+            if (oldSet.Files.Count == 0) Manifest.ChangeSets.Remove(oldSet.Id);
         }
+        var rec = new ChangeRecord
+        {
+            Path = path,
+            Kind = ServerData.ServerChangeFiles.IsServerPath(path) ? "server" : path.EndsWith(".blp", StringComparison.OrdinalIgnoreCase) ? "texture" : path.EndsWith(".m2", StringComparison.OrdinalIgnoreCase) ? "model" : System.IO.Path.GetExtension(path).TrimStart('.').ToLowerInvariant(),
+            Original = origin,
+            WorkspaceSha256 = Sha256(data),
+            Size = data.Length,
+            SourceFile = sourceFile,
+            SourceSha256 = sourceFile != null && File.Exists(sourceFile) ? Sha256File(sourceFile) : null,
+            Edited = DateTime.Now,
+            ChangeSet = changeSet.Id,
+            Summary = summary,
+            Installed = old?.Installed,
+            Packed = old?.Packed,
+            ServerApplied = old?.ServerApplied,
+        };
+        Manifest.Files[key] = rec;
+        Manifest.ChangeSets[changeSet.Id] = changeSet;
+        if (!changeSet.Files.Contains(key)) changeSet.Files.Add(key);
+        return rec;
     }
 
     /// <summary>Status of every change, newest first.</summary>

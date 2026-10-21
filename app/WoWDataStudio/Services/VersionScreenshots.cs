@@ -1,5 +1,6 @@
 using System.IO;
 using WoWDataStudio.ViewModels;
+using WoWDataStudio.Views;
 
 namespace WoWDataStudio.Services;
 
@@ -12,6 +13,7 @@ namespace WoWDataStudio.Services;
 ///   139_other_versions_tables     the Map table of 3.3.5a with its named columns
 ///   140_other_versions_compare    one spell compared in 1.12.1, 2.4.3 and 3.3.5a, only the differences
 ///   141_other_versions_modern     the "1.60" Classic beta (CASC): a minimap tile of Azeroth found by its number
+///   142_other_versions_convert_map  Convert map...: the preview of Elwynn Forest (a dry run, nothing written)
 /// </summary>
 internal static class VersionScreenshots
 {
@@ -91,6 +93,22 @@ internal static class VersionScreenshots
         await ScreenshotRunner.Settle(800);
         Expect(v.Preview != null, "other versions: a 1.60 minimap tile is previewed");
         await Shot(win, outDir, "141_other_versions_modern");
+
+        // 142: Convert map... with the preview of Elwynn Forest (a dry run: nothing is written)
+        Expect(v.CanConvertMaps, "other versions: the 1.60 client offers Convert map...");
+        var cvm = v.MakeConvertViewModel();
+        var cw = new MapConvertWindow(cvm);
+        ScreenshotRunner.Place(cw, 1180, 800);
+        cw.Show();
+        await cvm.LoadAsync();
+        cvm.SelectedMap = cvm.Maps.FirstOrDefault(m => m.Map.Id == 0);
+        cvm.ByZone = true;
+        cvm.ZoneText = "Elwynn Forest";
+        await cvm.PreviewCommand.ExecuteAsync(null);
+        await ScreenshotRunner.Settle(600);
+        Expect(cvm.CanConvert && cvm.Result is { DryRun: true, Ok: true }, $"other versions: the Elwynn Forest preview ({cvm.Status})");
+        await ScreenshotRunner.Shot(cw, outDir, "142_other_versions_convert_map");
+        cw.Close();
     }
 
     /// <summary>The minimap texture of the first Azeroth tile that has one: MAID holds 8 FileDataIDs per tile (root, obj0,

@@ -688,6 +688,45 @@ usually not Blizzard's; move a copy of the client without it into the folder.
 
 *Status:* open.
 
+### Converted maps leave out the models and buildings 1.12 does not have
+
+*What happens:* **Convert map...** keeps every tree, rock and building whose model your 1.12 game has, and keeps your
+1.12 model where 1.60 put a new one at the same place. The others (new 1.60 models and buildings, which are in a newer
+file format) are left out: on all of Eastern Kingdoms about 26,000 of 218,000 doodads and 720 of 2,800 buildings, on
+Zephras Isle most of them. The report lists them (*Left out most*), by FileDataID when they have no name.
+
+*Who is affected:* anyone converting 1.60 maps, most of all new areas and maps.
+
+*Workaround:* place 1.12 models there in Noggit after the conversion.
+
+*Status:* open (the conversion of modern models and buildings to 1.12 is planned).
+
+### A converted new map is not in the Maps tab until the release patch is installed
+
+*What happens:* a map 1.12 does not have (for example Zephras Isle) is saved into your workspace with its new Map row,
+but the **Maps** tab lists the maps of the game's archives, so the new map is not listed there yet. Its files are in
+**My changes**.
+
+*Who is affected:* anyone converting a whole new map.
+
+*Workaround:* build and install the release patch (**Build release patch (patch-3.MPQ)...**), then open the game
+folder again (**File > Rebuild the index**); or test it in the game with **Test all in game (install as loose files)**.
+
+*Status:* open.
+
+### Reverting a map conversion also reverts your earlier edits of the same files
+
+*What happens:* the conversion builds on your current files: a table you edited before (for example AreaTable.dbc)
+keeps your rows and gets the new ones, a tile you imported from Noggit is replaced. Those files then belong to the
+conversion's change set, so **Revert this import** of the conversion removes your earlier edits of them too. The report
+of the preview warns when this happens (*files already have your own edits*).
+
+*Who is affected:* anyone converting into a workspace that already changed the same tables or tiles.
+
+*Workaround:* convert before editing those files, or revert single files (**Revert**) instead of the whole conversion.
+
+*Status:* open.
+
 ## The command line
 
 ### `wds models render` needs the app and OpenGL

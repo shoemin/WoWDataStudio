@@ -77,6 +77,19 @@ public enum LossKind
     /// <summary>Alpha maps converted between sequential alphas and blend weights (<see cref="AlphaBlendMode"/>); to weights,
     /// paint hidden under an opaque layer above is lost.</summary>
     AlphaBlendConverted,
+    /// <summary>Map conversion: placements whose model or building the target does not have (a newer format, no
+    /// downgrade yet), left out.</summary>
+    PlacementsLeftOut,
+    /// <summary>Map conversion: baked shadows the target cannot use (the ground changed, so the old shadow does not fit;
+    /// or the source's own shadow, which the conversion does not take).</summary>
+    ShadowsDropped,
+    /// <summary>Map conversion: a texture larger than the target loads, made smaller.</summary>
+    TextureResized,
+    /// <summary>Map conversion: minimap tiles made smaller (1.60's 512 x 512 to 1.12's 256 x 256).</summary>
+    MinimapReduced,
+    /// <summary>Map conversion: chunks naming an area the source's AreaTable does not list (encrypted rows), written
+    /// without an area.</summary>
+    AreaUnknown,
 }
 
 /// <summary>One reduced or dropped detail. <see cref="Chunk"/> is the chunk index (indexY * 16 + indexX) or null for a

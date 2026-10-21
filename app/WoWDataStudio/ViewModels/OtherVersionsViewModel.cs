@@ -92,6 +92,11 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
 
     public bool HasClient => _open != null;
 
+    /// <summary>0.14.0: the open client is a modern (CASC) one, whose maps "Convert map..." converts.</summary>
+    public bool CanConvertMaps => _open?.Casc != null;
+
+    private List<ClientCopy> _found = new();
+
     /// <summary>For the screenshots: a file of the open client.</summary>
     internal byte[]? ReadForScreenshots(string pathOrId) => _open?.Files.Read(pathOrId);
 
@@ -162,6 +167,7 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
         var found = await _main.RunBusyAsync("Looking for World of Warcraft clients...", () => Task.Run(() => ClientCopies.Find(folder)));
         Clients.Clear();
         CompareClients.Clear();
+        _found = found;
         foreach (var c in found) Clients.Add(new ClientRow(c));
         foreach (var c in found.Where(c => c.Format == ClientFormat.Mpq).GroupBy(c => (c.Version, c.Build)).Select(g => g.First()).OrderBy(c => c.Build))
             CompareClients.Add(new CompareClientChoice { Copy = c });
@@ -184,6 +190,7 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
         PreviewText = "";
         FileCount = "";
         OnPropertyChanged(nameof(HasClient));
+        OnPropertyChanged(nameof(CanConvertMaps));
         if (!row.Copy.Readable)
         {
             ClientSummary = $"{row.Name}: World of Warcraft {row.Version} (build {row.Build}), {row.Release}. No game data was found in its folder.";
@@ -218,6 +225,7 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
             }));
             _open = oc;
             OnPropertyChanged(nameof(HasClient));
+            OnPropertyChanged(nameof(CanConvertMaps));
             var c = row.Copy;
             foreach (var t in tables) Tables.Add(t);
             if (oc.Casc is { } casc)
@@ -447,6 +455,33 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
         }
         CompareRows = dt.DefaultView;
         CompareNote = cmp.Notes.Count == 0 ? $"{table} {id}: {cmp.Columns.Count} named columns in {cmp.Clients.Count} versions." : string.Join(" ", cmp.Notes);
+    }
+
+    /// <summary>The view model of "Convert map..." for the selected client (also used by the screenshots).</summary>
+    internal MapConvertViewModel MakeConvertViewModel()
+    {
+        var lf = !string.IsNullOrWhiteSpace(Listfile) && File.Exists(Listfile) ? Listfile : null;
+        return new MapConvertViewModel(_session, SelectedClient!.Copy, lf, _found);
+    }
+
+    /// <summary>"Convert map...": a map of the open modern client converted into your 1.12 workspace (its own window).</summary>
+    [RelayCommand]
+    private void ConvertMap()
+    {
+        if (_open?.Casc == null || SelectedClient == null)
+        {
+            SetStatus("Open a modern (CASC) client first: maps are converted from the 1.60 Classic client.", true);
+            return;
+        }
+        if (_session.Workspace == null || _session.Data == null)
+        {
+            SetStatus("Open your 1.12 game folder first: the conversion goes into its workspace.", true);
+            return;
+        }
+        var vm = MakeConvertViewModel();
+        var win = new WoWDataStudio.Views.MapConvertWindow(vm) { Owner = System.Windows.Application.Current.MainWindow };
+        if (win.ShowDialog() == true && vm.Saved is { } cs)
+            _main.Toast($"Saved the converted map into your workspace: {cs.Files.Count} files (\"{cs.Label}\"). Next: My changes > Test all in game, the release patch, and the server steps listed in the report.");
     }
 
     public void Dispose() => _open?.Dispose();

@@ -2910,6 +2910,26 @@ wds versions compare AreaTable 1519 --clients 1.12,2.4,3.3.5 --diff
 wds versions compare Map 0 --clients 1.12,_classic_beta_
 ```
 
+#### wds versions convert-map
+
+"Convert map...": a map of the 1.60 client (a zone with its subzones, tiles or all) converted into your 1.12 workspace as one change set, with the conversion report; --dry-run only reports.
+
+```
+wds versions convert-map <client> <map> [options]
+```
+
+* `--folder <folder>`: search this folder for clients instead of the other-clients setting
+* `--listfile <file>`: names for a modern (CASC) client's files: a listfile you chose (FileDataID;path lines); also the other-clients.listfile setting
+* `--zone <name-or-id>`: only the tiles with ground of this zone (or its subzones): its name or AreaTable ID in that client
+* `--tiles <x_y,...>`: exactly these tiles (for example 32_48,33_48)
+* `--dry-run`: show what would happen; change nothing
+
+```
+wds versions convert-map _classic_beta_ Azeroth --zone "Elwynn Forest" --dry-run
+wds versions convert-map _classic_beta_ 0 --tiles 32_48,33_48 --yes
+wds versions convert-map _classic_beta_ "Zephras Isle" --yes --json
+```
+
 ### Help and the command line itself
 
 #### wds version
@@ -3200,6 +3220,7 @@ app's tests fail when the app, the command line and this table differ.
 | versions.tables | **Tables of this version** | `wds versions tables` |
 | versions.rows | **Find in rows** | `wds versions rows` |
 | versions.compare | **Compare across versions** | `wds versions compare` |
+| versions.convert-map | **Convert map...** | `wds versions convert-map` |
 | help.manual | **Help > User manual** | `wds manual` |
 | help.about | **Help > About WoW Data Studio** | `wds version` |
 | help.cli | **Help > The command line (wds)** | `wds manual` |

@@ -276,6 +276,7 @@ public static class FeatureRegistry
         new("versions.tables", "Other versions", "Tables of this version", "versions tables"),
         new("versions.rows", "Other versions", "Find in rows", "versions rows"),
         new("versions.compare", "Other versions", "Compare across versions", "versions compare"),
+        new("versions.convert-map", "Other versions", "Convert map...", "versions convert-map"),
 
         // ---- help and the command line itself
         new("help.manual", "Help", "Help > User manual", "manual"),

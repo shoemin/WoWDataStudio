@@ -1,6 +1,8 @@
 # Map conversion between versions: design (draft)
 
-Design note, 2026-10-20, for the experimental multi-version work of WoW Data Studio. Nothing here is built yet.
+Design note, 2026-10-20, for the experimental multi-version work of WoW Data Studio. Status: milestones 1-7 are built
+(5 and 6, the 1.60 to 1.12 conversion into the workspace: `app\WoWData.Core\Maps\Conversion\`, **Convert map...** in the
+Other versions tab, `wds versions convert-map`); 8 and 9 are not.
 
 ## Goal and the user's decisions
 

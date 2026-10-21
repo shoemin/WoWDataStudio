@@ -133,15 +133,72 @@ data tables, `Spell.dbc` among them). The **Archives** list marks these archives
 Tick **Blizzard archives only** to leave them out and read the game as Blizzard released it. The app knows the patch
 archives Blizzard shipped with 1.12.1, 2.4.3 and 3.3.5a; for other versions every archive is read.
 
+## Converting a map to 1.12
+
+**Convert map...** brings a map of the "1.60" Classic client (the modern `_classic_beta_`, build 1.60.1.70450) into
+your 1.12 game: a zone with its subzones, some tiles, or a whole map, also a map 1.12 does not have (for example
+Zephras Isle). The converted files go into your *workspace* as one change, like an import: your game folder is not
+changed, **Revert this import** in [My changes](my-changes.md) takes it all back, and **Test all in game (install as
+loose files)** and the release patch work as for any other change.
+
+1. In the list of clients, click the 1.60 client (`_classic_beta_`). The button **Convert map...** appears next to its
+   name. Click it.
+2. Pick the **Map** (name, ID and folder; for example *Eastern Kingdoms (0, Azeroth)*).
+3. Choose what to convert:
+   * **A zone and its subzones**: type or pick the zone, for example *Elwynn Forest*. Every tile with ground of that zone
+     is converted. A tile is converted whole, so the zones next to it change too (the report names them);
+   * **These tiles**: tiles as `x_y`, separated by commas, for example `32_48,33_48`;
+   * **The whole map**.
+4. Click **Preview**. The app converts everything in memory and shows the **Conversion report**; nothing is written.
+   It takes a few seconds (the whole of Eastern Kingdoms: about 10 seconds; **Stop** stops it).
+5. Read the report, then click **Convert**. The files are checked with the 1.12 checks first (nothing is written when
+   one fails) and saved as one change set.
+
+What the conversion does:
+
+* *Ground*: heights, holes, texture layers and their blending, water, lava and slime, zones. 1.12 shows at most 4
+  texture layers per chunk: the 4 most visible are kept and the rest blended in. The 1.60 vertex colours are dropped.
+  Water types become 1.12's four kinds (river, ocean, magma, slime) from the 1.60 client's own liquid table. Grass and
+  small plants (ground effects) stay as in your 1.12 tile where the chunk keeps its texture.
+* *Shadows*: where the ground is the same as in your 1.12 tile, your 1.12 shadow is kept; re-sculpted ground gets no
+  shadow (1.60 has almost none of its own).
+* *Ground textures*: a texture your game has (by its name) is used as it is. A new one is converted from the 1.60 file
+  (at most 512 x 512, the largest the 1.12 game loads) and saved with its `_s` file.
+* *Trees, rocks and buildings*: kept when your game has the model. Where 1.60 put a new model at the same place
+  (many Elwynn trees, some city buildings), your 1.12 model stays. Models and buildings 1.12 does not have are left out
+  and listed (converting them comes later).
+* *Zones*: a zone your AreaTable has keeps its ID; a 1.60 zone gets a new AreaTable row (its 1.60 ID, its name, a free
+  exploration bit).
+* *Map files*: the tile list (WDT), the far terrain on the horizon (WDL, rebuilt from the new heights) and the minimap
+  (1.60's 512 x 512 pictures made 256 x 256, with their entries in `md5translate.trs`). A map 1.12 does not have gets a
+  new Map row (its folder is the map's name, for example `ZephrasIsle`), a loading screen your game has, and a default
+  light.
+* *Names*: only from your own files. The names of your 1.12 game's files are found by their hashes in a Classic Era
+  copy (`_classic_era_`) next to the 1.60 client, plus the listfile you chose (**Choose listfile...**). A new texture
+  without a name is saved as `World\Converted\<number>.blp`. Without a Classic Era copy far fewer names are known, and
+  more models are left out.
+
+![Converting Elwynn Forest: the report of the preview](../screenshots/142_other_versions_convert_map.png)
+
+*Your server.* The server keeps its own copy of the zones and maps, and its own terrain files:
+
+1. New zones (and a new map): in the [Server data](server-data.md) tab, **Check client and server...**, check *areas*
+   (and *maps*), select the new rows and click **Make the server match the game**; save and apply.
+2. Build the release patch (**Build release patch (patch-3.MPQ)...**, installed into the game), then **Update server
+   maps...** ([Maps and terrain](maps-and-terrain.md#update-server-maps)).
+
+The report lists these steps with the IDs.
+
 ## Not yet
 
 * Most columns of the modern clients' data tables have no names yet.
-* Converting maps between versions (the "1.60" Classic maps to 1.12 and back) is planned, not there yet.
-* 3D views of TBC and WotLK models, and bringing maps, models or textures of other versions into your 1.12 game, are
-  planned, not there yet.
+* Maps convert from 1.60 to 1.12 only: 1.12 to 1.60, and maps of 2.x and 3.x, are planned. The models and buildings
+  1.12 does not have are left out (their conversion is planned), see [Known issues](known-issues.md#other-versions).
+* 3D views of TBC and WotLK models, and bringing models or textures of other versions into your 1.12 game, are planned,
+  not there yet.
 * Many tables of other versions show raw columns ([Known issues](known-issues.md#other-versions)).
 
 ## Command line
 
-`wds versions find`, `info`, `files`, `extract`, `tables`, `rows` and `compare` do everything this tab does, and
+`wds versions find`, `info`, `files`, `extract`, `tables`, `rows`, `compare` and `convert-map` do everything this tab does, and
 `wds settings set other-clients <folder>` sets the folder; see [The command line](command-line.md#other-versions-experimental).
