@@ -18,7 +18,8 @@ public sealed class Adt112WriterOptions
 /// The neutral model as 1.12.1 map files. The layout is the one Blizzard's tools wrote in every stock 1.12 tile (see
 /// <see cref="Adt112Reader"/>), so a stock tile read by <see cref="Adt112Reader"/> comes back byte for byte. Content from
 /// richer sources is reduced to what 1.12 can show, and every reduction goes into the <see cref="ConversionReport"/>:
-/// * more than 4 texture layers: the 4 with the most visible coverage are kept and renormalised;
+/// * more than 4 texture layers: the 4 with the most visible coverage are kept and renormalised; 1.60 blend weights
+///   (<see cref="AlphaBlendMode.Weights"/>) are turned into 1.12's sequential alphas (see ReduceLayers);
 /// * 8-bit alpha to 4 bits with <c>v &gt;&gt; 4</c> (the exact inverse of Blizzard's <c>16n + 15</c>; reported only when a
 ///   value is not of that form);
 /// * fine holes: a 1.12 hole only where all four fine holes are holes;
@@ -135,6 +136,10 @@ public static class Adt112Writer
             if (Tile.FlightBounds != null) Add(LossKind.FlightBoundsDropped, null, 1, "MFBO flight bounds dropped");
             if (Tile.TextureParams.Count > 0) Add(LossKind.TextureParamsDropped, null, Tile.TextureParams.Count, $"{Tile.TextureParams.Count} texture parameter entries (MTXF/MTXP) dropped");
             if (Tile.LodBlob != null) Add(LossKind.LodDropped, null, 1, "LOD data dropped");
+            if (Tile.Obj1Blob != null) Add(LossKind.LodDropped, null, 1, "obj1 level-of-detail placement lists dropped");
+            int subs = Tile.AllChunks.Sum(c => c.ExtraSubChunks.Count);
+            if (subs > 0)
+                Add(LossKind.UnknownChunksDropped, null, subs, "MCNK sub-chunks dropped: " + string.Join(" ", Tile.AllChunks.SelectMany(c => c.ExtraSubChunks).GroupBy(c => c.Magic).Select(g => $"{g.Key} x{g.Count()}")));
             if (Tile.ExtraChunks.Count > 0)
                 Add(LossKind.UnknownChunksDropped, null, Tile.ExtraChunks.Count, "chunks dropped: " + string.Join(" ", Tile.ExtraChunks.Select(c => c.Magic)));
             Textures.ReportMadeUp();
@@ -317,10 +322,12 @@ public static class Adt112Writer
             ctx.Add(LossKind.ChunkMissing, index, 1, "chunk missing in the model: written flat at height 0");
             ch = NeutralChunk.CreateFlat(ctx.Tile.X, ctx.Tile.Y, index % 16, index / 16, 0f);
         }
-        // --- texture layers (at most 4), alpha to 4 bits
-        var layers = ch.Layers.Count > 4 ? ReduceLayers(ctx, ch, index) : ch.Layers;
+        // --- texture layers (at most 4, sequential alphas), alpha to 4 bits
+        bool fromWeights = ctx.Tile.AlphaBlend == AlphaBlendMode.Weights && ch.Layers.Count > 1;
+        int offGrid = 0;
+        var layers = ch.Layers.Count > 4 || fromWeights ? ReduceLayers(ctx, ch, index, fromWeights, out offGrid) : ch.Layers;
         var outLayers = new List<LayerOut>(layers.Count);
-        int nAlpha = 0, reduced = 0;
+        int nAlpha = 0, reduced = offGrid;
         foreach (var l in layers)
         {
             uint flags = l.Flags & 0xFF;
@@ -489,45 +496,42 @@ public static class Adt112Writer
     }
 
     /// <summary>
-    /// More than 4 layers: the visible weight of each layer is computed per texel under 1.12's sequential blending (each
-    /// layer drawn over the ones below with its alpha: weight_L = alpha_L x product of (1 - alpha) of the layers above;
-    /// the base gets what is left), the 4 layers with the largest total weight are kept in their order, their weights are
-    /// renormalised to 1 per texel, and turned back into sequential alphas (alpha_j = weight_j / sum of weights j and below).
-    /// The lowest kept layer becomes the base.
+    /// More than 4 layers, or alphas that are blend weights (<see cref="AlphaBlendMode.Weights"/>, 1.60's 8-bit maps): the
+    /// visible weight of each layer is computed per texel (sequential: weight_L = alpha_L x product of (1 - alpha) of the
+    /// layers above, the base gets what is left; weights: the stored value, the base 255 minus their sum), the 4 layers
+    /// with the largest total weight are kept in their order, their weights are renormalised to 1 per texel, and turned
+    /// back into sequential alphas (alpha_j = weight_j / sum of weights j and below). The lowest kept layer becomes the
+    /// base. Alphas converted from weights are set to the nearest 1.12 value (0 or 16n + 15), so a weight Blizzard made
+    /// from a 1.12 alpha gives that alpha back; <paramref name="offGrid"/> = layers with a texel more than 2.5 off such a
+    /// value (reported as reduced).
     /// </summary>
-    private static List<NeutralLayer> ReduceLayers(TileContext ctx, NeutralChunk ch, int index)
+    private static List<NeutralLayer> ReduceLayers(TileContext ctx, NeutralChunk ch, int index, bool fromWeights, out int offGrid)
     {
         int n = ch.Layers.Count;
-        var weight = new float[n][];
+        var weight = AlphaBlending.VisibleWeights(ch.Layers, fromWeights ? AlphaBlendMode.Weights : AlphaBlendMode.Sequential);
         var total = new double[n];
-        for (int L = 0; L < n; L++) weight[L] = new float[4096];
         for (int t = 0; t < 4096; t++)
-        {
-            float rest = 1f;
-            for (int L = n - 1; L >= 1; L--)
-            {
-                float a = (ch.Layers[L].Alpha?[t] ?? 0) / 255f;
-                float wL = a * rest;
-                weight[L][t] = wL;
-                rest -= wL;
-            }
-            weight[0][t] = rest;
             for (int L = 0; L < n; L++) total[L] += weight[L][t];
-        }
         var keep = Enumerable.Range(0, n).OrderByDescending(L => total[L]).ThenBy(L => L).Take(4).OrderBy(L => L).ToList();
         var outList = new List<NeutralLayer>(4);
+        var seq = AlphaBlending.SequentialFromWeights(keep.Select(L => weight[L]).ToList());
         var alphas = keep.Select(_ => new byte[4096]).ToList();
-        for (int t = 0; t < 4096; t++)
+        offGrid = 0;
+        for (int j = 1; j < keep.Count; j++)
         {
-            float sum = 0;
-            foreach (var L in keep) sum += weight[L][t];
-            float below = 0;
-            for (int j = 0; j < keep.Count; j++)
+            bool off = false;
+            for (int t = 0; t < 4096; t++)
             {
-                float wj = sum > 0 ? weight[keep[j]][t] / sum : (j == 0 ? 1f : 0f);
-                below += wj;
-                if (j > 0) alphas[j][t] = (byte)Math.Clamp(MathF.Round(below > 0 ? wj / below * 255f : 0f), 0, 255);
+                float s = seq[j][t];
+                if (fromWeights)
+                {
+                    byte lv = AlphaBlending.Level4(s);
+                    if (!off && MathF.Abs(lv - s) > 2.5f) off = true;
+                    alphas[j][t] = lv;
+                }
+                else alphas[j][t] = (byte)Math.Clamp(MathF.Round(s), 0, 255);
             }
+            if (off) offGrid++;
         }
         for (int j = 0; j < keep.Count; j++)
         {
@@ -540,7 +544,8 @@ public static class Adt112Writer
             });
         }
         var dropped = Enumerable.Range(0, n).Except(keep).ToList();
-        ctx.Add(LossKind.TextureLayersDropped, index, dropped.Count,
+        if (dropped.Count > 0)
+            ctx.Add(LossKind.TextureLayersDropped, index, dropped.Count,
             $"{n} texture layers, kept {string.Join(", ", keep)} (most visible), dropped {string.Join(", ", dropped.Select(L => $"{L} ({ch.Layers[L].Texture}, {total[L] / 40.96:F1}% visible)"))}");
         return outList;
     }
@@ -692,6 +697,9 @@ public static class Adt112Writer
     public static byte[] WriteWdl(NeutralWdl wdl, ConversionReport? report = null, string name = "map.wdl")
     {
         if (wdl.Holes.Count > 0) report?.Add(LossKind.FarHolesDropped, name, null, wdl.Holes.Count, $"far hole masks (MAHO) of {wdl.Holes.Count} tiles dropped");
+        if (wdl.TileExtraChunks.Count > 0)
+            report?.Add(LossKind.UnknownChunksDropped, name, null, wdl.TileExtraChunks.Values.Sum(l => l.Count),
+                "per-tile chunks dropped: " + string.Join(" ", wdl.TileExtraChunks.Values.SelectMany(l => l).GroupBy(c => c.Magic).Select(g => $"{g.Key} x{g.Count()}")));
         if (wdl.ExtraChunks.Count > 0)
             report?.Add(LossKind.UnknownChunksDropped, name, null, wdl.ExtraChunks.Count, "chunks dropped: " + string.Join(" ", wdl.ExtraChunks.Select(c => c.Magic)));
         int size = 12 + 8 + MapBytes.WdlMaofSize + wdl.Heights.Count * (8 + MapBytes.WdlMareData);

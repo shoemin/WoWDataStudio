@@ -57,7 +57,13 @@ public sealed class AssetRef
 }
 
 /// <summary>A top-level chunk a reader met but does not model (kept opaque; magic forward, data without the 8-byte header).</summary>
-public sealed record RawChunk(string Magic, byte[] Data);
+public sealed record RawChunk(string Magic, byte[] Data)
+{
+    /// <summary>Where a reader of split files met it, so a writer of the same version puts it back there (for example
+    /// <c>"obj0"</c> = in the obj0 file before its MCNKs, <c>"root+"</c> = in the root file after its MCNKs; see
+    /// <see cref="Adt160Reader"/>); null = the one file of a 1.12-style ADT, in file order.</summary>
+    public string? Location { get; init; }
+}
 
 // ====================================================================== map level (WDT, WDL, minimaps)
 
@@ -118,6 +124,9 @@ public sealed class NeutralWdl
     public SortedDictionary<int, ushort[]> Holes { get; } = new();
     /// <summary>WDL chunks the reader did not model (for example WotLK's low-detail WMO lists).</summary>
     public List<RawChunk> ExtraChunks { get; } = new();
+    /// <summary>Tile index -> chunks that follow that tile's MARE and are not modelled (modern MAOE, 32 bytes, in 459
+    /// of 1.60 Azeroth's 736 tiles), in file order.</summary>
+    public SortedDictionary<int, List<RawChunk>> TileExtraChunks { get; } = new();
 }
 
 // ====================================================================== tile level (ADT)
@@ -135,6 +144,9 @@ public sealed class NeutralTile
     /// <summary>MHDR flags (0 in 1.12; 0x1 = MFBO present, 0x2 = Northrend in WotLK).</summary>
     public uint HeaderFlags { get; set; }
 
+    /// <summary>What the layers' alpha values mean (see <see cref="AlphaBlendMode"/>): 1.12 and the 4-bit 1.60 maps store
+    /// sequential alphas, the 8-bit 1.60 maps blend weights. Writers convert when their target uses the other mode.</summary>
+    public AlphaBlendMode AlphaBlend { get; set; } = AlphaBlendMode.Sequential;
     /// <summary>Ground textures in their file order (MTEX / modern MDID). Layers point at these objects.</summary>
     public List<AssetRef> Textures { get; } = new();
     /// <summary>Doodad models in their file order (MMDX via MMID). Placements point at these objects.</summary>
@@ -155,6 +167,11 @@ public sealed class NeutralTile
     public List<TextureParams> TextureParams { get; } = new();
     /// <summary>The tile's LOD file (modern _lod.adt), kept opaque.</summary>
     public byte[]? LodBlob { get; set; }
+    /// <summary>The tile's modern _obj1.adt (the level-of-detail copy of the placements: MLFD MLDD MLDX MLDL MLMD MLMX
+    /// ...), kept opaque: it is derived from the obj0 placements by Blizzard's tools in a way that is not known (its
+    /// MLDD records are the MDDF records with other flag bits, MLMD a subset of MODF), so an edit of
+    /// <see cref="Doodads"/> / <see cref="Wmos"/> is not reflected in it.</summary>
+    public byte[]? Obj1Blob { get; set; }
     /// <summary>Top-level chunks the reader did not model.</summary>
     public List<RawChunk> ExtraChunks { get; } = new();
 
@@ -170,12 +187,30 @@ public sealed class NeutralTile
     }
 }
 
+/// <summary>
+/// How a chunk's texture layers combine, i.e. what <see cref="NeutralLayer.Alpha"/> means.
+/// <para><b>Sequential</b> (1.12; 1.60's 4-bit instance maps): each layer is drawn over the ones below with its alpha; the
+/// visible share of layer L is alpha_L x the product of (1 - alpha) of the layers above it. Layers overlap freely:
+/// MEASURED, in 11.9% of 1.12 Azeroth's multi-layer texels the upper alphas sum to more than 255 (in 25-31% of the
+/// 1.60 instance maps' 3-4-layer texels the nibbles sum to more than 15).</para>
+/// <para><b>Weights</b> (1.60 maps with 8-bit alpha, MPHD 0x4 / 0x80): each upper layer's value is its share of the texel,
+/// the base layer gets 255 minus their sum. MEASURED on every multi-layer chunk of 1.60 Azeroth and Kalimdor (281,896
+/// chunks, 2-8 layers, 1.15 G texels): the upper values never sum to more than 255. Where 1.12 layers overlap (101 M
+/// texels of chunks with the same textures on both sides), 1.60 holds the 1.12 layer's sequential visible share
+/// ((16n + 15) / 255 x the transparency of the layers above, within 2.5 / 255) in 94.6% of the texels and the 1.12 alpha
+/// itself in 0.005%: Blizzard converted sequential alphas into weights. (That the client blends the two kinds of map
+/// differently is INFERRED from the data.)</para>
+/// </summary>
+public enum AlphaBlendMode { Sequential, Weights }
+
 /// <summary>Texture parameters (MTXF flags; MTXP adds height scale and offset).</summary>
 public sealed class TextureParams
 {
     public uint Flags { get; set; }
     public float HeightScale { get; set; }
     public float HeightOffset { get; set; }
+    /// <summary>The height texture of this ground texture (modern tex0 MHID entry), or null.</summary>
+    public AssetRef? HeightTexture { get; set; }
 }
 
 /// <summary>One of a tile's 256 chunks (MCNK).</summary>
@@ -194,7 +229,10 @@ public sealed class NeutralChunk
     public float[] Heights { get; set; } = new float[145];
     /// <summary>145 normals as signed bytes x, y, z (world space).</summary>
     public sbyte[] Normals { get; set; } = new sbyte[145 * 3];
-    /// <summary>The 13 bytes Blizzard's tools wrote after MCNR in 1.12 (uninitialised memory, non-zero in every stock chunk).</summary>
+    /// <summary>The 13 bytes Blizzard's tools wrote after MCNR in 1.12 (uninitialised memory, non-zero in every stock chunk).
+    /// 1.60 counts the same 13 bytes into MCNR's size (448 = 435 + 13); <see cref="Adt160Reader"/> keeps them here too
+    /// when they are not all zero (MEASURED: 00 70 F5 12 00 08 00 00 00 54 F5 12 00 in all 88,576 chunks of every 5th
+    /// continent tile, apparently stack memory of Blizzard's tool).</summary>
     public byte[]? NormalPad112 { get; set; }
     /// <summary>Holes, high resolution: 8 x 8 bits, byte = row, bit = column (a 1.12 4 x 4 hole is the 2 x 2 block of
     /// fine holes under it).</summary>
@@ -215,11 +253,19 @@ public sealed class NeutralChunk
     public byte[]? VertexLighting { get; set; }
     /// <summary>Liquid instances (MH2O instances, or one per 1.12 MCLQ layer).</summary>
     public List<NeutralLiquid> Liquids { get; } = new();
+    /// <summary>Whether the 1.60 MH2O header of this chunk pointed at an attribute block (fishable / deep masks), also when
+    /// both masks are zero; null when not read from 1.60. MEASURED on the 1.60 continents: chunks whose instances are all
+    /// ocean (LiquidType 1250) have none (173,593) unless a mask is set; every other chunk has one, 3,565 of them with
+    /// both masks zero (4 mixed chunks without one). Writers write a block when this is true or a mask is set.</summary>
+    public bool? Mh2oAttributes160 { get; set; }
     /// <summary>Doodads referenced by this chunk (indices into <see cref="NeutralTile.Doodads"/>), in file order.</summary>
     public List<int> DoodadRefs { get; } = new();
     /// <summary>WMOs referenced by this chunk (indices into <see cref="NeutralTile.Wmos"/>), in file order.</summary>
     public List<int> WmoRefs { get; } = new();
     public List<NeutralSoundEmitter> SoundEmitters { get; } = new();
+    /// <summary>MCNK sub-chunks the reader met but does not model, in file order (1.60 root: MPTX in 2,618 continent
+    /// chunks, MCBB in 10; both after MCSE). <see cref="RawChunk.Location"/> names the file (null = the root).</summary>
+    public List<RawChunk> ExtraSubChunks { get; } = new();
 
     /// <summary>The corner of chunk (cx, cy) of tile (tx, ty) as the 1.12 client computes it.</summary>
     public static Vector3 CornerOf(int tileX, int tileY, int cx, int cy, float z = 0f) =>

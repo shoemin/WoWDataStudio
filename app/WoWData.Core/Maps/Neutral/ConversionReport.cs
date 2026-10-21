@@ -53,6 +53,30 @@ public enum LossKind
     MapFileRefsDropped,
     /// <summary>WDL far hole masks (MAHO) dropped.</summary>
     FarHolesDropped,
+    /// <summary>An assumption, not a loss: assets that had only a path got their FileDataID from the name resolver (ground
+    /// textures: the <c>_s.blp</c> file, which is what modern tex0 MDID entries name).</summary>
+    AssetIdResolved,
+    /// <summary>An asset with no known FileDataID got a new local one (listed in the writer's name map).</summary>
+    AssetIdAllocated,
+    /// <summary>The 1.12 model name lists (MMDX / MWMO order) cannot be stored: modern placements name their model by
+    /// FileDataID, so a reader rebuilds the lists in first-use order.</summary>
+    ModelListRebuilt,
+    /// <summary>MCLQ details with no MH2O counterpart dropped (flow vectors, water flow bytes, irregular tile bytes).</summary>
+    LiquidFlowDropped,
+    /// <summary>Liquid instances of one chunk had different fishable / deep tiles; MH2O has one mask per chunk (merged).</summary>
+    LiquidMasksMerged,
+    /// <summary>A liquid without a LiquidType ID got one from its 1.12 kind (default or supplied table).</summary>
+    LiquidTypeDefaulted,
+    /// <summary>A liquid without a LiquidObject ID: the vertex format number was written in its place (the 3.3.5a meaning
+    /// of MH2O's second field; a modern client reads a LiquidObject ID there).</summary>
+    LiquidObjectDefaulted,
+    /// <summary>The model has no modern obj1 data: written with empty level-of-detail placement lists.</summary>
+    Obj1Generated,
+    /// <summary>MAID slots left empty (no such file: LOD, map textures).</summary>
+    MapFileRefsMissing,
+    /// <summary>Alpha maps converted between sequential alphas and blend weights (<see cref="AlphaBlendMode"/>); to weights,
+    /// paint hidden under an opaque layer above is lost.</summary>
+    AlphaBlendConverted,
 }
 
 /// <summary>One reduced or dropped detail. <see cref="Chunk"/> is the chunk index (indexY * 16 + indexX) or null for a

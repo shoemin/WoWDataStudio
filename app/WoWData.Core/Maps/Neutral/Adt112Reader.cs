@@ -19,7 +19,14 @@ namespace WoWData.Core.Maps.Neutral;
 public static class Adt112Reader
 {
     /// <summary>MCLQ tile low nibble of a tile that has liquid, per 1.12 kind (river 4, ocean 1, magma 6: measured on every
-    /// stock layer; slime 3 is an ASSUMPTION: no stock 1.12 tile has slime, so it is unverified).</summary>
+    /// stock layer, the same in all 2.4.3 tiles). Slime 3: no 1.12 or 2.4.3 terrain has slime (MEASURED), so the value is
+    /// settled from the client and the WMO data: the 1.12 client reads a terrain liquid tile as "has liquid" when the
+    /// nibble is not 0xF and takes its type as nibble &amp; 3 (0 water, 1 ocean, 2 magma, 3 slime; MapColl_GetLiquidAtPoint
+    /// @0069b6d0); it draws terrain liquid only for the river / ocean / magma slots, matching the nibble exactly (4, 1, 6:
+    /// CChunkLiquid_FillIndices @0068d9b0 via DrawClass0/1/2; World_CullAreaChunkLiquids @00683ab0 culls layers 0..2 only),
+    /// so a slime layer is never drawn on terrain and any nibble with &amp; 3 == 3 behaves the same. In Blizzard's 1.12 WMO
+    /// liquids (MLIQ tile bytes, MEASURED: water caves 4, lava 6 or 2) the Undercity sewers' slime is 3 in all 38 groups; 7 occurs in 3
+    /// Stratholme groups. 3 is kept.</summary>
     public static readonly byte[] MclqKindNibble = { 4, 1, 6, 3 };
 
     /// <summary>(x, y) from a tile file name "Map_x_y.adt", or null.</summary>
