@@ -21,6 +21,9 @@ public sealed class MapConvertRequest
     public IReadOnlyList<(int X, int Y)>? Tiles { get; init; }
     /// <summary>Where assets without a 1.12 name go (<c>World\Converted\&lt;FileDataID&gt;.&lt;ext&gt;</c>).</summary>
     public string ConvertedFolder { get; init; } = @"World\Converted";
+    /// <summary>How the selection is named in the report when <see cref="Tiles"/> are given ("the zones Elwynn Forest and
+    /// Westfall"); null: the tile list.</summary>
+    public string? SelectionLabel { get; init; }
 }
 
 /// <summary>The user's 1.12 game: its files, the workspace the conversion is saved into, its data tables.</summary>
@@ -31,6 +34,8 @@ public sealed class MapConvertTarget
     public required DbcService Dbc { get; init; }
     /// <summary>The game's language (index of <see cref="DbcTable.LocaleNames"/>): new names go there and to enUS.</summary>
     public int Locale { get; init; }
+    /// <summary>Save into this change set instead of starting one (the update catalog imports several picks as one).</summary>
+    public ChangeSet? JoinChangeSet { get; init; }
 
     /// <summary>Your workspace version of a file, else the game's.</summary>
     public byte[]? ReadCurrent(string path) => (Workspace.IsModified(path) ? Workspace.ReadEdited(path) : null) ?? Client.Read(path);
@@ -246,7 +251,7 @@ public static class MapConverter
             var missing = list.Where(t => !existing.Contains(t)).ToList();
             if (missing.Count > 0) throw new ArgumentException($"{smap.Name} has no tile {string.Join(", ", missing.Select(t => $"{t.X}_{t.Y}"))} in {source.Label}.");
             res.Tiles.AddRange(list.OrderBy(t => t.Y).ThenBy(t => t.X));
-            res.SelectionText = $"tile{(list.Count == 1 ? "" : "s")} {string.Join(", ", res.Tiles.Take(8).Select(t => $"{t.X}_{t.Y}"))}{(list.Count > 8 ? ", ..." : "")}";
+            res.SelectionText = req.SelectionLabel ?? $"tile{(list.Count == 1 ? "" : "s")} {string.Join(", ", res.Tiles.Take(8).Select(t => $"{t.X}_{t.Y}"))}{(list.Count > 8 ? ", ..." : "")}";
         }
         else if (!string.IsNullOrWhiteSpace(req.Zone))
         {
@@ -513,7 +518,7 @@ public static class MapConverter
             if (!dryRun)
             {
                 progress?.Report($"Saving {pending.Count} files into your workspace...");
-                var cs = target.Workspace.BeginChangeSet($"Map conversion: {res.TargetName} from {VersionName(source.Version)} ({res.SelectionText})");
+                var cs = target.JoinChangeSet ?? target.Workspace.BeginChangeSet($"Map conversion: {res.TargetName} from {VersionName(source.Version)} ({res.SelectionText})");
                 var edits = pending.OrderBy(p => p.Path, StringComparer.OrdinalIgnoreCase)
                     .Select(p => new Ws.PendingEdit(p.Path, () => File.ReadAllBytes(p.StagedFile), p.Origin, p.Summary)).ToList();
                 target.Workspace.SaveEdits(edits, cs, (i, n) => progress?.Report($"Saving into your workspace: {i * 100 / Math.Max(1, n)}%..."));

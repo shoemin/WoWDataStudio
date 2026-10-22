@@ -60,7 +60,11 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
         _folder = session.Settings.OtherClientsDir ?? "";
         _blizzardOnly = session.Settings.OtherClientsBlizzardOnly;
         _listfile = session.Settings.OtherClientsListfile ?? "";
+        Updates = new UpdateCatalogViewModel(session, main);
     }
+
+    /// <summary>0.14.0: the Updates tab (the update catalog of the open modern client against your game).</summary>
+    public UpdateCatalogViewModel Updates { get; }
 
     public ObservableCollection<ClientRow> Clients { get; } = new();
     public ObservableCollection<ArchiveRow> Archives { get; } = new();
@@ -191,6 +195,7 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
         FileCount = "";
         OnPropertyChanged(nameof(HasClient));
         OnPropertyChanged(nameof(CanConvertMaps));
+        Updates.SetClient(null, null, _found);
         if (!row.Copy.Readable)
         {
             ClientSummary = $"{row.Name}: World of Warcraft {row.Version} (build {row.Build}), {row.Release}. No game data was found in its folder.";
@@ -226,6 +231,7 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
             _open = oc;
             OnPropertyChanged(nameof(HasClient));
             OnPropertyChanged(nameof(CanConvertMaps));
+            Updates.SetClient(row.Copy, lf, _found);
             var c = row.Copy;
             foreach (var t in tables) Tables.Add(t);
             if (oc.Casc is { } casc)
@@ -484,5 +490,9 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
             _main.Toast($"Saved the converted map into your workspace: {cs.Files.Count} files (\"{cs.Label}\"). Next: My changes > Test all in game, the release patch, and the server steps listed in the report.");
     }
 
-    public void Dispose() => _open?.Dispose();
+    public void Dispose()
+    {
+        Updates.Dispose();
+        _open?.Dispose();
+    }
 }

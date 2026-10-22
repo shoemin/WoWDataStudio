@@ -202,6 +202,95 @@
                                           GridLinesVisibility="Horizontal" AutoGeneratingColumn="Grid_AutoGeneratingColumn" />
                             </DockPanel>
                         </TabItem>
+
+                        <!-- 0.14.0: the update catalog -->
+                        <TabItem Header="Updates" Padding="12,5">
+                            <Grid Margin="0,8,0,0" DataContext="{Binding Updates}">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <DockPanel Margin="0,0,0,6">
+                                    <Button DockPanel.Dock="Right" Content="Stop" Command="{Binding StopCommand}" Style="{StaticResource ToolButton}" Margin="6,0,0,0"
+                                            Visibility="{Binding IsBusy, Converter={StaticResource BoolVis}}" ToolTip="Stop the scan or the import (nothing is written when it stops)." />
+                                    <Button DockPanel.Dock="Left" Content="Scan for updates" Command="{Binding ScanCommand}" Style="{StaticResource PrimaryButton}" Padding="14,5" Margin="0,0,6,0"
+                                            IsEnabled="{Binding CanScan}"
+                                            ToolTip="Compare this client with your 1.12 game: every difference, grouped into updates you can pick. The first scan takes a minute or two; the result is kept and used again until either side changes." />
+                                    <Button DockPanel.Dock="Left" Content="Scan again" Command="{Binding RescanCommand}" Style="{StaticResource ToolButton}" Margin="0,0,10,0"
+                                            IsEnabled="{Binding CanScan}" ToolTip="Scan both sides again, even when the kept catalog is current." />
+                                    <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" VerticalAlignment="Center"
+                                               Text="Experimental. Every difference between this client and your 1.12 game, with what it takes to bring it over: Ready, Needs converter, Needs server, Needs client code, or No visible change." />
+                                </DockPanel>
+                                <WrapPanel Grid.Row="1" Margin="0,0,0,6">
+                                    <TextBlock Text="Kind" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                    <ComboBox ItemsSource="{Binding Kinds}" SelectedItem="{Binding KindFilter}" Width="170" Margin="0,0,12,0" VerticalAlignment="Center" />
+                                    <TextBlock Text="Class" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                    <ComboBox ItemsSource="{Binding Classes}" SelectedItem="{Binding ClassFilter}" Width="150" Margin="0,0,12,0" VerticalAlignment="Center" />
+                                    <TextBlock Text="Zone or folder" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                    <TextBox Text="{Binding WhereFilter, UpdateSourceTrigger=PropertyChanged, Delay=300}" Width="150" Margin="0,0,12,0" VerticalAlignment="Center"
+                                             ToolTip="Only updates whose zone, map, folder or table contains this text (for example Elwynn or Creature)." />
+                                    <TextBlock Text="Search" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                    <TextBox Text="{Binding Search, UpdateSourceTrigger=PropertyChanged, Delay=300}" Width="150" Margin="0,0,12,0" VerticalAlignment="Center"
+                                             ToolTip="Words that must appear in the title, the place, the ID or the measured facts." />
+                                    <CheckBox Content="Hide differences without a visible change" IsChecked="{Binding HideUnchanged}" VerticalAlignment="Center" Margin="0,0,12,0"
+                                              ToolTip="Leave out files that were only re-encoded or re-saved in the modern format (nothing to bring)." />
+                                    <CheckBox Content="Only what can be imported" IsChecked="{Binding OnlyImportable}" VerticalAlignment="Center" />
+                                </WrapPanel>
+                                <Grid Grid.Row="2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="8" />
+                                        <ColumnDefinition Width="440" />
+                                    </Grid.ColumnDefinitions>
+                                    <DataGrid x:Name="UpdateGrid" ItemsSource="{Binding Rows}" SelectedItem="{Binding SelectedRow}" AutoGenerateColumns="False" IsReadOnly="True"
+                                              SelectionMode="Extended" HeadersVisibility="Column" GridLinesVisibility="Horizontal" EnableRowVirtualization="True"
+                                              SelectionChanged="UpdateGrid_SelectionChanged">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Update" Binding="{Binding Title}" Width="*" />
+                                            <DataGridTextColumn Header="Kind" Binding="{Binding Kind}" Width="120" />
+                                            <DataGridTextColumn Header="Class" Binding="{Binding Class}" Width="115" />
+                                            <DataGridTextColumn Header="Files" Binding="{Binding Files, StringFormat=N0}" Width="60" />
+                                            <DataGridTextColumn Header="Size" Binding="{Binding Size}" Width="70" />
+                                            <DataGridTextColumn Header="Import" Binding="{Binding Import}" Width="55" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                    <Grid Grid.Column="2">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="3*" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="2*" />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="About this update" Style="{StaticResource H3}" Margin="0,0,0,4" />
+                                        <TextBox Grid.Row="1" Text="{Binding Details, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                                 FontFamily="Consolas" FontSize="11.5" BorderThickness="1" />
+                                        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,8,0,4">
+                                            <Button Content="Preview import" Command="{Binding PreviewCommand}" CommandParameter="{Binding SelectedItems, ElementName=UpdateGrid}"
+                                                    Style="{StaticResource PrimaryButton}" Padding="12,5" Margin="0,0,8,0"
+                                                    ToolTip="Convert the picked updates in memory and show what would be written. Nothing is written." />
+                                            <Button Content="Import picked updates" Command="{Binding ImportCommand}" CommandParameter="{Binding SelectedItems, ElementName=UpdateGrid}"
+                                                    Style="{StaticResource ToolButton}" IsEnabled="{Binding CanImport}" Margin="0"
+                                                    ToolTip="Save the picked updates into your workspace as one change set (after a Preview import of the same picks). Revert this import in My changes takes it all back." />
+                                        </StackPanel>
+                                        <TextBlock Grid.Row="3" Text="Import report" Style="{StaticResource H3}" Margin="0,4,0,4" />
+                                        <TextBox Grid.Row="4" Text="{Binding Report, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                                 FontFamily="Consolas" FontSize="11.5" BorderThickness="1" />
+                                    </Grid>
+                                </Grid>
+                                <TextBlock Grid.Row="3" Text="{Binding Status}" TextWrapping="Wrap" Margin="0,6,0,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding StatusIsError}" Value="True"><Setter Property="Foreground" Value="{StaticResource Bad}" /></DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+                        </TabItem>
                     </TabControl>
                 </DockPanel>
             </Border>

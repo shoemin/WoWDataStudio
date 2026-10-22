@@ -2930,6 +2930,67 @@ wds versions convert-map _classic_beta_ 0 --tiles 32_48,33_48 --yes
 wds versions convert-map _classic_beta_ "Zephras Isle" --yes --json
 ```
 
+#### wds versions updates
+
+The update catalog: every difference between another client (the 1.60 Classic client) and your 1.12 game, grouped into updates you can pick (zone terrain, new maps, lighting, textures, models, interface, sounds, tables, engine features), each with its portability class.
+
+```
+wds versions updates <client> [options]
+```
+
+* `--folder <folder>`: search this folder for clients instead of the other-clients setting
+* `--listfile <file>`: names for a modern (CASC) client's files: a listfile you chose (FileDataID;path lines); also the other-clients.listfile setting
+* `--kind <kind>`: only one kind: zone-terrain, new-map, sky-lighting, skybox, weather, ground-textures, textures, models, buildings, interface-art, interface-strings, fonts, sounds, data-tables, engine-features, other
+* `--class <class>`: only one portability class: ready, needs-converter, needs-server, needs-client-code, no-visible-change
+* `--zone <text>`: only updates whose zone, map, folder or table contains this text
+* `--search <words>`: only updates with these words in the title, place, ID or facts
+* `--importable`: only what the app can import now
+* `--hide-unchanged`: leave out the differences without a visible change
+* `--rescan`: scan both sides again even when the cached catalog is current
+* `--limit <n>`: at most n results (default 50; 0 = all)
+
+```
+wds versions updates _classic_beta_
+wds versions updates _classic_beta_ --kind zone-terrain --zone "Elwynn"
+wds versions updates _classic_beta_ --class ready --importable --limit 0 --json
+```
+
+#### wds versions update-info
+
+One update of the catalog: what it changes in your game, what it needs, why it has its class, the measured facts and its files.
+
+```
+wds versions update-info <client> <id> [options]
+```
+
+* `--folder <folder>`: search this folder for clients instead of the other-clients setting
+* `--listfile <file>`: names for a modern (CASC) client's files: a listfile you chose (FileDataID;path lines); also the other-clients.listfile setting
+* `--rescan`: scan both sides again even when the cached catalog is current
+* `--limit <n>`: at most n results (default 50; 0 = all)
+
+```
+wds versions update-info _classic_beta_ terrain:0:12
+wds versions update-info _classic_beta_ tex:changed:creature --limit 0 --json
+```
+
+#### wds versions import-updates
+
+Import picked updates of the catalog into your 1.12 workspace as one change set (terrain through the map conversion, textures, interface art, fonts and MP3 sounds made loadable by 1.12); --dry-run only reports.
+
+```
+wds versions import-updates <client> <ids...> [options]
+```
+
+* `--folder <folder>`: search this folder for clients instead of the other-clients setting
+* `--listfile <file>`: names for a modern (CASC) client's files: a listfile you chose (FileDataID;path lines); also the other-clients.listfile setting
+* `--dry-run`: show what would happen; change nothing
+
+```
+wds versions import-updates _classic_beta_ terrain:0:12 --dry-run
+wds versions import-updates _classic_beta_ terrain:0:12 terrain:0:40 tex:changed:creature --yes
+wds versions import-updates _classic_beta_ fonts:changed --yes --json
+```
+
 ### Help and the command line itself
 
 #### wds version
@@ -3221,6 +3282,11 @@ app's tests fail when the app, the command line and this table differ.
 | versions.rows | **Find in rows** | `wds versions rows` |
 | versions.compare | **Compare across versions** | `wds versions compare` |
 | versions.convert-map | **Convert map...** | `wds versions convert-map` |
+| versions.updates | **Scan for updates** | `wds versions updates` |
+| versions.updates-filter | **Hide differences without a visible change** | `wds versions updates` |
+| versions.update-info | **About this update** | `wds versions update-info` |
+| versions.import-preview | **Preview import** | `wds versions import-updates` |
+| versions.import-updates | **Import picked updates** | `wds versions import-updates` |
 | help.manual | **Help > User manual** | `wds manual` |
 | help.about | **Help > About WoW Data Studio** | `wds version` |
 | help.cli | **Help > The command line (wds)** | `wds manual` |

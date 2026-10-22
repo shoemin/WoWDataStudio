@@ -53,13 +53,15 @@ public sealed class AppSession : IDisposable
     }
 
     /// <summary>The language of the game (WTF\Config.wtf "SET locale"), as an index of DbcTable.LocaleNames (0 = enUS).</summary>
-    public int GameLocale
+    public int GameLocale => LocaleOf(Client?.ClientDir ?? Settings.ClientDir ?? "");
+
+    /// <summary>The language of the game in a folder (its WTF\Config.wtf "SET locale"), as an index of DbcTable.LocaleNames (0 = enUS).</summary>
+    public static int LocaleOf(string clientDir)
     {
-        get
         {
             try
             {
-                var cfg = Path.Combine(Client?.ClientDir ?? Settings.ClientDir ?? "", "WTF", "Config.wtf");
+                var cfg = Path.Combine(clientDir, "WTF", "Config.wtf");
                 if (File.Exists(cfg))
                     foreach (var line in File.ReadLines(cfg))
                     {

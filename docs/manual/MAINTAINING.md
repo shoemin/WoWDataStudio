@@ -88,8 +88,9 @@ fixture holds only a sample of `spell_template`) and
 `Services\QuestScreenshots.cs` (127-136: the Whirlwind weapon and Dreadsteed chains, a new quest giver on the map, the
 Riposte Drill template, the text preview, a branch, the Horde copy, the checks, apply, test in game; against a throwaway
 MySQL server loaded with the fixture and its quest-chain supplement `serverdb\quest_chains_fixture.sql`).
-`Services\VersionScreenshots.cs` (137-142: the Other versions tab and the Convert map window with a preview of Elwynn
-Forest, a dry run that writes nothing) needs a folder of client copies in the environment variable
+`Services\VersionScreenshots.cs` (137-143: the Other versions tab, the Convert map window with a preview of Elwynn
+Forest, and the Updates tab with the update catalog and a preview of Elwynn Forest's terrain; dry runs that write
+nothing; the catalog's first scan takes a minute or two) needs a folder of client copies in the environment variable
 `WDS_SCREENSHOT_OTHER_CLIENTS` (else these pictures are skipped); `WDS_SCREENSHOT_ONLY=versions` makes only them.
 The Server data pictures never use the user's server: the steps start a throwaway
 MySQL server (`ThrowawayMySql`, the local VMaNGOS `mysqld.exe` or `WDS_TEST_MYSQLD`, its own data folder and port) and

@@ -189,16 +189,103 @@ What the conversion does:
 
 The report lists these steps with the IDs.
 
+## The update catalog: picking 1.60 updates for your game
+
+The **Updates** tab lists *every* difference between the "1.60" Classic client and your 1.12 game, grouped into updates
+you can pick and bring into your game one at a time: a zone's terrain, a new map, the re-lit light zones of a zone, the
+repainted textures of a folder, new interface art, a data table, an engine feature. Each update says what it would
+change in your game, what it needs, and what it takes to bring it over (its class). The differences that only the
+modern engine or a server can use are listed too, so you know them.
+
+1. In **Clients found**, click the 1.60 client (`_classic_beta_`), then the **Updates** tab.
+2. Click **Scan for updates**. The first scan compares both sides, which takes a minute or two: every file of your game
+   against the client (the changed textures pixel by pixel), every tile of every map chunk by chunk, every data table.
+   The result is kept in the app's folder and used again until the client or your game changes; **Scan again** scans
+   anyway, **Stop** stops.
+3. The list shows each update with its **Kind**, its **Class**, the number of files (tiles for terrain, rows for a
+   table), its size in the 1.60 client and whether it can be imported now. Narrow it with **Kind**, **Class**,
+   **Zone or folder** (for example `Elwynn` or `Creature`) and **Search**. **Hide differences without a visible change**
+   (ticked at first) leaves out the files that were only re-encoded or re-saved; **Only what can be imported** shows
+   what the app can bring over today.
+4. Click an update: **About this update** shows what it changes in your game, what it needs, why it has its class, what
+   was measured and its files.
+5. Pick one or several updates (<kbd>Ctrl</kbd> or <kbd>Shift</kbd> and click) and click **Preview import**. The app
+   converts everything in memory and shows the **Import report**; nothing is written. Then click
+   **Import picked updates**: all picks go into your workspace as *one* change set (**Revert this import** in
+   [My changes](my-changes.md) takes it all back), after the 1.12 checks. Picks that cannot be imported yet are listed
+   in the report with why; the others are imported.
+
+![The Updates tab: the 1.60 catalog narrowed to Elwynn Forest, its terrain picked and previewed](../screenshots/143_other_versions_updates.png)
+
+The classes:
+
+| Class | Meaning |
+|---|---|
+| **Ready** | 1.12 loads it as it is, or after a conversion the app already does. Most of these can be imported now. |
+| **Needs converter** | It needs a converter that does not exist yet: modern models (M2) and buildings (WMO), OGG sounds, the light colours, data tables (DB2 to DBC). |
+| **Needs server** | It only matters with server data: hotfixed rows, spells and items, encrypted content. |
+| **Needs client code** | A feature of the modern engine or interface (volumetric fog, ambient occlusion, the modern interface API, character customization...): it needs work on the 1.12 client itself. Listed so you know; it cannot be imported. |
+| **No visible change** | The files differ, but nothing changes on screen (a texture only re-encoded, a model re-saved in the modern format, a sound stored as OGG like Classic Era's). Nothing to bring. |
+
+The kinds:
+
+* **Zone terrain**: one update per zone (a zone and its subzones), per dungeon or battleground, and one for the open sea:
+  how many ground chunks change (heights, texture layers, water, zone IDs), the trees, rocks and buildings that are new,
+  gone, replaced or moved, the new tiles. The import is the map conversion of [Converting a map to 1.12](#converting-a-map-to-112):
+  all picked zones of one map are converted together.
+* **New map**: a map 1.12 does not have (Zephras Isle, Hyjal Crater...), converted as a whole new map.
+* **Sky and lighting**: per zone, the light zones 1.60 added, removed or resized and its polygon-shaped zone lights; the
+  modern lighting tables (light colours per time of day, volumetric fog, sun shafts, ambient occlusion, colour grading).
+  The colours themselves were not compared yet (their table's columns are not decoded).
+* **Skyboxes**: the sky models 1.60 has and your LightSkybox table does not, and the sky textures of your game that
+  changed.
+* **Weather**: the modern weather types and particle volumes.
+* **Ground textures** and **Textures**: per folder, the textures that were repainted or lightly edited, the ones 1.60
+  made larger (the same picture with more detail), their high-resolution versions (usually four times as wide), and the
+  ones only re-encoded (*No visible change*). 1.12 loads at most 512 x 512, so larger pictures are made 512 x 512: still
+  sharper where yours are smaller. Character skins, faces, hair and armour pieces are put together at a fixed size by
+  1.12, so larger ones need client code.
+* **Models** and **Buildings (WMO)**: the high-resolution player models, the new models and buildings placed in the 1.60
+  world, the landmarks 1.60 replaced (Stormwind, Ironforge, Orgrimmar...), and your models re-saved in the modern format.
+* **Interface art**: the 1.60 interface textures your game does not have, by folder. They show only where your
+  interface code or tables name them.
+* **Interface strings**: the interface texts 1.60 changed, added or removed (GlobalStrings).
+* **Fonts**: the fonts that changed, and the new ones (Cyrillic, Chinese, Korean).
+* **Sounds and music**: changed sounds (OGG, not playable by 1.12 without a converter), changed MP3 music, and your WAV
+  sounds stored as OGG.
+* **Data tables**: per table of your game, the rows 1.60 added and changed (counted row by row where both sides' columns
+  are named, by number of rows otherwise), the tables only 1.60 has (by system), and the rows Blizzard's server hotfixed
+  (from the 1.60 client's cache).
+* **Engine and UI features**: the modern renderer and its effects, the modern interface API, the sound engine, found in
+  the 1.60 program file (and not in yours).
+* **Other files**: movies, the 1.60 files without a name, encrypted files.
+
+What an import writes:
+
+* *Textures and interface art*: a file 1.12 loads (palette or DXT1, DXT3, DXT5, a power of two up to 512 x 512, all its
+  mip levels) is saved as it is. A larger one with mip levels keeps its own smaller pictures (nothing is encoded again);
+  any other is made a power of two of at most 512 x 512 and encoded again in its format. The checks of every saved
+  texture run before anything is written.
+* *Fonts* and *MP3 music*: as they are.
+* *Zone terrain* and *New map*: the map conversion (the same report as **Convert map...**).
+* *Names*: as for the map conversion, only your own 1.12 game's file names (found by their hashes in a Classic Era copy
+  next to the 1.60 client) and the listfile you chose; the 1.60 interface files are also named by the client's own list
+  of them (ManifestInterfaceData), each name checked against the client's name hash. With a listfile (**Choose
+  listfile...**) the catalog also lists the 1.60 files without another name by folder.
+
 ## Not yet
 
 * Most columns of the modern clients' data tables have no names yet.
 * Maps convert from 1.60 to 1.12 only: 1.12 to 1.60, and maps of 2.x and 3.x, are planned. The models and buildings
   1.12 does not have are left out (their conversion is planned), see [Known issues](known-issues.md#other-versions).
-* 3D views of TBC and WotLK models, and bringing models or textures of other versions into your 1.12 game, are planned,
-  not there yet.
+* 3D views of TBC and WotLK models, and bringing models of other versions into your 1.12 game, are planned, not there
+  yet. Textures, interface art, fonts and MP3 music of the 1.60 client can be imported through the update catalog.
+* The update catalog compares the 1.60 client only. Its models, buildings, OGG sounds, light colours, data tables and
+  interface texts cannot be imported yet (each update says why), see [Known issues](known-issues.md#other-versions).
 * Many tables of other versions show raw columns ([Known issues](known-issues.md#other-versions)).
 
 ## Command line
 
-`wds versions find`, `info`, `files`, `extract`, `tables`, `rows`, `compare` and `convert-map` do everything this tab does, and
-`wds settings set other-clients <folder>` sets the folder; see [The command line](command-line.md#other-versions-experimental).
+`wds versions find`, `info`, `files`, `extract`, `tables`, `rows`, `compare`, `convert-map`, `updates`, `update-info` and
+`import-updates` do everything this tab does, and `wds settings set other-clients <folder>` sets the folder; see
+[The command line](command-line.md#other-versions-experimental).

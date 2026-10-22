@@ -714,6 +714,45 @@ folder again (**File > Rebuild the index**); or test it in the game with **Test 
 
 *Status:* open.
 
+### The update catalog imports only terrain, textures, interface art, fonts and MP3 music
+
+*What happens:* in the **Updates** tab, updates of the classes **Needs converter**, **Needs server** and
+**Needs client code** cannot be imported: modern models and buildings, OGG sounds, the light zones and their colours,
+skyboxes, weather, data-table rows and the interface texts. **Preview import** lists them under *Not imported* with why.
+The colours of the light zones are not even compared yet (their 1.60 table's columns are not decoded), so a zone's
+*Sky and lighting* update counts its light zones, not its new colours.
+
+*Who is affected:* anyone who wants the 1.60 lighting, models, sounds or tables in their 1.12 game.
+
+*Workaround:* none in the app yet; the **Data tables** tab and Noggit can recreate single rows and placements by hand.
+
+*Status:* open (the model, building, light and table converters are planned).
+
+### Larger 1.60 textures are made 512 x 512, and larger character textures are not imported
+
+*What happens:* 1.12 loads textures of at most 512 x 512, so a high-resolution 1.60 texture is imported at that size
+(still sharper than a smaller 1.12 one; textures that are already 512 x 512 bring nothing and are listed as
+*beyond 1.12's limit*). Character skins, faces, hair and armour pieces that 1.60 made larger are listed as
+**Needs client code**: 1.12 puts them together into one texture of a fixed size (inferred from the 1.12 format, not tested
+in the game). High-resolution textures the 1.60 client has not downloaded are left out (the catalog's notes say how many).
+
+*Who is affected:* anyone importing high-resolution textures.
+
+*Workaround:* none; let Battle.net download the client completely to have every high-resolution texture.
+
+*Status:* by design for the 512 limit (the recompiled client may lift it); open for character textures.
+
+### New interface art shows only where your interface names it
+
+*What happens:* importing *Interface art* adds the 1.60 interface textures to your game, but the 1.12 interface code
+does not use them: they appear only where your own interface code, an add-on or a data table (an icon) names them.
+
+*Who is affected:* anyone importing interface art.
+
+*Workaround:* use them in your interface code or tables (for example new spell icons).
+
+*Status:* by design.
+
 ### Reverting a map conversion also reverts your earlier edits of the same files
 
 *What happens:* the conversion builds on your current files: a table you edited before (for example AreaTable.dbc)

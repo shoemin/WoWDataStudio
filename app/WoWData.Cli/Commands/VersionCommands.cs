@@ -422,6 +422,245 @@ internal static class VersionCommands
                 }
             },
         };
+        foreach (var c in UpdateCommands()) yield return c;
+    }
+
+    // ------------------------------------------------------------------ the update catalog (0.14.0)
+
+    private static readonly OptionSpec Rescan = new("rescan", null, "scan both sides again even when the cached catalog is current");
+
+    /// <summary>The user's 1.12 game, read only (no index needed): its archives as the app opens them.</summary>
+    private static (ClientData Data, string Dir) Game(Invocation inv)
+    {
+        var dir = inv.Ctx.ClientDir();
+        try { return (new ClientData(Path.Combine(dir, "Data")), dir); }
+        catch (Exception e) when (e is IOException or MpqException or UnauthorizedAccessException) { throw new CliError(ExitCode.Error, $"Your game's archives could not be opened: {e.Message}"); }
+    }
+
+    private static ClientCopy PickForCatalog(Invocation inv, out List<ClientCopy>? found)
+    {
+        found = null;
+        var text = inv.Arg(0).Trim().Trim('"');
+        if (!Directory.Exists(text) || inv.Opt("folder") != null || inv.Ctx.Settings.OtherClientsDir != null)
+        {
+            try { found = Found(inv); }
+            catch (CliError) when (Directory.Exists(text)) { }
+        }
+        return Pick(inv, inv.Arg(0), found);
+    }
+
+    private static WoWData.Core.Versions.Catalog.UpdateCatalogSource OpenCatalog(Invocation inv, ClientCopy c, List<ClientCopy>? found, ClientData game)
+    {
+        var lf = inv.Opt("listfile") ?? inv.Ctx.Settings.OtherClientsListfile;
+        if (lf != null && !File.Exists(lf)) throw new CliError(ExitCode.NotFound, $"the listfile \"{lf}\" does not exist.");
+        inv.Ctx.Progress($"Opening {c.Name} ({c.Label}) and the names of your 1.12 files...");
+        try { return WoWData.Core.Versions.Catalog.UpdateCatalogSource.Open(c, lf, game, found, Path.Combine(inv.Ctx.Paths.Root, "cache")); }
+        catch (NotSupportedException e) { throw new CliError(ExitCode.Refused, e.Message); }
+        catch (Exception e) when (e is IOException or InvalidDataException or WoWData.Core.Casc.CascMissingException or UnauthorizedAccessException)
+        {
+            throw new CliError(ExitCode.NotFound, $"{c.Name} could not be opened: {e.Message}");
+        }
+    }
+
+    private static WoWData.Core.Versions.Catalog.UpdateCatalog LoadCatalog(Invocation inv, WoWData.Core.Versions.Catalog.UpdateCatalogSource src)
+    {
+        bool rescan = inv.Flag("rescan");
+        if (rescan || WoWData.Core.Versions.Catalog.UpdateCatalogStore.LoadCached(src) == null)
+            inv.Ctx.Progress($"Scanning {src.Label} against your game (the first scan takes a minute or two; the result is kept)...");
+        string last = "";
+        var progress = new SyncProgress<string>(p =>
+        {
+            var step = p.Contains("] ") ? p[(p.IndexOf("] ", StringComparison.Ordinal) + 2)..].Split(':')[0] : p;
+            if (step == last) return;
+            last = step;
+            inv.Ctx.Progress("  " + p);
+        });
+        return WoWData.Core.Versions.Catalog.UpdateCatalogStore.LoadOrScan(src, rescan, progress);
+    }
+
+    private static object ItemJson(WoWData.Core.Versions.Catalog.UpdateItem i, int files = 0) => new
+    {
+        id = i.Id,
+        kind = WoWData.Core.Versions.Catalog.UpdateNames.Key(i.Kind),
+        kindText = i.KindText,
+        @class = WoWData.Core.Versions.Catalog.UpdateNames.Key(i.Class),
+        classText = i.ClassText,
+        title = i.Title,
+        where = i.Where,
+        files = i.Files,
+        bytes = i.Bytes,
+        importable = i.Importable,
+        notYet = i.NotYet,
+        classReason = files >= 0 ? i.ClassReason : null,
+        changes = files >= 0 ? i.Changes : null,
+        needs = files >= 0 ? i.Needs : null,
+        facts = files >= 0 ? i.Facts : null,
+        terrain = i.Terrain == null ? null : new { mapId = i.Terrain.MapId, map = i.Terrain.MapName, directory = i.Terrain.MapDirectory, zoneId = i.Terrain.ZoneId, zone = i.Terrain.ZoneName, tiles = i.Terrain.Tiles, wholeMap = i.Terrain.WholeMap },
+        fileList = files > 0 ? i.FileList?.Take(files).Select(f => new { path = f.Path, fileDataId = f.FileDataId, highRes = f.HighRes, size = f.Size, note = f.Note }) : null,
+        fileCount = i.FileList?.Count ?? 0,
+    };
+
+    private static IEnumerable<CommandSpec> UpdateCommands()
+    {
+        yield return new CommandSpec
+        {
+            Path = "versions updates",
+            Summary = "the update catalog: every difference between another client (the 1.60 Classic client) and your 1.12 game, grouped into updates you can pick (zone terrain, new maps, lighting, textures, models, interface, sounds, tables, engine features), each with its portability class",
+            Args = new[] { "<client>" },
+            Options = new[]
+            {
+                Folder, Listfile,
+                new OptionSpec("kind", "kind", "only one kind: zone-terrain, new-map, sky-lighting, skybox, weather, ground-textures, textures, models, buildings, interface-art, interface-strings, fonts, sounds, data-tables, engine-features, other"),
+                new OptionSpec("class", "class", "only one portability class: ready, needs-converter, needs-server, needs-client-code, no-visible-change"),
+                new OptionSpec("zone", "text", "only updates whose zone, map, folder or table contains this text"),
+                new OptionSpec("search", "words", "only updates with these words in the title, place, ID or facts"),
+                new OptionSpec("importable", null, "only what the app can import now"),
+                new OptionSpec("hide-unchanged", null, "leave out the differences without a visible change"),
+                Rescan, Common.Limit,
+            },
+            Details = "The first run scans both sides (a minute or two: every 1.12 file against the client, changed textures pixel by pixel, every map tile chunk by chunk, every data table); " +
+                      "the catalog is kept in the app's folder and scanned again when either side changes. Names come only from your 1.12 game's files, the listfile you chose and the client's own name lists.",
+            Examples = new[]
+            {
+                "wds versions updates _classic_beta_",
+                "wds versions updates _classic_beta_ --kind zone-terrain --zone \"Elwynn\"",
+                "wds versions updates _classic_beta_ --class ready --importable --limit 0 --json",
+            },
+            NeedsClient = false,
+            Run = inv =>
+            {
+                WoWData.Core.Versions.Catalog.UpdateKind? kind = null;
+                WoWData.Core.Versions.Catalog.Portability? cls = null;
+                if (inv.Opt("kind") is { } k)
+                    kind = WoWData.Core.Versions.Catalog.UpdateNames.ParseKind(k) ?? throw new CliError(ExitCode.Usage,
+                        $"--kind: no kind \"{k}\". Kinds: {string.Join(", ", Enum.GetValues<WoWData.Core.Versions.Catalog.UpdateKind>().Select(WoWData.Core.Versions.Catalog.UpdateNames.Key))}.");
+                if (inv.Opt("class") is { } cl)
+                    cls = WoWData.Core.Versions.Catalog.UpdateNames.ParseClass(cl) ?? throw new CliError(ExitCode.Usage,
+                        $"--class: no class \"{cl}\". Classes: {string.Join(", ", Enum.GetValues<WoWData.Core.Versions.Catalog.Portability>().Select(WoWData.Core.Versions.Catalog.UpdateNames.Key))}.");
+                var c = PickForCatalog(inv, out var found);
+                var (game, _) = Game(inv);
+                using (game)
+                using (var src = OpenCatalog(inv, c, found, game))
+                {
+                    var cat = LoadCatalog(inv, src);
+                    var filter = new WoWData.Core.Versions.Catalog.UpdateFilter
+                    {
+                        Kind = kind, Class = cls, Where = inv.Opt("zone"), Search = inv.Opt("search"),
+                        OnlyImportable = inv.Flag("importable"), HideNoChange = inv.Flag("hide-unchanged"),
+                    };
+                    var items = cat.Filter(filter).ToList();
+                    var shown = items.Take(Common.LimitOf(inv)).ToList();
+                    var r = new CliResult().With(new
+                    {
+                        client = c.Name, source = cat.Source, target = cat.Target, scanned = cat.Scanned, seconds = cat.Seconds, names = cat.NamesText,
+                        total = cat.Items.Count, matched = items.Count, importable = cat.Items.Count(i => i.Importable),
+                        counts = cat.Counts().SelectMany(kv => kv.Value.Select(x => new
+                        {
+                            kind = WoWData.Core.Versions.Catalog.UpdateNames.Key(kv.Key), @class = WoWData.Core.Versions.Catalog.UpdateNames.Key(x.Key), count = x.Value,
+                        })),
+                        notes = cat.Notes,
+                        items = shown.Select(i => ItemJson(i, -1)),
+                    });
+                    foreach (var l in cat.SummaryLines()) r.Line(l);
+                    r.Line($"{Common.Plural(items.Count, "update")} match{(items.Count == 1 ? "es" : "")}" + (shown.Count < items.Count ? $" (showing {shown.Count}; --limit 0 for all)" : "") + ":");
+                    foreach (var l in Common.Table(new[] { "ID", "Kind", "Class", "Files", "Size", "Title" },
+                                 shown.Select(i => (IReadOnlyList<string>)new[] { i.Id, i.KindText, i.ClassText, i.Files.ToString("N0"), i.SizeText, i.Title }), 60))
+                        r.Line(l);
+                    r.Line("\"wds versions update-info <client> <id>\" shows one update; \"wds versions import-updates <client> <id>...\" imports.");
+                    return Task.FromResult(r);
+                }
+            },
+        };
+        yield return new CommandSpec
+        {
+            Path = "versions update-info",
+            Summary = "one update of the catalog: what it changes in your game, what it needs, why it has its class, the measured facts and its files",
+            Args = new[] { "<client>", "<id>" },
+            Options = new[] { Folder, Listfile, Rescan, Common.Limit },
+            Details = "<id> is the update's ID in \"wds versions updates\" (for example terrain:0:12 for Elwynn Forest's terrain). --limit is the number of files listed (default 50).",
+            Examples = new[] { "wds versions update-info _classic_beta_ terrain:0:12", "wds versions update-info _classic_beta_ tex:changed:creature --limit 0 --json" },
+            NeedsClient = false,
+            Run = inv =>
+            {
+                var c = PickForCatalog(inv, out var found);
+                var (game, _) = Game(inv);
+                using (game)
+                using (var src = OpenCatalog(inv, c, found, game))
+                {
+                    var cat = LoadCatalog(inv, src);
+                    var item = cat.Find(inv.Arg(1)) ?? throw new CliError(ExitCode.NotFound, $"the catalog of {c.Name} has no update \"{inv.Arg(1)}\" (wds versions updates \"{c.Name}\" lists them).");
+                    int limit = Common.LimitOf(inv);
+                    var r = new CliResult().With(new { client = c.Name, update = ItemJson(item, limit == int.MaxValue ? int.MaxValue : limit) });
+                    foreach (var l in item.Lines(limit == int.MaxValue ? int.MaxValue : limit)) r.Line(l);
+                    return Task.FromResult(r);
+                }
+            },
+        };
+        yield return new CommandSpec
+        {
+            Path = "versions import-updates",
+            Summary = "import picked updates of the catalog into your 1.12 workspace as one change set (terrain through the map conversion, textures, interface art, fonts and MP3 sounds made loadable by 1.12); --dry-run only reports",
+            Args = new[] { "<client>", "<ids...>" },
+            Options = new[] { Folder, Listfile, Common.DryRun },
+            Details = "Nothing is written without --yes (without it the report is shown and the exit code is 5). Updates that cannot be imported yet are listed with why. " +
+                      "\"wds changes revert-set <id> --yes\" takes the whole import back.",
+            Examples = new[]
+            {
+                "wds versions import-updates _classic_beta_ terrain:0:12 --dry-run",
+                "wds versions import-updates _classic_beta_ terrain:0:12 terrain:0:40 tex:changed:creature --yes",
+                "wds versions import-updates _classic_beta_ fonts:changed --yes --json",
+            },
+            NeedsClient = false,
+            Run = inv =>
+            {
+                var c = PickForCatalog(inv, out var found);
+                var (game, dir) = Game(inv);
+                using (game)
+                using (var src = OpenCatalog(inv, c, found, game))
+                {
+                    var cat = LoadCatalog(inv, src);
+                    var ws = new WoWData.Core.Workspace.Workspace(inv.Ctx.Paths.ForClient(dir));
+                    var target = new MapConvertTarget { Client = game, Workspace = ws, Dbc = new DbcService(game, ws), Locale = WoWData.Core.Session.AppSession.LocaleOf(dir) };
+                    bool write = inv.Yes && !inv.DryRun;
+                    string last = "";
+                    var progress = new SyncProgress<string>(p =>
+                    {
+                        var step = p.Split(':')[0];
+                        if (step == last) return;
+                        last = step;
+                        inv.Ctx.Progress(p);
+                    });
+                    WoWData.Core.Versions.Catalog.UpdateImportResult res;
+                    try { res = WoWData.Core.Versions.Catalog.UpdateImporter.Run(src, cat, inv.Args.Skip(1).ToList(), target, !write, progress); }
+                    catch (ArgumentException e) { throw new CliError(ExitCode.NotFound, e.Message); }
+                    catch (WoWData.Core.Workspace.WorkspaceException e) { return Task.FromResult(CliResult.Fail(ExitCode.ValidationFailed, e.Message)); }
+                    var r = new CliResult().With(new
+                    {
+                        client = c.Name, dryRun = res.DryRun,
+                        imported = res.Imported.Select(i => i.Id), notYet = res.NotYet.Select(x => new { id = x.Item.Id, why = x.Why }),
+                        files = res.Files.Select(f => new { path = f.Path, update = f.Item, fileDataId = f.FileDataId, isNew = f.IsNew, size = f.Size, summary = f.Summary, replacesYourEdit = f.ReplacesYourEdit }),
+                        fileProblems = res.FileProblems,
+                        maps = res.Maps.Select(m => ConversionJson(m, c)),
+                        warnings = res.Warnings,
+                        changeSet = res.ChangeSet == null ? null : new { id = res.ChangeSet.Id, label = res.ChangeSet.Label, files = res.ChangeSet.Files.Count },
+                        seconds = Math.Round(res.Elapsed.TotalSeconds, 1),
+                    });
+                    foreach (var l in res.Lines()) r.Line(l);
+                    if (!res.Ok)
+                    {
+                        foreach (var f in res.Maps.SelectMany(m => m.Validation.Errors).Take(10)) r.Line("  " + f.Plain);
+                        r.Code = ExitCode.ValidationFailed;
+                        r.Error = "The 1.12 check refused converted files: nothing was saved.";
+                        return Task.FromResult(r);
+                    }
+                    if (res.Imported.Count == 0) { r.Code = ExitCode.Refused; r.Error = "None of these updates can be imported yet (see why above); nothing was changed."; return Task.FromResult(r); }
+                    if (res.ChangeSet is { } cs)
+                        r.Line($"Saved {Common.Plural(cs.Files.Count, "file")} into your workspace as one change set (\"{cs.Label}\", {cs.Id}); \"wds changes revert-set {cs.Id} --yes\" takes it back.");
+                    else if (!inv.DryRun) return Task.FromResult(Common.NeedsYes(r, "This writes the picked updates into your workspace (one change set; your game folder is not changed)."));
+                    return Task.FromResult(r);
+                }
+            },
+        };
     }
 
     private static object ConversionJson(MapConversionResult res, ClientCopy c) => new

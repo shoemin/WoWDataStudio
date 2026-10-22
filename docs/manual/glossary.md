@@ -90,6 +90,7 @@ The words used in the app and in this manual, in alphabetical order.
 | Playable-animation table | Part of every model: for each of the game's animations, the one the model really plays (its own, or a fallback from AnimationData, for example *Run* when it has no *Sprint*). The app rebuilds it when the animations change. |
 | PNG | A common picture format every image editor can open. The app exports textures as PNG and imports your edited PNG. |
 | Pop-out window | A 3D view in a window of its own (**Open in new window**), to make it bigger, put it on another monitor or show it full screen. See [Open in a new window](model-viewer.md#open-in-a-new-window). |
+| Portability class | In the update catalog: what it takes to bring a 1.60 update into your 1.12 game. *Ready* (1.12 loads it, or the app converts it), *Needs converter* (a converter that does not exist yet), *Needs server* (only meaningful with server data), *Needs client code* (a feature of the modern engine), *No visible change* (the files differ but look the same). |
 | Power of two | 2, 4, 8, 16, 32, 64, 128, 256, 512... The game only loads textures whose width and height are such numbers (at most 512). |
 | Quest chain | Quests linked by what each needs first (*Must be done first*, *Opens*, *Next in chain*, breadcrumbs, exclusive groups). The **Quest chains** tab draws one as a flowchart. See [The quest-chain designer](quest-chain-designer.md). |
 | Quest giver, quest ender | The NPC (or object, or item) that offers a quest, and the one you hand it in to (`creature_questrelation`, `creature_involvedrelation` and the game object tables). A creature needs the *Quest giver* flag. |
@@ -115,6 +116,7 @@ The words used in the app and in this manual, in alphabetical order.
 | Tile | One square of a map: 533 x 533 yards, one ADT file. A continent has hundreds. |
 | Tile breakdown | The window **Break down this tile...** opens: every piece of one tile (ground, chunks, textures, doodads, buildings, water, sounds, zones) in a list, each viewable on its own. |
 | Tooltip variable | A `$` word in a spell's description that the game replaces with a value: `$s1` the first effect's value, `$d` the duration, `$o1` the total over the duration... See [The tooltip preview](spell-designer.md#the-tooltip-preview). |
+| Update catalog | The **Updates** tab of **Other versions**: every difference between the 1.60 client and your 1.12 game, grouped into updates you can pick and import one at a time (see [Other versions](other-versions.md)). |
 | Used by (data tables) | In the **Data tables** tab: the rows of other tables that link to the selected row. |
 | Variation (animation) | One of several versions of an animation, for example *Stand*, *Stand [2]*, *Stand [3]*: the game picks one at random each time, by its chance. |
 | Vertex group | A named set of points of a Blender object. The terrain tiles have one per edge (*EDGE_N*...). |

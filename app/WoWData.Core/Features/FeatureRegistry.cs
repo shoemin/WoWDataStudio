@@ -277,6 +277,11 @@ public static class FeatureRegistry
         new("versions.rows", "Other versions", "Find in rows", "versions rows"),
         new("versions.compare", "Other versions", "Compare across versions", "versions compare"),
         new("versions.convert-map", "Other versions", "Convert map...", "versions convert-map"),
+        new("versions.updates", "Other versions", "Scan for updates", "versions updates"),
+        new("versions.updates-filter", "Other versions", "Hide differences without a visible change", "versions updates"),
+        new("versions.update-info", "Other versions", "About this update", "versions update-info"),
+        new("versions.import-preview", "Other versions", "Preview import", "versions import-updates"),
+        new("versions.import-updates", "Other versions", "Import picked updates", "versions import-updates"),
 
         // ---- help and the command line itself
         new("help.manual", "Help", "Help > User manual", "manual"),

@@ -79,6 +79,28 @@ recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
   in 3 s; the report names the server steps (area_template / map_template rows, the release patch, Update server maps).
   Tests: `MapConversionTests`.
 
+* **The update catalog (experimental): the Updates tab of Other versions and `wds versions updates`, `update-info`,
+  `import-updates`.** Every difference between the "1.60" Classic client and your 1.12 game, measured and grouped into
+  updates you can pick (`WoWData.Core.Versions.Catalog`; the basis is `docs\research\DIFF_112_160.md`), each with its
+  portability class (*Ready*, *Needs converter*, *Needs server*, *Needs client code*, or *No visible change*), a plain
+  reason, what it changes in your game and what it needs. The scan: every 1.12 file against the client by content (the
+  MD5 of the 1.12 bytes against the 1.60 content key; Classic Era's key tells format updates Era already had), changed
+  textures compared pixel by pixel (re-encoded only, lightly edited, repainted, made larger; DIFF_112_160's rule), the
+  high-resolution texture variants, every tile of every map compared chunk by chunk per zone (heights, texture layers,
+  water, zone IDs, placements by unique ID with re-numbered ones matched by model and place), new maps, the light zones
+  per zone, skyboxes, weather, every data table (rows added and changed where both sides' columns are named), the
+  rows in the client's hotfix cache, the interface strings, fonts (named from their own name table), movies, and the
+  engine features found in the program file. Measured against the stock 1.12.1 copy: 889 updates (76 zones' terrain,
+  28 new maps, 60 lighting, 140 texture folders, 174 interface art folders, 272 data-table updates...), 406 importable;
+  the first scan takes one to two minutes, a later one (the 1.12 MD5s and pixel results are kept) about 20 seconds; the
+  catalog is kept in the app's folder per pair of fingerprints. **Preview import** / **Import picked updates**
+  (`--dry-run` / `--yes`): several picks go into the workspace as ONE change set; terrain and new maps through the map
+  conversion (the zones of one map converted together: `MapConvertTarget.JoinChangeSet`, `MapConvertRequest.SelectionLabel`),
+  textures and interface art made loadable by 1.12 (kept when they pass the 1.12 checks, larger ones cut to their own
+  512 mip level without re-encoding, others encoded again), fonts and MP3 music as they are; the rest is listed with why
+  not yet. Names only from the user's 1.12 files, the user's listfile, and the client's own interface file list
+  (ManifestInterfaceData) checked against its name hashes. Tests: `UpdateCatalogTests`.
+
 ### Fixed
 
 * The 0.13.3 entry below showed a broken path to its in-game test results.

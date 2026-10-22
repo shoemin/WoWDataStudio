@@ -14,6 +14,7 @@ namespace WoWDataStudio.Services;
 ///   140_other_versions_compare    one spell compared in 1.12.1, 2.4.3 and 3.3.5a, only the differences
 ///   141_other_versions_modern     the "1.60" Classic beta (CASC): a minimap tile of Azeroth found by its number
 ///   142_other_versions_convert_map  Convert map...: the preview of Elwynn Forest (a dry run, nothing written)
+///   143_other_versions_updates    the Updates tab: the update catalog of the 1.60 client, Elwynn Forest's terrain previewed
 /// </summary>
 internal static class VersionScreenshots
 {
@@ -109,6 +110,25 @@ internal static class VersionScreenshots
         Expect(cvm.CanConvert && cvm.Result is { DryRun: true, Ok: true }, $"other versions: the Elwynn Forest preview ({cvm.Status})");
         await ScreenshotRunner.Shot(cw, outDir, "142_other_versions_convert_map");
         cw.Close();
+
+        // 143: the Updates tab: the catalog of the 1.60 client against the game (a first scan takes a minute or two), the
+        // updates of Elwynn Forest, its terrain picked and previewed (a dry run: nothing is written)
+        win.BrowserScreen.VersionsScreen.ShowInnerTab(4);
+        var u = v.Updates;
+        Expect(u.CanScan, "other versions: the 1.60 client offers Scan for updates");
+        await u.LoadAsync(false);
+        Expect(u.Catalog is { Items.Count: > 100 }, $"other versions: the update catalog was made ({u.Status})");
+        u.KindFilter = UpdateCatalogViewModel.AllKinds;
+        u.ClassFilter = UpdateCatalogViewModel.AllClasses;
+        u.HideUnchanged = true;
+        u.WhereFilter = "Elwynn";
+        await ScreenshotRunner.Settle(500);
+        var picks = win.BrowserScreen.VersionsScreen.SelectUpdates(r => r.Item.Id == "terrain:0:12");
+        Expect(picks.Count == 1, "other versions: Elwynn Forest's terrain is in the update catalog");
+        await u.PreviewCommand.ExecuteAsync(picks);
+        await ScreenshotRunner.Settle(700);
+        Expect(u.CanImport && u.Result is { DryRun: true, Ok: true }, $"other versions: the preview of Elwynn Forest's terrain ({u.Status})");
+        await Shot(win, outDir, "143_other_versions_updates");
     }
 
     /// <summary>The minimap texture of the first Azeroth tile that has one: MAID holds 8 FileDataIDs per tile (root, obj0,
