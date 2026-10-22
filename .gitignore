@@ -22,3 +22,8 @@ __pycache__/
 *.sqlite
 TestResults/
 /app/.testcache/
+
+# generated locally from the user's own server by app\tools\ServerFixtureBuilder (VMaNGOS data): never in the repository
+/app/WoWData.Tests/serverdb/*.sql
+# GPL extractor source (apply_patch3.py's backup of the untouched System.cpp): local only, never in the repository
+/server/patches/

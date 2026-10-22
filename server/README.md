@@ -13,7 +13,9 @@ Nothing here writes into `Server\data` or the client, except `swap_in.ps1` run w
 
 Licence: our scripts (`*.ps1`, `tools\*.py`) are MIT (SPDX header in each file) and contain no extractor code.
 The extractors are GPL (vmangos / cmangos). They are built from `WoWDecomp\work\server_src` and only run as
-separate programs. `patches\mapextractor_patch3.diff` modifies GPL code and stays under the GPL.
+separate programs. The patch-3 change (one line: `"patch-3.MPQ",` added to the extractor's MPQ list in
+`contrib/extractor/System.cpp`) is applied by `tools\apply_patch3.py`; the patched GPL file and its backup stay on this
+machine (`patches\`, not in the repository).
 
 ## Layout
 
@@ -21,7 +23,7 @@ separate programs. `patches\mapextractor_patch3.diff` modifies GPL code and stay
 |---|---|
 | `bin\` | `mapextractor.exe`, `vmapextractor.exe`, `vmap_assembler.exe`, `MoveMapGen.exe` + `ACE.dll`, `tbb*.dll` |
 | `build\` | CMake/MSBuild tree (separate from the server's `work\server_build`) |
-| `patches\` | `System.cpp.orig` (untouched original), `mapextractor_patch3.diff` |
+| `patches\` | `System.cpp.orig` (untouched original, written by `apply_patch3.py`); local only, not in the repository (GPL) |
 | `baseline\` | `maps`, `vmaps`, `dbc` extracted from the **stock** client (no patch-3) with the same options; used to tell edits from extractor drift |
 | `staging\` | output of `reextract.ps1` (created on demand; empty after this delivery) |
 | `backups\` | `swap_<timestamp>\` folders written by `swap_in.ps1` |

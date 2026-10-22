@@ -26,7 +26,8 @@ was written from facts read in the VMaNGOS schema and its loaders (which rows a 
 the `.reload` commands) and checked on the local database; no VMaNGOS (GPL) code was copied. Test data only, never
 shipped: `app\WoWData.Tests\serverdb\world_fixture.sql` holds the schema of the local world database and a small
 sample of its rows (VMaNGOS world-database content), for the tests' throwaway database; the tests run the local
-server's MySQL program (`mysqld.exe`, GPL) as a separate program to host it. Neither is part of the installer.
+server's MySQL program (`mysqld.exe`, GPL) as a separate program to host it. Neither is part of the installer, and the
+fixture files are not in the repository either: `app\tools\ServerFixtureBuilder` generates them from the local server.
 
 **No code copied** either. `WoWData.Core` is a port of our own Python code (above): MPQ reader/writer, DBC, BLP/DXT
 codecs, M2 reader/writer/validator/animation, model looks, index. The 3D renderer (`WoWDataStudio\Rendering`: shaders,
