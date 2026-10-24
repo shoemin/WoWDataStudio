@@ -15,7 +15,7 @@ public static class ExitCode
     /// <summary>A check failed: a value, file, model, map or import that the game would not load; nothing was changed.</summary>
     public const int ValidationFailed = 3;
     /// <summary>Refused for safety: the world server runs, a file in the game folder is not the app's, a patch-3.MPQ the app
-    /// did not create (without --force)... Nothing was changed.</summary>
+    /// did not create (without --force), a newer import changed a file of the import to revert... Nothing was changed.</summary>
     public const int Refused = 4;
     /// <summary>Confirmation needed: the command changes the game folder, the server or deletes something; it printed what
     /// it would do and changed nothing. Run it again with --yes.</summary>

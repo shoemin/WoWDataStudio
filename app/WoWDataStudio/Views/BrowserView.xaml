@@ -540,7 +540,7 @@
                                                             <Button Content="Revert" Padding="8,3" Margin="0,0,4,0" Command="{Binding DataContext.RevertChangeCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}"
                                                                     ToolTip="Undo this file's change." />
                                                             <Button Content="Revert this import" Padding="8,3" Command="{Binding DataContext.RevertChangeSetCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}"
-                                                                    ToolTip="Undo every file that came with the same import." />
+                                                                    ToolTip="Undo every file that came with the same import: each goes back to the version it had before it (your earlier edit, or the game's original)." />
                                                         </StackPanel>
                                                     </DataTemplate>
                                                 </GridViewColumn.CellTemplate>

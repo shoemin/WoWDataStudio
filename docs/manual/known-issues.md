@@ -753,19 +753,6 @@ does not use them: they appear only where your own interface code, an add-on or 
 
 *Status:* by design.
 
-### Reverting a map conversion also reverts your earlier edits of the same files
-
-*What happens:* the conversion builds on your current files: a table you edited before (for example AreaTable.dbc)
-keeps your rows and gets the new ones, a tile you imported from Noggit is replaced. Those files then belong to the
-conversion's change set, so **Revert this import** of the conversion removes your earlier edits of them too. The report
-of the preview warns when this happens (*files already have your own edits*).
-
-*Who is affected:* anyone converting into a workspace that already changed the same tables or tiles.
-
-*Workaround:* convert before editing those files, or revert single files (**Revert**) instead of the whole conversion.
-
-*Status:* open.
-
 ## The command line
 
 ### `wds models render` needs the app and OpenGL

@@ -191,7 +191,7 @@ public static class CliApp
         CliError c => c.Code,
         FileNotFoundException or DirectoryNotFoundException => ExitCode.NotFound,
         WorkspaceException w when w.Message.Contains("would not load", StringComparison.Ordinal) || w.Message.Contains("read-back check", StringComparison.Ordinal) => ExitCode.ValidationFailed,
-        WorkspaceException w when w.Message.Contains("not installed by WoW Data Studio", StringComparison.Ordinal) || w.Message.Contains("cannot be proven", StringComparison.Ordinal) => ExitCode.Refused,
+        WorkspaceException w when w.Message.Contains("not installed by WoW Data Studio", StringComparison.Ordinal) || w.Message.Contains("cannot be proven", StringComparison.Ordinal) || w.Message.Contains("was not reverted; nothing was changed", StringComparison.Ordinal) => ExitCode.Refused,
         WorkspaceException w when w.Message.Contains("There are no changes", StringComparison.Ordinal) => ExitCode.NotFound,
         Core.Dbc.DbcException => ExitCode.ValidationFailed,
         Core.Designers.DesignException d when d.Message.StartsWith("There is no", StringComparison.Ordinal) || d.Message.Contains(" has no row ", StringComparison.Ordinal) => ExitCode.NotFound,

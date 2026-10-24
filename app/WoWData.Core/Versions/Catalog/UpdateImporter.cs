@@ -159,7 +159,7 @@ public static class UpdateImporter
             res.Files.Sort((a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
             var replaced = res.Files.Count(f => f.ReplacesYourEdit);
             if (replaced > 0)
-                res.Warnings.Add($"{replaced:N0} of these files already have your own edits: the import replaces them and takes them into its change set, so \"Revert this import\" removes those earlier edits too.");
+                res.Warnings.Add($"{replaced:N0} of these files already have your own edits: the import replaces them; \"Revert this import\" puts your earlier versions back.");
 
             // ---- the terrain: one map conversion per map (validated in a dry run first when writing)
             var requests = mapItems.Select(g => (Map: g.Key, Req: RequestOf(g.ToList()))).ToList();

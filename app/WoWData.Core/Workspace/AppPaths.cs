@@ -49,6 +49,8 @@ public sealed class ClientPaths
     public string WorkspaceDir => Path.Combine(Dir, "workspace");
     public string ChangesFile => Path.Combine(Dir, "changes.json");
     public string BackupDir => Path.Combine(Dir, "backups");
+    /// <summary>0.14.0: the versions of edited files that a later change set replaced ("Revert this import" puts them back).</summary>
+    public string HistoryDir => Path.Combine(Dir, "history");
     public string BuildDir => Path.Combine(Dir, "build");
     public string TempDir => Path.Combine(Dir, "temp");
     /// <summary>Cached minimap overviews of the Maps tab (rebuilt when the archives change).</summary>

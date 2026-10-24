@@ -95,7 +95,7 @@ The command line follows the same rules as the app ([Safety and undoing everythi
 | 1 | error: a file could not be read or written, a program could not be started, the server database did not answer |
 | 2 | usage: unknown command or option, a missing or extra argument |
 | 3 | validation failed: a value, file, model, map or import the game would not load; nothing was changed |
-| 4 | refused for safety: the world server runs, a file in the game folder or a `patch-3.MPQ` is not the app's (without `--force`); nothing was changed |
+| 4 | refused for safety: the world server runs, a file in the game folder or a `patch-3.MPQ` is not the app's (without `--force`), a newer import changed a file of the import to revert; nothing was changed |
 | 5 | confirmation needed: the command would change the game folder or the server, or delete something; it printed what, changed nothing; run it again with `--yes` |
 | 6 | not found: no game folder is set, or the table, row, file, entry, map, tile or change does not exist |
 
@@ -2635,7 +2635,14 @@ wds changes revert Spell --dry-run
 
 #### wds changes revert-set
 
-"Revert this import": throw away every file of one change set (needs --yes).
+"Revert this import": put every file of one change set back to the version it had before that import (needs --yes).
+
+A file the import replaced while it held an earlier edit of yours (a map conversion builds on your tables, an update
+import replaces your texture) goes back to that edit; the others go back to the game's original. Other imports are not
+changed. `--dry-run` lists where each file goes (`--json`: `plan.steps`, `plan.toEarlier`, `plan.toOriginal`). When a
+newer import changed one of its files again, nothing is reverted and the command ends with exit code 4, naming the files
+(`plan.problems`): revert the newer import first, or use `wds changes revert` on single files. See
+[My changes](my-changes.md#undo-a-whole-import).
 
 ```
 wds changes revert-set <change-set> [options]
@@ -2646,6 +2653,7 @@ wds changes revert-set <change-set> [options]
 
 ```
 wds changes revert-set cs-20261011-101500-123-ab12 --yes
+wds changes revert-set cs-20261011-101500-123-ab12 --dry-run
 ```
 
 #### wds changes install

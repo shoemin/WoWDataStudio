@@ -505,7 +505,7 @@ public static class MapConverter
             var replaced = res.Files.Where(f => f.ReplacesYourEdit).ToList();
             if (replaced.Count > 0)
                 res.Warnings.Add($"{replaced.Count} file{(replaced.Count == 1 ? " already has" : "s already have")} your own edits ({string.Join(", ", replaced.Take(5).Select(f => Path.GetFileName(f.Path)))}{(replaced.Count > 5 ? ", ..." : "")}): " +
-                                 "the conversion builds on them (tables keep your rows) and takes them into its change set, so \"Revert this import\" of the conversion removes those earlier edits too.");
+                                 "the conversion builds on them (tables keep your rows); \"Revert this import\" of the conversion puts your earlier versions back.");
             ServerNotes(res);
             res.Files.Sort((a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
 

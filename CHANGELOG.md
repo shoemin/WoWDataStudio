@@ -103,6 +103,20 @@ recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
 
 ### Fixed
 
+* **Reverting an import no longer wipes your earlier edits of the same files** (was in Known issues: "Reverting a map
+  conversion also reverts your earlier edits of the same files"). When a change set (a map conversion, an update import,
+  a texture or model import, a new save of a table) replaces a file that already held an edit of yours, the app now keeps
+  that earlier version (`<client-id>\history\`, the ten latest versions per file), and **Revert this import** /
+  `wds changes revert-set` puts each file back to the version it had just before the import: your earlier edit (back in
+  its own import) or, without one, the game's original. Other imports, older or newer, stay as they are. When a NEWER
+  import changed one of its files again, nothing is reverted: the app shows why (the files and the newer imports) and
+  `wds changes revert-set` ends with exit code 4; revert the newer import first, or **Revert** single files (which, as
+  before, puts the game's original back). `--dry-run` / `--json` list where each file goes (`plan`). The rollback of a
+  failed update import also restores the earlier edits now. Tests: `ChangeSetRevertTests`, `ChangeSetRevertCliTests`,
+  `MapConversionTests.RevertingAConversionPutsYourEarlierTableEditBack`.
+* The hot-reload test `ThePatchIsReplacedWhileTheGameRuns` could fail when the computer was busy: the test's stand-in game
+  (`FakeGame`) opened its next pipe connection on a thread-pool thread that could start seconds late, so a 5-second connect
+  gave up. It now serves its pipe from threads of its own and always has a connection waiting.
 * The 0.13.3 entry below showed a broken path to its in-game test results.
 
 ## 0.13.3 (2026-10-16)

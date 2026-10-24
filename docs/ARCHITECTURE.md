@@ -374,6 +374,10 @@ designer's `DesignSession`, so reward spells are spells there and one save write
   count, the models and displays that use it, the workspace SHA-256, the source PNG and its SHA-256, the change set (one
   import = one set; "Revert this import" reverts the set), the loose install (destination, SHA-256, backup) and the patch
   build. This is what the Phase 3c model-package import needs to apply and revert several textures (and later a mesh) as one.
+  0.14.0: when a change set replaces a file that holds an edit of another set, the earlier record becomes the new record's
+  `prior` and its bytes are kept under `<client-id>\history\<set>\<path>` (at most `Workspace.MaxPriorVersions` per
+  file); `RevertChangeSet` puts each file back to that version (the game's original when there is none) and refuses,
+  changing nothing, when a newer set's chain names the set (`PlanRevertChangeSet`, `RevertPlan`).
 * **Compare.** `CompareViewModel` takes two `ICompareSide`s and a shared `ViewState` (zoom/pan) for textures. Models
   have their counterpart since 3b: `ModelCompareViewModel` with two sides and one shared `OrbitCamera` (two synchronized
   3D views, see "The 3D viewer" below), with the same labels ("Original (from game)" / "Your edit") available to 3c.

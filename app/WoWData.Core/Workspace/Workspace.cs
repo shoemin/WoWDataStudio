@@ -63,8 +63,51 @@ public sealed class ChangeRecord
     /// <summary>0.9.0: for server edits (kind "server"): when they were applied to the server's database, and which version.</summary>
     [JsonPropertyName("server_applied")] public ServerAppliedRecord? ServerApplied { get; set; }
 
+    /// <summary>0.14.0: the version of the file just before this record's change set replaced it, when that was an earlier
+    /// edit of yours (null: the game's original, or <see cref="PriorDropped"/>). "Revert this import" puts it back.</summary>
+    [JsonPropertyName("prior")] public PriorVersion? Prior { get; set; }
+    /// <summary>0.14.0: there was an earlier edit before this change set, but its copy is no longer kept (the history of a
+    /// file is limited to <see cref="Workspace.MaxPriorVersions"/> versions), so "Revert this import" refuses this file.</summary>
+    [JsonPropertyName("prior_dropped")] public bool PriorDropped { get; set; }
+
     /// <summary>0.9.0: a server edit (ServerData\&lt;database&gt;\&lt;table&gt;.json), not a game file: never installed or packed.</summary>
     [JsonIgnore] public bool IsServerEdit => Kind == "server";
+}
+
+/// <summary>0.14.0: an earlier edit of a file that a later change set replaced: its record (with its own
+/// <see cref="ChangeRecord.Prior"/>, so the versions form a chain), the change set it came from, and the copy of its bytes
+/// under &lt;client-id&gt;\history (relative to the client's folder).</summary>
+public sealed class PriorVersion
+{
+    [JsonPropertyName("record")] public ChangeRecord Record { get; set; } = new();
+    [JsonPropertyName("set_label")] public string SetLabel { get; set; } = "";
+    [JsonPropertyName("set_created")] public DateTime SetCreated { get; set; }
+    [JsonPropertyName("stash")] public string Stash { get; set; } = "";
+}
+
+/// <summary>0.14.0: what "Revert this import" will do with one file: go back to the earlier edit from
+/// <see cref="EarlierLabel"/>, or (null) to the game's original.</summary>
+public sealed record RevertStep(string Path, string? EarlierLabel);
+
+/// <summary>0.14.0: what "Revert this import" will do (the app's question, <c>wds changes revert-set --dry-run</c>), and
+/// why it cannot (<see cref="Problems"/>: a newer change set changed one of its files again, or an earlier version is no
+/// longer kept). With problems, nothing is reverted.</summary>
+public sealed record RevertPlan(ChangeSet Set, IReadOnlyList<RevertStep> Steps, IReadOnlyList<string> Problems)
+{
+    public bool CanRevert => Problems.Count == 0;
+    public int ToEarlier => Steps.Count(s => s.EarlierLabel != null);
+    public int ToOriginal => Steps.Count(s => s.EarlierLabel == null);
+
+    /// <summary>What happens, in words (one sentence).</summary>
+    public string Text => ToEarlier == 0
+        ? "Each file goes back to the game's original."
+        : $"Each file goes back to the version it had before this import: {ToEarlier} to your earlier edit, {ToOriginal} to the game's original.";
+
+    /// <summary>The refusal when <see cref="CanRevert"/> is false.</summary>
+    public string RefusalText =>
+        $"\"{Set.Label}\" was not reverted; nothing was changed. {Problems.Count} file{(Problems.Count == 1 ? "" : "s")} cannot go back to the version {(Problems.Count == 1 ? "it" : "they")} had before this import:\n" +
+        string.Join("\n", Problems.Take(10)) + (Problems.Count > 10 ? $"\n... and {Problems.Count - 10} more" : "") +
+        "\n\nRevert the newer import first (then this one), or use Revert on single files (that puts the game's original back).";
 }
 
 /// <summary>0.9.0: "Apply to server" of a server edit: when, where (host:port and database, never a password) and the
@@ -333,14 +376,30 @@ public sealed class Workspace
     {
         CheckLoads(archivePath, data);
         var path = ClientData.ResolveName(archivePath);
-        WriteWorkspaceFile(path, data);
         lock (_lock)
         {
             Sync();
-            var rec = Record(path, data, origin, changeSet, sourceFile, summary);
+            var rec = Put(path, data, origin, changeSet, sourceFile, summary);
             Save();
             return rec;
         }
+    }
+
+    /// <summary>Keeps the version a file has now when <paramref name="changeSet"/> replaces an earlier edit of another
+    /// change set (0.14.0), writes the new bytes and records them (call under the lock; the caller saves the manifest).</summary>
+    private ChangeRecord Put(string path, byte[] data, OriginInfo origin, ChangeSet changeSet, string? sourceFile, string summary)
+    {
+        var (prior, dropped, stash) = KeepPrior(path, changeSet);
+        try
+        {
+            WriteWorkspaceFile(path, data);
+        }
+        catch
+        {
+            if (stash != null) DeleteStash(stash);
+            throw;
+        }
+        return Record(path, data, origin, changeSet, sourceFile, summary, prior, dropped);
     }
 
     /// <summary>One file of <see cref="SaveEdits"/>: its game path, its bytes (loaded when needed), its origin and summary.</summary>
@@ -369,8 +428,7 @@ public sealed class Workspace
                     var e = edits[i];
                     var data = e.Load();
                     var path = ClientData.ResolveName(e.Path);
-                    WriteWorkspaceFile(path, data);
-                    recs.Add(Record(path, data, e.Origin, changeSet, null, e.Summary));
+                    recs.Add(Put(path, data, e.Origin, changeSet, null, e.Summary));
                     if (i % 50 == 0) progress?.Invoke(edits.Count + i, edits.Count * 2);
                 }
             }
@@ -410,7 +468,7 @@ public sealed class Workspace
     }
 
     /// <summary>Records a written file under a change set (call under the lock; the caller saves the manifest).</summary>
-    private ChangeRecord Record(string path, byte[] data, OriginInfo origin, ChangeSet changeSet, string? sourceFile, string summary)
+    private ChangeRecord Record(string path, byte[] data, OriginInfo origin, ChangeSet changeSet, string? sourceFile, string summary, PriorVersion? prior, bool priorDropped)
     {
         var key = Key(path);
         Manifest.Files.TryGetValue(key, out var old);
@@ -434,11 +492,79 @@ public sealed class Workspace
             Installed = old?.Installed,
             Packed = old?.Packed,
             ServerApplied = old?.ServerApplied,
+            Prior = prior,
+            PriorDropped = priorDropped,
         };
         Manifest.Files[key] = rec;
         Manifest.ChangeSets[changeSet.Id] = changeSet;
         if (!changeSet.Files.Contains(key)) changeSet.Files.Add(key);
         return rec;
+    }
+
+    // ------------------------------------------------------------------ earlier versions (0.14.0)
+
+    /// <summary>How many earlier edits of one file are kept for "Revert this import" (older ones are dropped).</summary>
+    public const int MaxPriorVersions = 10;
+
+    /// <summary>Before <paramref name="changeSet"/> replaces a file: when the file holds an edit of ANOTHER change set, its
+    /// bytes are copied to history\&lt;change set&gt;\&lt;path&gt; and its record becomes the new record's
+    /// <see cref="ChangeRecord.Prior"/>; a file the same change set already wrote keeps its prior version. Call under the
+    /// lock, before the file is written. Returns the prior version, whether an earlier version is lost, and the copy made.</summary>
+    private (PriorVersion? Prior, bool Dropped, string? Stash) KeepPrior(string path, ChangeSet changeSet)
+    {
+        if (!Manifest.Files.TryGetValue(Key(path), out var old)) return (null, false, null);
+        if (old.ChangeSet == changeSet.Id) return (old.Prior, old.PriorDropped, null);
+        var wf = WorkspaceFile(old.Path);
+        if (!File.Exists(wf)) return (null, true, null);   // the earlier edit's copy is already gone: nothing to put back
+        var baseRel = System.IO.Path.Combine("history", changeSet.Id, ClientData.ResolveName(old.Path).Replace('\\', System.IO.Path.DirectorySeparatorChar));
+        var rel = baseRel;
+        for (int k = 2; File.Exists(System.IO.Path.Combine(Paths.Dir, rel)); k++) rel = baseRel + "." + k;
+        var dest = System.IO.Path.Combine(Paths.Dir, rel);
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(dest)!);
+        File.Copy(wf, dest + ".tmp", true);
+        File.Move(dest + ".tmp", dest, true);
+        var set = Manifest.ChangeSets.GetValueOrDefault(old.ChangeSet);
+        var kept = new ChangeRecord
+        {
+            Path = old.Path, Kind = old.Kind, Original = old.Original, WorkspaceSha256 = old.WorkspaceSha256, Size = old.Size,
+            SourceFile = old.SourceFile, SourceSha256 = old.SourceSha256, Edited = old.Edited, ChangeSet = old.ChangeSet,
+            Summary = old.Summary, Prior = old.Prior, PriorDropped = old.PriorDropped,
+            // the deliveries (loose install, patch, server) belong to the file, not the version: they stay on the newest record
+        };
+        var prior = new PriorVersion { Record = kept, SetLabel = set?.Label ?? old.Summary, SetCreated = set?.Created ?? old.Edited, Stash = rel };
+        // keep at most MaxPriorVersions versions: the copies of older ones are deleted
+        var link = prior;
+        for (int depth = 1; link.Record.Prior != null; depth++)
+        {
+            if (depth >= MaxPriorVersions)
+            {
+                DeleteHistory(link.Record.Prior);
+                link.Record.Prior = null;
+                link.Record.PriorDropped = true;
+                break;
+            }
+            link = link.Record.Prior;
+        }
+        return (prior, false, dest);
+    }
+
+    /// <summary>Deletes the kept copies of a chain of earlier versions (a file reverted to the game's original).</summary>
+    private void DeleteHistory(PriorVersion? p)
+    {
+        for (; p != null; p = p.Record.Prior)
+            if (p.Stash.Length > 0) DeleteStash(System.IO.Path.Combine(Paths.Dir, p.Stash));
+    }
+
+    private void DeleteStash(string file)
+    {
+        try
+        {
+            if (File.Exists(file)) File.Delete(file);
+            PruneEmptyDirs(System.IO.Path.GetDirectoryName(file)!, Paths.HistoryDir);
+            if (Directory.Exists(Paths.HistoryDir) && !Directory.EnumerateFileSystemEntries(Paths.HistoryDir).Any()) Directory.Delete(Paths.HistoryDir);
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
     }
 
     /// <summary>Status of every change, newest first.</summary>
@@ -472,7 +598,8 @@ public sealed class Workspace
     // ------------------------------------------------------------------ revert
 
     /// <summary>Undo the edit of one file: removes its loose install from the game (only if unchanged since we installed it),
-    /// deletes the workspace copy and the record. Returns what was done, in words.</summary>
+    /// deletes the workspace copy and the record (and the kept earlier versions of the file): the game's original is used
+    /// again. Returns what was done, in words.</summary>
     public List<string> Revert(string archivePath)
     {
         var done = new List<string>();
@@ -481,35 +608,136 @@ public sealed class Workspace
             Sync();
             var key = Key(archivePath);
             if (!Manifest.Files.TryGetValue(key, out var rec)) return done;
-            if (rec.Installed != null) done.Add(RemoveInstalled(rec.Path, rec.Installed, key));
-            var wf = WorkspaceFile(rec.Path);
-            if (File.Exists(wf)) File.Delete(wf);
-            PruneEmptyDirs(System.IO.Path.GetDirectoryName(wf)!, Paths.WorkspaceDir);
-            Manifest.Files.Remove(key);
-            if (Manifest.ChangeSets.TryGetValue(rec.ChangeSet, out var cs))
-            {
-                cs.Files.Remove(key);
-                if (cs.Files.Count == 0) Manifest.ChangeSets.Remove(cs.Id);
-            }
-            done.Add($"{rec.Path}: your edit was removed; the game's original is used again" + (rec.Packed != null ? " (rebuild patch-3.MPQ to drop it from the archive too)" : "") + ".");
+            RevertToOriginal(key, rec, done);
             Save();
         }
         return done;
     }
 
-    /// <summary>Revert every file of a change set (e.g. one multi-texture import).</summary>
-    public List<string> RevertChangeSet(string changeSetId)
+    /// <summary>One file back to the game's original (call under the lock; the caller saves the manifest).</summary>
+    private void RevertToOriginal(string key, ChangeRecord rec, List<string> done)
     {
-        List<string> files;
+        if (rec.Installed != null) done.Add(RemoveInstalled(rec.Path, rec.Installed, key));
+        var wf = WorkspaceFile(rec.Path);
+        if (File.Exists(wf)) File.Delete(wf);
+        PruneEmptyDirs(System.IO.Path.GetDirectoryName(wf)!, Paths.WorkspaceDir);
+        DeleteHistory(rec.Prior);
+        Manifest.Files.Remove(key);
+        if (Manifest.ChangeSets.TryGetValue(rec.ChangeSet, out var cs))
+        {
+            cs.Files.Remove(key);
+            if (cs.Files.Count == 0) Manifest.ChangeSets.Remove(cs.Id);
+        }
+        done.Add($"{rec.Path}: your edit was removed; the game's original is used again" + (rec.Packed != null ? " (rebuild patch-3.MPQ to drop it from the archive too)" : "") + ".");
+    }
+
+    /// <summary>0.14.0: what "Revert this import" would do with each file of a change set, and what stops it: a file this
+    /// change set replaced that a NEWER change set changed again (reverting would throw the newer work away, or leave it
+    /// built on this import), or an earlier version whose copy is no longer kept. Null when there is no such change set.</summary>
+    public RevertPlan? PlanRevertChangeSet(string changeSetId)
+    {
         lock (_lock)
         {
             Sync();
-            if (!Manifest.ChangeSets.TryGetValue(changeSetId, out var cs)) return new List<string>();
-            files = cs.Files.Select(k => Manifest.Files.TryGetValue(k, out var r) ? r.Path : k).ToList();
+            return PlanCore(changeSetId);
         }
+    }
+
+    private RevertPlan? PlanCore(string changeSetId)
+    {
+        if (!Manifest.ChangeSets.TryGetValue(changeSetId, out var cs)) return null;
+        var steps = new List<RevertStep>();
+        var problems = new List<string>();
+        foreach (var key in cs.Files)
+        {
+            if (!Manifest.Files.TryGetValue(key, out var r)) continue;
+            if (r.Prior != null)
+            {
+                if (File.Exists(System.IO.Path.Combine(Paths.Dir, r.Prior.Stash))) steps.Add(new RevertStep(r.Path, r.Prior.SetLabel));
+                else problems.Add($"{r.Path}: the kept copy of your earlier version is missing ({r.Prior.Stash})");
+            }
+            else if (r.PriorDropped) problems.Add($"{r.Path}: the version before this import is no longer kept (only the {MaxPriorVersions} latest versions of a file are kept)");
+            else steps.Add(new RevertStep(r.Path, null));
+        }
+        // files this change set wrote that a newer change set took over since: their chain of earlier versions names it
+        foreach (var r in Manifest.Files.Values.Where(r => r.ChangeSet != changeSetId).OrderBy(r => r.Path, StringComparer.OrdinalIgnoreCase))
+        {
+            var newer = new List<string> { r.ChangeSet };
+            for (var p = r.Prior; p != null; p = p.Record.Prior)
+            {
+                if (p.Record.ChangeSet == changeSetId)
+                {
+                    var labels = newer.Distinct().Select(id => "\"" + (Manifest.ChangeSets.GetValueOrDefault(id)?.Label ?? id) + "\"");
+                    problems.Add($"{r.Path}: changed again later by {string.Join(", then ", labels.Reverse())}");
+                    break;
+                }
+                newer.Add(p.Record.ChangeSet);
+            }
+        }
+        return new RevertPlan(cs, steps, problems);
+    }
+
+    /// <summary>"Revert this import": every file of a change set goes back to the version it had just before it (0.14.0):
+    /// your earlier edit when the change set replaced one (a map conversion that builds on your tables, an update import over
+    /// your texture), the game's original otherwise. Other change sets are not changed. When a newer change set changed one
+    /// of its files again, nothing is reverted (<see cref="WorkspaceException"/> with <see cref="RevertPlan.RefusalText"/>).</summary>
+    public List<string> RevertChangeSet(string changeSetId)
+    {
         var done = new List<string>();
-        foreach (var f in files) done.AddRange(Revert(f));
+        lock (_lock)
+        {
+            Sync();
+            var plan = PlanCore(changeSetId);
+            if (plan == null) return done;
+            if (!plan.CanRevert) throw new WorkspaceException(plan.RefusalText);
+            var cs = plan.Set;
+            try
+            {
+                foreach (var key in cs.Files.ToList())
+                {
+                    if (!Manifest.Files.TryGetValue(key, out var rec))
+                    {
+                        cs.Files.Remove(key);
+                        continue;
+                    }
+                    if (rec.Prior != null) StepBack(key, rec, cs, done);
+                    else RevertToOriginal(key, rec, done);
+                }
+                if (cs.Files.Count == 0) Manifest.ChangeSets.Remove(cs.Id);
+            }
+            finally
+            {
+                Save();
+            }
+        }
         return done;
+    }
+
+    /// <summary>One file back to its earlier edit (call under the lock): the kept copy is moved back into the workspace, the
+    /// earlier record returns to its own change set (made again when it had no files left), the loose copy of the
+    /// reverted version is removed from the game; the patch and server marks stay (they show "older version").</summary>
+    private void StepBack(string key, ChangeRecord rec, ChangeSet cs, List<string> done)
+    {
+        var prior = rec.Prior!;
+        var src = System.IO.Path.Combine(Paths.Dir, prior.Stash);
+        if (rec.Installed != null) done.Add(RemoveInstalled(rec.Path, rec.Installed, key));
+        var back = prior.Record;
+        var wf = WorkspaceFile(back.Path);
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(wf)!);
+        File.Copy(src, wf + ".tmp", true);
+        File.Move(wf + ".tmp", wf, true);
+        DeleteStash(src);
+        back.Installed = null;
+        back.Packed = rec.Packed;
+        back.ServerApplied = rec.ServerApplied;
+        Manifest.Files[key] = back;
+        cs.Files.Remove(key);
+        if (!Manifest.ChangeSets.TryGetValue(back.ChangeSet, out var owner))
+            Manifest.ChangeSets[back.ChangeSet] = owner = new ChangeSet { Id = back.ChangeSet, Label = prior.SetLabel, Created = prior.SetCreated };
+        if (!owner.Files.Contains(key)) owner.Files.Add(key);
+        done.Add($"{rec.Path}: put back to your earlier edit (\"{prior.SetLabel}\")" +
+                 (rec.Installed != null ? "; install it again to test it in the game" : "") +
+                 (rec.Packed != null ? "; rebuild patch-3.MPQ to put it into the archive" : "") + ".");
     }
 
     private string RemoveInstalled(string path, InstallRecord inst, string key)

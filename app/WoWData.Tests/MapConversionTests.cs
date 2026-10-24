@@ -244,6 +244,46 @@ public class MapConversionTests
         Assert.Empty(ConvertTestData.FilesIn(ws.Paths.WorkspaceDir));
     }
 
+    /// <summary>0.14.0: the conversion builds on your edited AreaTable (keeps your rows, adds the new areas); reverting it
+    /// puts your edit back, not the game's table.</summary>
+    [Casc160Fact(names: true)]
+    public void RevertingAConversionPutsYourEarlierTableEditBack()
+    {
+        var target = ConvertTestData.NewTarget(out _);
+        var ws = target.Workspace;
+        const string areaPath = @"DBFilesClient\AreaTable.dbc";
+        var at = target.Dbc.LoadCurrent("AreaTable");
+        var nameCol = at.Layout.Column("AreaName")!;
+        var row = at.Find(12)!;                                   // Elwynn Forest
+        at.SetText(row, nameCol.Field, "My Elwynn");
+        var mine = target.Dbc.Save(at, "renamed Elwynn")!;
+        var edit = ws.ReadEdited(areaPath)!;
+        // a tile with 1.60's Stormwind Harbor: new areas go into AreaTable
+        var src = ConvertTestData.Source;
+        var smap = src.FindMap("0")!;
+        var wdt160 = src.ReadWdt(smap);
+        var harbor = wdt160.ExistingTiles().Where(t => t.Y >= 44 && t.Y <= 50 && t.X >= 29 && t.X <= 34).OrderBy(t => t.Y).ThenBy(t => t.X)
+            .First(t => src.ChunkAreas(smap, wdt160, t.X, t.Y)!.Contains(17203));
+        var res = MapConverter.Run(src, new MapConvertRequest { Map = "0", Tiles = new[] { harbor } }, target, dryRun: false);
+        foreach (var l in res.Lines()) _out.WriteLine(l);
+        var cs = Assert.IsType<ChangeSet>(res.ChangeSet);
+        Assert.Contains(res.Files, f => f.Path.Equals(areaPath, StringComparison.OrdinalIgnoreCase) && f.ReplacesYourEdit);
+        Assert.Equal(cs.Id, ws.Get(areaPath)!.ChangeSet);
+        var converted = target.Dbc.LoadCurrent("AreaTable");
+        Assert.NotNull(converted.Find(17203));
+        Assert.Equal("My Elwynn", converted.Text(converted.Find(12)!, nameCol));   // the conversion kept your row
+        // revert: AreaTable is your edit again (in its own change set), the tiles are gone
+        Assert.Equal(1, ws.PlanRevertChangeSet(cs.Id)!.ToEarlier);
+        ws.RevertChangeSet(cs.Id);
+        target.Dbc.Invalidate("AreaTable");
+        Assert.Equal(edit, ws.ReadEdited(areaPath));
+        Assert.Equal(mine.ChangeSet, ws.Get(areaPath)!.ChangeSet);
+        var back = target.Dbc.LoadCurrent("AreaTable");
+        Assert.Null(back.Find(17203));
+        Assert.Equal("My Elwynn", back.Text(back.Find(12)!, nameCol));
+        Assert.Equal(areaPath, Assert.Single(ws.List()).Record.Path, ignoreCase: true);
+    }
+
     [Casc160Fact(names: true)]
     public void ANewMapGetsItsMapLightAndAreaRows()
     {

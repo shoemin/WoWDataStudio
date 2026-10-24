@@ -15,8 +15,9 @@ public sealed class FakeGame : IGameLocator, IDisposable
     private readonly string _clientDir;
     private readonly string _pipe = "wds-fakegame-" + Guid.NewGuid().ToString("N")[..12];
     private readonly CancellationTokenSource _stop = new();
-    private readonly Task _loop;
+    private readonly Thread _listener;
     private readonly ManualResetEventSlim _listening = new();
+    private readonly object _answerGate = new();
     private FileStream? _patchLock;
     private bool _released;
     private int _id;
@@ -44,7 +45,8 @@ public sealed class FakeGame : IGameLocator, IDisposable
     {
         _clientDir = Path.GetFullPath(clientDir);
         if (holdPatch) LockPatch();
-        _loop = Task.Factory.StartNew(() => LoopAsync(_stop.Token), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
+        _listener = new Thread(Listen) { IsBackground = true, Name = "FakeGame pipe" };
+        _listener.Start();
         _listening.Wait(TimeSpan.FromSeconds(10));   // the pipe exists before the constructor returns (a busy thread pool must not race the first client)
     }
 
@@ -65,48 +67,85 @@ public sealed class FakeGame : IGameLocator, IDisposable
         if (File.Exists(p)) _patchLock = new FileStream(p, FileMode.Open, FileAccess.Read, FileShare.Read);
     }
 
-    private async Task LoopAsync(CancellationToken stop)
+    // 0.14.0: the pipe is served by threads of its own with blocking calls, never by the thread pool. The tests block thread
+    // pool threads while wds runs in-process; under machine load a pool continuation that should have opened the next pipe
+    // instance could start seconds late, and a client's 5-second connect gave up ("connection is in use"). Now a new instance
+    // listens again right after each connection (the answer is written by a thread of its own), so a client always finds one.
+    private void Listen()
     {
+        var stop = _stop.Token;
         while (!stop.IsCancellationRequested)
         {
+            NamedPipeServerStream server;
             try
             {
-                await using var server = new NamedPipeServerStream(_pipe, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
-                _listening.Set();
-                await server.WaitForConnectionAsync(stop);
-                var req = await ReadRequestAsync(server, stop);
-                if (req == null) continue;
-                lock (Requests) Requests.Add(req);
-                if (NeverAnswer)
-                {
-                    await Task.Delay(Timeout.Infinite, stop).ContinueWith(_ => { });
-                    continue;
-                }
-                var (first, second) = Answer(req);
-                var w = new StreamWriter(server, new UTF8Encoding(false)) { NewLine = "\n" };
-                await w.WriteLineAsync(first);
-                await w.FlushAsync();
-                if (second != null)
-                {
-                    if (ReportDelayMs > 0) await Task.Delay(ReportDelayMs, stop);
-                    await w.WriteLineAsync(second);
-                    await w.FlushAsync();
-                }
-                try { if (OperatingSystem.IsWindows()) server.WaitForPipeDrain(); }
-                catch (IOException) { }
+                server = new NamedPipeServerStream(_pipe, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances, PipeTransmissionMode.Byte, PipeOptions.None);
             }
-            catch (OperationCanceledException) { break; }
-            catch (IOException) { }
+            catch (IOException)
+            {
+                if (stop.WaitHandle.WaitOne(20)) break;
+                continue;
+            }
+            _listening.Set();
+            try
+            {
+                server.WaitForConnection();
+            }
+            catch (Exception e) when (e is IOException or ObjectDisposedException or InvalidOperationException)
+            {
+                server.Dispose();
+                continue;
+            }
+            if (stop.IsCancellationRequested)
+            {
+                server.Dispose();
+                break;
+            }
+            new Thread(() => Serve(server)) { IsBackground = true, Name = "FakeGame answer" }.Start();
         }
     }
 
-    private static async Task<string?> ReadRequestAsync(Stream s, CancellationToken stop)
+    /// <summary>One connection: read the request, answer like the game (blocking calls on this thread).</summary>
+    private void Serve(NamedPipeServerStream server)
+    {
+        var stop = _stop.Token;
+        using (server)
+        {
+            try
+            {
+                var req = ReadRequest(server);
+                if (req == null) return;
+                lock (Requests) Requests.Add(req);
+                if (NeverAnswer)
+                {
+                    stop.WaitHandle.WaitOne();
+                    return;
+                }
+                string first;
+                string? second;
+                lock (_answerGate) (first, second) = Answer(req);   // the real game handles one request at a time
+                var w = new StreamWriter(server, new UTF8Encoding(false), 4096, leaveOpen: true) { NewLine = "\n" };
+                w.WriteLine(first);
+                w.Flush();
+                if (second != null)
+                {
+                    if (ReportDelayMs > 0 && stop.WaitHandle.WaitOne(ReportDelayMs)) return;
+                    w.WriteLine(second);
+                    w.Flush();
+                }
+                if (OperatingSystem.IsWindows()) server.WaitForPipeDrain();
+            }
+            catch (Exception e) when (e is IOException or ObjectDisposedException or InvalidOperationException) { }
+        }
+    }
+
+    private static string? ReadRequest(Stream s)
     {
         var sb = new StringBuilder();
         var buf = new byte[4096];
         while (true)
         {
-            int n = await s.ReadAsync(buf, stop);
+            int n = s.Read(buf, 0, buf.Length);
             if (n == 0) return sb.Length > 0 ? sb.ToString() : null;
             sb.Append(Encoding.UTF8.GetString(buf, 0, n));
             var t = sb.ToString();
@@ -198,8 +237,14 @@ public sealed class FakeGame : IGameLocator, IDisposable
     public void Dispose()
     {
         _stop.Cancel();
-        try { _loop.Wait(2000); }
-        catch (AggregateException) { }
+        try
+        {
+            // wake the listener from its blocking wait for a connection
+            using var wake = new NamedPipeClientStream(".", _pipe, PipeDirection.InOut);
+            wake.Connect(500);
+        }
+        catch (Exception e) when (e is IOException or TimeoutException or UnauthorizedAccessException) { }
+        _listener.Join(2000);
         _patchLock?.Dispose();
         _patchLock = null;
     }

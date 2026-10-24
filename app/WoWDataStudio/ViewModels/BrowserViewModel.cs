@@ -871,10 +871,13 @@ public sealed partial class BrowserViewModel : ObservableObject
     {
         var ws = _session.Workspace;
         if (ws == null || (path == null && set == null)) return;
-        string what = set != null ? $"all {set.Files.Count} file(s) of \"{set.Label}\"" : System.IO.Path.GetFileName(path!);
-        if (!Dialogs.Confirm("Revert my change", $"Undo your change to {what}? The edited copy is deleted from your workspace and the game's original is used again. " +
-                                                 "If it is installed as a loose file, it is removed from the game folder too. Your exported PNG files are not touched.",
-                "Revert", "Keep my change", DialogKind.Warning)) return;
+        var (question, refused) = ChangeOperations.RevertQuestion(ws, set == null ? path : null, set?.Id);
+        if (refused)
+        {
+            Dialogs.Error("Could not revert", question);   // 0.14.0: a newer import changed one of its files again
+            return;
+        }
+        if (!Dialogs.Confirm("Revert my change", question, "Revert", "Keep my change", DialogKind.Warning)) return;
         try
         {
             var reverted = set != null ? ChangeOperations.FilesOf(ws, set.Id) : new List<string> { path! };

@@ -60,8 +60,8 @@ The status lists every place your change is, separated by dots:
 |---|---|
 | **Compare** | opens the comparison of the original and your edit ([Editing textures](editing-textures.md#the-compare-window)); for a model the two 3D views ([Models and Blender](model-export-import.md)); for a map tile the before/after terrain views with the height difference ([Maps and terrain](maps-and-terrain.md#compare-before-and-after)); for a data table the rows changed, added and removed, with every value before and after ([Data tables](dbc-editor.md#save-compare-test-and-release)); for server edits the rows as the server has them and as you edited them ([Server data](server-data.md#save-into-your-workspace)) |
 | **Show** | jumps to the texture in the **Browse** tab, with the texture viewer open; a map file opens its map and tile in the **Maps** tab; a data table opens in the **Data tables** tab; server edits open in the **Server data** tab |
-| **Revert** | undoes this one file |
-| **Revert this import** | undoes every file that came with the same import |
+| **Revert** | undoes this one file: the game's original is used again |
+| **Revert this import** | undoes every file that came with the same import: each goes back to the version it had before that import |
 
 ## Change sets: one import, one undo
 
@@ -70,6 +70,12 @@ Every import is one *change set*. Importing a texture gives a change set with on
 change set, so **Revert this import** takes the whole import back in one click, while **Revert** takes back a single
 file of it.
 
+An import can replace a file you had already edited: a map conversion builds on your edited tables (they keep your rows
+and get the new ones), an update import or a texture import replaces your earlier texture, saving a data table again
+replaces your previous save. The file then belongs to the newer import, and the app keeps your earlier version, so
+**Revert this import** can put it back (see [Undo a whole import](#undo-a-whole-import)). The earlier versions are kept
+in the `history` folder next to your workspace (the ten latest versions of each file; older ones are dropped).
+
 ## Undo one file
 
 1. Click **Revert** in the file's row (or select the texture in **Browse** and click **Revert my change**).
@@ -77,7 +83,8 @@ file of it.
 
 What revert does:
 
-* your edited copy is deleted from the workspace: the game's original is used again;
+* your edited copy is deleted from the workspace: the game's original is used again (also when the file had earlier
+  versions from imports it replaced: they are dropped too; use **Revert this import** to go back one import instead);
 * if it was installed as a loose file, that copy is removed from the game folder too (and a file that was there before
   is put back);
 * your exported PNG files are *not* touched: you can import them again later.
@@ -93,7 +100,24 @@ Restart the game after a revert that touched the game folder. When the game runs
 ## Undo a whole import
 
 Click **Revert this import** in any row of that import. The dialog names the import and its number of files, for example
-*all 3 file(s) of "Imported ..."*. Click **Revert**.
+*all 3 file(s) of "Imported ..."*, and says where they go. Click **Revert**.
+
+Each file goes back to the version it had just before this import:
+
+* a file the import replaced while it held an earlier edit of yours goes back to that edit, which returns to its own
+  import in the list (for example: you edited AreaTable.dbc, then converted a map; reverting the conversion gives you
+  your edited AreaTable.dbc back, without the conversion's new areas);
+* every other file goes back to the game's original.
+
+Your other imports, older or newer, are not changed. Loose copies of the reverted files are removed from the game folder
+(test again with **Test in game** to see an earlier edit that came back); an installed `patch-3.MPQ` keeps the reverted
+version until you build it again (the status says *older version - rebuild*).
+
+*When a newer import changed the same file again*, nothing is reverted. Reverting would either throw the newer work
+away or leave it built on the import you take back, so the app refuses and names the files, for example
+*Creature\Boar\BoarSkinIvory.blp: changed again later by "Update from ..."*. Revert the newer import first, then this
+one, or use **Revert** on single files. The same happens when the version before the import is no longer kept (after
+ten newer versions of the file).
 
 ## Find your changes in the Browse tab
 
@@ -142,4 +166,5 @@ again (or use **Undo server update**, see [Maps and terrain](maps-and-terrain.md
 
 ## Command line
 
-`wds changes list`, `wds changes sets`, `wds changes diff <path>`, `wds changes revert <path> --yes` and `wds changes revert-set <change-set> --yes`. See [The command line](command-line.md#my-changes-testing-and-releasing).
+`wds changes list`, `wds changes sets`, `wds changes diff <path>`, `wds changes revert <path> --yes` and `wds changes revert-set <change-set> --yes`
+(`--dry-run` lists where each file goes; refused with exit code 4 when a newer import changed one of its files). See [The command line](command-line.md#my-changes-testing-and-releasing).

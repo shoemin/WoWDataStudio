@@ -201,10 +201,12 @@ internal static class ChangeCommands
         yield return new CommandSpec
         {
             Path = "changes revert-set",
-            Summary = "\"Revert this import\": throw away every file of one change set (needs --yes)",
+            Summary = "\"Revert this import\": put every file of one change set back to the version it had before that import (needs --yes)",
             Args = new[] { "<change-set>" },
             Options = new[] { ReloadOpt, Common.DryRun },
-            Examples = new[] { "wds changes revert-set cs-20261011-101500-123-ab12 --yes" },
+            Details = "A file the import replaced while it held an earlier edit of yours (a map conversion builds on your tables, an update import replaces your texture) goes back to that edit; the others go back to the game's original. " +
+                      "Other imports are not changed. When a newer import changed one of its files again, nothing is reverted (exit code 4): revert the newer import first, or use \"wds changes revert\" on single files.",
+            Examples = new[] { "wds changes revert-set cs-20261011-101500-123-ab12 --yes", "wds changes revert-set cs-20261011-101500-123-ab12 --dry-run" },
             Run = async inv =>
             {
                 var s = await inv.Ctx.SessionAsync();
@@ -212,10 +214,13 @@ internal static class ChangeCommands
                 var id = inv.Arg(0);
                 if (!ws.Manifest.ChangeSets.TryGetValue(id, out var set)) throw new CliError(ExitCode.NotFound, $"no change set {id} (\"wds changes sets\" lists them).");
                 var files = ChangeOperations.FilesOf(ws, id);
-                var r = new CliResult().With(new { changeSet = id, label = set.Label, files, reverted = false }).Line($"Revert all {files.Count} file(s) of \"{set.Label}\":");
-                foreach (var f in files) r.Line("  " + f);
+                var plan = ws.PlanRevertChangeSet(id)!;
+                var planJson = new { toEarlier = plan.ToEarlier, toOriginal = plan.ToOriginal, steps = plan.Steps.Select(st => new { path = st.Path, backTo = st.EarlierLabel == null ? "original" : "earlier edit", earlierImport = st.EarlierLabel }), problems = plan.Problems };
+                var r = new CliResult().With(new { changeSet = id, label = set.Label, files, plan = planJson, reverted = false }).Line($"Revert all {files.Count} file(s) of \"{set.Label}\". {plan.Text}");
+                foreach (var st in plan.Steps) r.Line("  " + st.Path + (st.EarlierLabel != null ? $"  (back to your earlier edit from \"{st.EarlierLabel}\")" : ""));
+                if (!plan.CanRevert) return CliResult.Fail(ExitCode.Refused, plan.RefusalText).With(new { changeSet = id, label = set.Label, files, plan = planJson, reverted = false });
                 if (inv.DryRun) return r;
-                if (!inv.Yes) return Common.NeedsYes(r, "This deletes your edits.");
+                if (!inv.Yes) return Common.NeedsYes(r, "This deletes your edits of this import.");
                 var installed = files.Where(f => ws.Get(f)?.Installed != null).ToList();
                 var done = ChangeOperations.Revert(s, null, id);
                 foreach (var d in done) r.Line(d);
@@ -223,9 +228,9 @@ internal static class ChangeCommands
                 {
                     var outcome = await new HotReloadService(ws.Paths.ClientDir).ReloadAsync(installed);
                     AddReload(r, outcome);
-                    return r.With(new { changeSet = id, label = set.Label, files, reverted = true, done, reload = ReloadJson(outcome) });
+                    return r.With(new { changeSet = id, label = set.Label, files, plan = planJson, reverted = true, done, reload = ReloadJson(outcome) });
                 }
-                return r.With(new { changeSet = id, label = set.Label, files, reverted = true, done });
+                return r.With(new { changeSet = id, label = set.Label, files, plan = planJson, reverted = true, done });
             },
         };
         yield return new CommandSpec

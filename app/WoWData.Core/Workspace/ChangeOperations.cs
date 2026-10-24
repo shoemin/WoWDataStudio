@@ -33,6 +33,26 @@ public static class ChangeOperations
             ? set.Files.Select(k => ws.Manifest.Files.TryGetValue(k, out var r) ? r.Path : k).ToList()
             : new List<string>();
 
+    /// <summary>The question before "Revert" / "Revert my change" (one file) or "Revert this import" (a change set), or, when
+    /// the import cannot be reverted, the refusal (<c>Refused</c> true: the app shows it as an error instead of asking).</summary>
+    public static (string Message, bool Refused) RevertQuestion(Workspace ws, string? path, string? changeSetId)
+    {
+        const string tail = " Your exported PNG files are not touched.";
+        if (changeSetId != null)
+        {
+            var plan = ws.PlanRevertChangeSet(changeSetId);
+            if (plan == null) return ("This import has no files left to revert.", true);
+            if (!plan.CanRevert) return (plan.RefusalText, true);
+            return ($"Undo all {plan.Steps.Count} file(s) of \"{plan.Set.Label}\"? {plan.Text} Loose copies of its files are removed from the game folder too." + tail, false);
+        }
+        var rec = path != null ? ws.Get(path) : null;
+        var name = System.IO.Path.GetFileName(path ?? "");
+        var earlier = rec?.Prior != null
+            ? " Your earlier versions of it, from imports this one replaced, are thrown away too (\"Revert this import\" goes back one import instead)."
+            : "";
+        return ($"Undo your change to {name}? The edited copy is deleted from your workspace and the game's original is used again." + earlier + " If it is installed as a loose file, it is removed from the game folder too." + tail, false);
+    }
+
     /// <summary>Revert one file or a whole change set: the workspace copy is deleted (and its loose install removed), and
     /// map files are forgotten in the map's Noggit project when the copy there is identical.</summary>
     public static List<string> Revert(AppSession session, string? path, string? changeSetId)
