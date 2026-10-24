@@ -4,7 +4,7 @@ What changed in each release of WoW Data Studio (the desktop app, `app\`). Bugs 
 listed in the manual's [Known issues](docs/manual/known-issues.md); when one is fixed it is removed from that list and
 recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
 
-## Unreleased (0.14.0, in progress: reading other client versions, experimental)
+## 0.14.0 (2026-10-24)
 
 ### Added
 

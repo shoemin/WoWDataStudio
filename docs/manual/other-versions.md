@@ -231,7 +231,7 @@ The kinds:
 
 * **Zone terrain**: one update per zone (a zone and its subzones), per dungeon or battleground, and one for the open sea:
   how many ground chunks change (heights, texture layers, water, zone IDs), the trees, rocks and buildings that are new,
-  gone, replaced or moved, the new tiles. The import is the map conversion of [Converting a map to 1.12](#converting-a-map-to-112):
+  gone, replaced or moved, the new tiles. The import is the map conversion of [Converting a map to 1.12](#converting-a-map-to-1.12):
   all picked zones of one map are converted together.
 * **New map**: a map 1.12 does not have (Zephras Isle, Hyjal Crater...), converted as a whole new map.
 * **Sky and lighting**: per zone, the light zones 1.60 added, removed or resized and its polygon-shaped zone lights; the
