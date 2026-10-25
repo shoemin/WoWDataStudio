@@ -11,8 +11,18 @@ public static class TestEnv
     private static ClientData? _client;
     private static readonly object Gate = new();
 
-    public static string ClientDir =>
-        Environment.GetEnvironmentVariable("WOWDATA_CLIENT_DIR") is { Length: > 0 } d ? d : Path.Combine(Path.GetDirectoryName(Oracle.ToolDir)!, "Client");
+    // WOWDATA_CLIENT_DIR first; then a "Client3" test copy next to the tool when there is one (the maintainer's machine keeps its
+    // playable "Client" folder out of every test run: the tests only read, but they never need the player's own copy); else "Client".
+    public static string ClientDir
+    {
+        get
+        {
+            if (Environment.GetEnvironmentVariable("WOWDATA_CLIENT_DIR") is { Length: > 0 } d) return d;
+            var parent = Path.GetDirectoryName(Oracle.ToolDir)!;
+            var testCopy = Path.Combine(parent, "Client3");
+            return File.Exists(Path.Combine(testCopy, "Data", "model.MPQ")) ? testCopy : Path.Combine(parent, "Client");
+        }
+    }
 
     public static string DataDir => Path.Combine(ClientDir, "Data");
 
