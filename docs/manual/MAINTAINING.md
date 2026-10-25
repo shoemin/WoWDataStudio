@@ -128,6 +128,57 @@ It writes `113_blender_wow_animations.png`, `114_blender_wow_bone.png` (half siz
 Numbers are never reused: a new feature continues after the highest number, adds a step that shows it, and the
 chapter references the new picture.
 
+## The leak test (developers)
+
+`--leaktest` opens and closes the app's views many times with the real game data and measures the memory after every
+cycle, to find leaks: event handlers that keep closed windows alive, GL / Direct3D resources not freed, caches without
+a bound. It is a developer tool, not a feature for users (`Services\LeakTestRunner.cs`):
+
+```powershell
+cd "<your WoW Custom Client folder>\WoWDataTool\app"
+dotnet build WoWDataStudio\WoWDataStudio.csproj
+$env:WDS_SCREENSHOT_OTHER_CLIENTS = "G:\WoW Clients and Patches\Clients"   # for other_versions (else it is skipped)
+WoWDataStudio\bin\Debug\net8.0-windows\WoWDataStudio.exe --client "..\..\Client3" --leaktest "$env:TEMP\wds_leak" --cycles 100
+```
+
+Use a copy of the client (here `Client3`), never the one you play with. Like `--screenshot` the run has its own
+temporary app folder (`<folder>\_home`: settings, index, workspace, error log), turns the server database off, installs
+nothing, and draws its windows off screen. The Server data tab and the designers get a throwaway MySQL server
+(`ThrowawayMySql`) loaded from the tests' fixture and its quest-chain supplement, as in the screenshot run; the user's
+server is never used. The output (CSV files and logs about game data) stays in that folder: never copy it into the
+repository.
+
+The views, in order (`--only model_popout,maps_tab` runs some of them): `model_viewer` (the docked 3D viewer: a boar,
+the orc male, a tree, an axe, a spell effect, shown and cleared), `model_popout` (a model pop-out window opened and
+closed), `model_compare` (the compare window of two skins), `model_browse` (another creature every cycle, as when a
+user browses the list), `texture_viewer`, `maps_tab` (two maps in turn, a tile with its 3D preview), `terrain_popout`,
+`data_tables`, `server_data`, `spell_designer`, `class_designer`, `quest_designer`, `other_versions` (the 2.4.3 and
+3.3.5a copies in turn). Each runs `--cycles` times (default 100); `model_viewer`, `model_popout` and `model_browse`
+run twice as many.
+
+After every cycle the run collects the garbage (full, blocking, compacting) and records the managed heap
+(`GC.GetTotalMemory`), private bytes, working set, handles, GDI and USER objects, threads, the GL contexts and objects
+(`GlTracker`) and how many of the windows and view models closed so far are still alive (weak references). It writes:
+
+* `leak_<view>.csv`: one row per cycle;
+* `leak_summary.txt` / `.csv`: per view the slope per cycle of each measure, the first 10% of the cycles left out as
+  warm-up, and the verdict. A measure "grows" when it keeps rising: after the warm-up its slope passes the limit, is
+  clearly larger than the noise (t > 4) and adds up to more than the total limit, and the second half of the run still
+  rises. The limits: the managed heap 2 KB per cycle and 1 MB, private bytes 32 KB per cycle and 16 MB, handles 0.1 per
+  cycle, GDI / USER objects and threads 0.05, GL objects 0.2. A view also grows when its GL contexts do not come back
+  or more than 4 closed windows / view models stay alive (the last closed window may stay referenced by WPF's input
+  state until the next one replaces it). A cache that fills and then stays rises in the first half only, and views that
+  rotate through a few states swing by tens of MB of private bytes: neither counts;
+* `leaktest.log`: progress, the handles by kernel object type after the warm-up against the end (which handles a view
+  leaks; Mutant and Section handles by name), and the closed objects still alive at the end.
+
+Exit code 0: every view flat; 1: a view grows; 2: the run failed. A full run takes about 40 minutes. A view that grows
+is a lead, not a verdict: look at its CSV for a curve that keeps rising (caches fill during the first cycles: the
+decoded-texture cache holds up to 32 MB, the model cache 8 models). The run of 2026-10-25: every view flat except the
+windows with their own 3D views (two handles per closed view, see `known-issues.md`). To see what holds the memory, a heap snapshot of
+the running process (for example with Microsoft.Diagnostics.Runtime) at two points of a long run shows which types
+grow and their roots.
+
 ## The automated check
 
 `app\WoWData.Tests\ManualTests.cs` (part of `dotnet test`, a second or so) fails when:

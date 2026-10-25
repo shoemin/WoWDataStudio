@@ -352,7 +352,10 @@ public sealed partial class MapsViewModel : ObservableObject
     public TerrainAsset BuildAsset(IReadOnlyList<TerrainTile> tiles, CancellationToken ct = default)
     {
         var res = _session.Models!;
-        return TerrainAsset.Build(tiles, p => _session.ReadCurrent(p), res.LoadBlp, new TerrainBuildOptions(SpecularGround: _session.SpecularGround, Exists: _session.FileExists), ct);
+        // one image per texture for the whole build (the resolver's cache is bounded since 0.14.0 and may forget a texture
+        // in the middle of a large build: the doodads sharing it would get two copies, on the GPU too)
+        var once = new System.Collections.Concurrent.ConcurrentDictionary<string, WoWData.Core.Imaging.RgbaImage?>(StringComparer.OrdinalIgnoreCase);
+        return TerrainAsset.Build(tiles, p => _session.ReadCurrent(p), p => once.GetOrAdd(p, res.LoadBlp), new TerrainBuildOptions(SpecularGround: _session.SpecularGround, Exists: _session.FileExists), ct);
     }
 
     // ------------------------------------------------------------------ ground textures: base or "_s" (0.6.1)

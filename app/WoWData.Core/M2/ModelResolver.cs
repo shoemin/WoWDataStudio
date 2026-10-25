@@ -79,7 +79,11 @@ public sealed class ModelResolver
     public Catalog Catalog { get; }
     public Func<string, byte[]?> ReadFile { get; }
 
-    private readonly ConcurrentDictionary<string, RgbaImage?> _blp = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Decoded textures, bounded (after 0.14.0: it used to keep every texture ever shown; see <see cref="ImageCache"/>).</summary>
+    private readonly ImageCache _blp = new();
+
+    /// <summary>The decoded-texture cache (statistics and tests).</summary>
+    public ImageCache TextureCache => _blp;
     private List<CharSectionsRec>? _sections;
     private List<CharHairGeosetsRec>? _hairGeosets;
     private List<CharFacialHairRec>? _facialHair;
@@ -96,7 +100,7 @@ public sealed class ModelResolver
     /// <summary>Forget decoded textures (after a texture was edited or reverted).</summary>
     public void ClearTextureCache() => _blp.Clear();
 
-    public void Forget(string path) => _blp.TryRemove(path, out _);
+    public void Forget(string path) => _blp.Remove(path);
 
     public RgbaImage? LoadBlp(string path)
     {

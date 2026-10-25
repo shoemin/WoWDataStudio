@@ -18,9 +18,10 @@ namespace WoWDataStudio.Services;
 /// </summary>
 public static class ScreenshotRunner
 {
-    public static bool Running { get; private set; }
+    /// <summary>An automated run (this one or `--leaktest`, <see cref="LeakTestRunner"/>): no confirmation dialogs.</summary>
+    public static bool Running { get; internal set; }
     /// <summary>The main view model of the run (for the steps in other files).</summary>
-    internal static MainViewModel? Main { get; private set; }
+    internal static MainViewModel? Main { get; set; }
     public static List<string> Failures { get; } = new();
     private static StreamWriter? _log;
 

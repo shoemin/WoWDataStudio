@@ -816,6 +816,23 @@ changes it; the terrain pop-out cannot save a picture.
 
 *Status:* open.
 
+### Each closed 3D window leaves two small handles behind
+
+*What happens:* every 3D view that closes (a model or terrain pop-out window, the three views of a compare window)
+leaves two Windows handles (a named shared-memory section and a mutex, both named after the same GUID) and about
+110 to 220 KB of memory behind. The app's own resources come back (the GL contexts, textures and buffers it counts, the
+windows and their view models), so the rest happens below the app, in the OpenGL to Direct3D bridge of the 3D control
+(OpenTK GLWpfControl 4.3.6) or in the graphics driver. Measured with the developers' leak test: 200 pop-outs opened and
+closed add about 390 handles and 20 to 30 MB.
+
+*Who is affected:* only someone who opens and closes 3D windows hundreds of times in one session; a few dozen make no
+difference.
+
+*Workaround:* keep a pop-out window open (it follows the selection) instead of opening a new one each time; restarting
+the app gives everything back.
+
+*Status:* open (the next step: try a newer GLWpfControl, and the same test on another graphics card).
+
 ## For developers
 
 ### Timing tests depend on the machine

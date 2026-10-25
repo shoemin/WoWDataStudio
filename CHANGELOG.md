@@ -4,6 +4,31 @@ What changed in each release of WoW Data Studio (the desktop app, `app\`). Bugs 
 listed in the manual's [Known issues](docs/manual/known-issues.md); when one is fixed it is removed from that list and
 recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
 
+## Unreleased
+
+### Fixed
+
+* **Browsing many models no longer grows the memory without end.** The decoded textures of the 3D viewer were all kept
+  for the whole session (the model resolver's cache had no limit), and every 3D view kept its GPU copy of each one.
+  Browsing 200 different creatures added about 110 MB to the managed heap, 220 MB of private memory and 256 GPU
+  textures, and the curve kept rising. The cache now keeps the most recently used textures up to 32 MB
+  (`WoWData.Core.Imaging.ImageCache`); the same 200 creatures level off after about 60 (the cache and the 8 built
+  models full) with the GPU textures at about 115, and the second half of the run no longer rises. A terrain build
+  keeps one image per texture for the whole build. Tests: `ImageCacheTests`.
+
+### Added (developers)
+
+* **`--leaktest <folder> [--cycles N] [--only views]`**: opens and closes the views many times (the 3D viewer, its
+  pop-out and compare windows, browsing many creatures, the texture viewer, the Maps tab and a terrain tile in 3D, the
+  terrain pop-out, Data tables, Server data and the three designers on a throwaway MySQL server, Other versions) and
+  records the memory after each cycle: the managed heap after a full collection, private bytes, handles (by kernel
+  object type), GDI / USER objects, threads, GL contexts and objects, closed windows still alive. One CSV per view and
+  a summary with the slopes; its own temporary app folder, the server database off
+  ([MAINTAINING.md](docs/manual/MAINTAINING.md#the-leak-test-developers)). Tests: `LeakTestAnalysisTests`.
+  First run (100 cycles, 200 for the 3D viewer, its pop-out and the browsing): every view flat except the browsing
+  (fixed above) and the windows with their own 3D views, which leave two kernel handles behind per closed view
+  ([Known issues](docs/manual/known-issues.md#each-closed-3d-window-leaves-two-small-handles-behind)).
+
 ## 0.14.0 (2026-10-24)
 
 ### Added
