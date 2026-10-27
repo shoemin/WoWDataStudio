@@ -44,6 +44,9 @@ public sealed class M2ModernInfo
     /// <summary>The blend mode of each material as the file has it (the 1.12-shaped materials hold the nearest 1.12
     /// mode; M3: the 3D view draws mode 7 with the modern factors).</summary>
     public int[] MaterialBlends { get; set; } = System.Array.Empty<int>();
+    /// <summary>M3: the texture units whose second layer the 3D view combines with the first (a reflection or glow; the
+    /// operation, <see cref="M2ModernReader.LayerOp"/>); the others draw their layers as the 1.12 renderer does.</summary>
+    public Dictionary<M2TexUnit, int> LayerOps { get; } = new(ReferenceEqualityComparer.Instance);
     /// <summary>M3: the external animations, loaded when a sequence is chosen; null without external sequences.</summary>
     public ModernAnimations? Animations { get; internal set; }
     /// <summary>M3: the particle emitters and ribbons (drawn by the 3D view of another version); null when none.</summary>

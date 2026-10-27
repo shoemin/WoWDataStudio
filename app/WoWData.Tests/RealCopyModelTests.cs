@@ -104,8 +104,9 @@ public class RealCopyModelTests : IDisposable
         Assert.Equal(new Sample(420, 419, 1, 0, 0, 419, 87, 332, 0, i.Quats, i.Quats), i);
         // game objects: 457 sampled, 4 not on this computer, 10 are buildings (WMO, not chunked M2: later, with the maps)
         Assert.Equal(new Sample(457, 443, 4, 10, 0, 443, 409, 34, 0, o.Quats, o.Quats), o);
-        // every compressed bone rotation decodes to a unit quaternion (+- 0.01)
-        Assert.Equal(56991534, c.Quats + i.Quats + o.Quats);
+        // every compressed bone rotation decodes to a unit quaternion (+- 0.01); M3: 68,542,995 with the bones of the
+        // 22 skeleton files (and their parents' animations) of the character-style models (56,991,534 without, in M2)
+        Assert.Equal(68542995, c.Quats + i.Quats + o.Quats);
     }
 
     [ClientCopyFact(RealCopyOpenTests.Beta)]
@@ -136,6 +137,8 @@ public class RealCopyModelTests : IDisposable
         var model = d.Models.First(m => m.EndsWith(".m2", StringComparison.OrdinalIgnoreCase));
         var sword = s.ModelSource.Load(model);
         Assert.EndsWith("Sword_1H_Short_A_02Rusty.blp", s.Looks.ItemDisplay((int)item, model).Slots[2].Path!, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains(sword.Modern!.Approximated, a => a.Contains("first texture only", StringComparison.Ordinal));
+        // M3: its blade's reflection layer (combiner 0x8001, ArmorReflect3) is combined by the 3D view (approximately)
+        Assert.Contains(sword.Modern!.Approximated, a => a.Contains("drawn with the viewer's version of the combiner", StringComparison.Ordinal));
+        Assert.Equal(M2ModernReader.OpAddAlpha, Assert.Single(sword.Modern.LayerOps).Value);
     }
 }

@@ -397,6 +397,8 @@ public sealed partial class ModelRenderer : IDisposable
                 GL.Uniform1(U(_modelProg, "uLit"), lit ? 1 : 0);
                 GL.Uniform1(U(_modelProg, "uCombiner"), blend >= 5 ? 1 : 0);
                 GL.Uniform1(U(_modelProg, "uLayers"), b.LayerCount);
+                // M3: another version's reflection / glow combiner (0 for every 1.12 model: the layers as before)
+                GL.Uniform1(U(_modelProg, "uLayerOp"), m.Modern != null && m.Modern.LayerOps.TryGetValue(b.Unit, out int layerOp) ? layerOp : 0);
                 float alphaRef = blend switch { 0 => -1f, 1 => alpha * 224f / 255f, _ => 1f / 255f };
                 GL.Uniform1(U(_modelProg, "uAlphaRef"), alphaRef);
                 var (en, src, dst) = BlendFactors(blend);

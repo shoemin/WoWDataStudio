@@ -69,6 +69,7 @@ internal static class Shaders
         uniform sampler2D uTex1;
         uniform int uLayers;
         uniform int uCombiner;      // 0 modulate, 1 blend by texture alpha (mod / mod2x)
+        uniform int uLayerOp;       // M3, other versions: 1 reflect by alpha, 2 add alpha, 3 add alpha masked, 4 mod2x, 5 add (0: 1.12)
         uniform vec4 uColor;        // diffuse rgb, batch alpha
         uniform vec3 uEmissive;
         uniform int uLit;
@@ -94,7 +95,12 @@ internal static class Shaders
             else c = cur * t0;
             if (uLayers > 1) {
                 vec4 t1 = texture(uTex1, vUv1);
-                if (uCombiner == 1) c = vec4(mix(c.rgb, t1.rgb, t1.a), c.a * t1.a);
+                if (uLayerOp == 1) c = vec4(mix(c.rgb * t1.rgb * 2.0, c.rgb, t0.a), cur.a);
+                else if (uLayerOp == 2) c = vec4(c.rgb + t1.rgb * t1.a, cur.a);
+                else if (uLayerOp == 3) c = vec4(c.rgb + t1.rgb * t1.a * (1.0 - t0.a), cur.a);
+                else if (uLayerOp == 4) c = vec4(c.rgb * t1.rgb * 2.0, c.a);
+                else if (uLayerOp == 5) c = vec4(c.rgb + t1.rgb, c.a);
+                else if (uCombiner == 1) c = vec4(mix(c.rgb, t1.rgb, t1.a), c.a * t1.a);
                 else c *= t1;
             }
             if (uAlphaRef >= 0.0 && c.a < uAlphaRef) discard;

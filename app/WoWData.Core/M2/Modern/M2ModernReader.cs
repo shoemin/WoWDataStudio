@@ -271,20 +271,33 @@ public static class M2ModernReader
     private static byte[] TextureLayers(List<M2View> views, M2ModernInfo info)
     {
         var pairs = new List<(ushort, ushort)>();
-        int firstOnly = 0, sphere = 0;
+        int firstOnly = 0, sphere = 0, combined = 0;
         foreach (var v in views)
             foreach (var tu in v.TexUnits)
             {
                 int sid = tu.ShaderId;
                 bool combiner = (sid & 0x8000) != 0;
+                bool env1 = false;
                 if (tu.TextureCount >= 2 && (combiner || (sid & 0x7) != 1 || (sid & 0x8) != 0))
                 {
-                    tu.TextureCount = 1;
-                    firstOnly++;
+                    // M3: the reflection and glow combiners the 3D view draws (LayerOp), else the first texture only
+                    var (op, env) = LayerOp(sid);
+                    if (op > 0)
+                    {
+                        tu.TextureCount = 2;
+                        info.LayerOps[tu] = op;
+                        env1 = env;
+                        combined++;
+                    }
+                    else
+                    {
+                        tu.TextureCount = 1;
+                        firstOnly++;
+                    }
                 }
                 bool env0 = !combiner && (sid & 0x80) != 0;
                 if (env0) sphere++;
-                var pair = (env0 ? (ushort)0xFFFF : (ushort)0, (ushort)1);
+                var pair = (env0 ? (ushort)0xFFFF : (ushort)0, env1 ? (ushort)0xFFFF : (ushort)1);
                 int at = pairs.IndexOf(pair);
                 if (at < 0)
                 {
@@ -293,6 +306,7 @@ public static class M2ModernReader
                 }
                 tu.TexUnitLookup = at * 2;
             }
+        if (combined > 0) info.Approximated.Add($"{combined} texture unit{(combined == 1 ? "" : "s")} with a reflection or glow layer drawn with the viewer's version of the combiner (close, not exact)");
         if (firstOnly > 0) info.Approximated.Add($"{firstOnly} texture unit{(firstOnly == 1 ? "" : "s")} with a reflection or glow layer drawn with {(firstOnly == 1 ? "its" : "their")} first texture only");
         if (sphere > 0) info.Approximated.Add($"{sphere} texture unit{(sphere == 1 ? "" : "s")} drawn as a reflection (sphere map), from the shader id");
         var bytes = new byte[pairs.Count * 4];
@@ -302,6 +316,43 @@ public static class M2ModernReader
             BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(i * 4 + 2), pairs[i].Item2);
         }
         return bytes;
+    }
+
+    /// <summary>The two-layer combiners the 3D view draws.</summary>
+    public const int OpReflectByAlpha = 1, OpAddAlpha = 2, OpAddAlphaMasked = 3, OpMod2x = 4, OpAdd = 5;
+
+    /// <summary>
+    /// M3: how the 3D view combines a unit's second layer with its first (0: it does not, the first texture only), and
+    /// whether the second layer is mapped by the reflection (sphere). FORMAT KNOWLEDGE of the modern client's combiners
+    /// by shader id, the second layer's role MEASURED on the 1.60 copy by its texture names (where the names are known:
+    /// combiner 0x8000: 30 of 30 reflection maps (ArmorReflect..., OrbReflect...), 0x8001: 51 of 52, 0x8002: 2 of 3,
+    /// 0x8003: 6 of 6, 0x000E: 37 of 37; 0x0014: a glow and a rune):
+    /// <list type="bullet">
+    /// <item>0x8000 / 0x8003 "opaque, mod2x by the reflection where the first texture's alpha is low":
+    ///   mix(base x reflection x 2, base, base alpha) (0x8003's third layer is left out);</item>
+    /// <item>0x8001 "opaque, add the reflection by its alpha": base + reflection x its alpha;</item>
+    /// <item>0x8002: the same, masked by the first texture's alpha;</item>
+    /// <item>below 0x8000, the second layer's operation (bits 0x07) 4 / 6 (mod2x) and 3 (add), mapped by the reflection
+    ///   when bit 0x08 is set.</item>
+    /// </list>
+    /// </summary>
+    public static (int Op, bool Env) LayerOp(int shaderId)
+    {
+        if ((shaderId & 0x8000) != 0)
+            return (shaderId & 0x7FFF) switch
+            {
+                0 or 3 => (OpReflectByAlpha, true),
+                1 => (OpAddAlpha, true),
+                2 => (OpAddAlphaMasked, true),
+                _ => (0, false),
+            };
+        bool env = (shaderId & 0x8) != 0;
+        return (shaderId & 0x7) switch
+        {
+            4 or 6 => (OpMod2x, env),
+            3 => (OpAdd, env),
+            _ => (0, false),
+        };
     }
 
     private static uint[] U32s(byte[] data, List<(string Magic, int Offset, int Size)> chunks, string magic)
