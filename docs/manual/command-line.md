@@ -54,6 +54,7 @@ The groups follow the app: `setup`, `settings`, `serverdb`, `index`, `find` (the
 |---|---|
 | `--home <folder>` | keeps the settings, the index and your edits in that folder instead of `%APPDATA%\WoWDataStudio` (the app's). Scripts and tests use it to work apart from your normal edits; the app has the same option. |
 | `--client <folder>` | uses that World of Warcraft folder for this one command, instead of the one in the settings |
+| `--version <client>` | opens another World of Warcraft version read only for this one command, instead of your game: its folder, its name in the folder of other versions, a version (`1.60`) or a build (`70450`). Only the commands that read work with it: `wds find search`, `list`, `info`, `files`, `extract`, `wds textures info`, `export`, `export-all` (and `wds versions open`); every other command refuses with exit code 4. Alone, `wds --version` prints the version of wds. See [Another version, read only](#another-version-read-only). |
 | `--json` | prints one JSON object instead of text (see [JSON output](#json-output)) |
 | `--quiet` | no progress messages |
 | `--yes` | confirms a command that changes the game folder or the server, or deletes something (see [Safety](#safety)) |
@@ -2781,6 +2782,24 @@ Read the data of other World of Warcraft clients without changing them (the **Ot
 A modern (CASC) client's files are named by their full path or their number (`#775971`); a listfile you choose
 (`--listfile`, or the `other-clients.listfile` setting) names them for wildcard searches.
 
+#### wds versions open
+
+open another version read only (the app's "Open read only"): build or check its index and show what it holds: entries, file names and where they come from, locked records.
+
+```
+wds versions open [client] [options]
+```
+
+* `--folder <folder>`: search this folder for clients instead of the other-clients setting
+* `--listfile <file>`: names for a modern (CASC) client's files: a listfile you chose (FileDataID;path lines); also the other-clients.listfile setting
+* `--rebuild`: build the index again ("Rebuild the index")
+
+```
+wds versions open _classic_beta_
+wds versions open 1.60 --listfile "G:\listfile\community-listfile.csv"
+wds versions open _classic_beta_ --rebuild --json
+wds find search boar --version _classic_beta_
+```
 #### wds versions find
 
 The World of Warcraft clients in the folder of other versions: version, release, data format, readable or not.
@@ -2998,6 +3017,32 @@ wds versions import-updates _classic_beta_ terrain:0:12 --dry-run
 wds versions import-updates _classic_beta_ terrain:0:12 terrain:0:40 tex:changed:creature --yes
 wds versions import-updates _classic_beta_ fonts:changed --yes --json
 ```
+
+### Another version, read only
+
+`wds versions open <client>` opens another World of Warcraft version read only, like the app's **Open read only**
+([Other versions](other-versions.md#opening-another-version-read-only)): the first time it builds that version's index
+(from the client's own tables and file names, your 1.12 game's file names and the listfile you chose; a few seconds),
+then it prints what the index holds, where the names come from and how many records of each table are locked
+(encrypted). After that, the commands that read take `--version <client>` and work on that version as they work on
+your game:
+
+```
+wds versions open _classic_beta_
+wds find search boar --version _classic_beta_
+wds find info cdisplay:503 --version _classic_beta_
+wds find files Interface\Icons\INV_Sword_* --version _classic_beta_
+wds textures export Interface\Icons\INV_Sword_04.blp --out sword.png --version _classic_beta_
+```
+
+* Files are named by path, or by their FileDataID as `#123456` when no name is known; `wds find info` lists every file
+  with its FileDataID, where its name comes from and whether it can be read (*local*, *encrypted*, *not downloaded*).
+* `wds textures export` writes only the PNG (no `.blp.json`: a texture of another version is not imported back into
+  your game this way). Nothing is ever written into the other client's folder (exit code 4).
+* Every command that changes something refuses `--version` with exit code 4 and one line, for example
+  `1.60.1.70450 is open read only: wds dbc set changes files.`; the commands that read but do not work with other
+  versions yet (the 3D models, maps, Used in game) refuse the same way. The 3D models and maps of other versions come
+  later.
 
 ### Help and the command line itself
 
@@ -3295,6 +3340,12 @@ app's tests fail when the app, the command line and this table differ.
 | versions.update-info | **About this update** | `wds versions update-info` |
 | versions.import-preview | **Preview import** | `wds versions import-updates` |
 | versions.import-updates | **Import picked updates** | `wds versions import-updates` |
+| versions.open | **Open read only** | `wds versions open` |
+| versions.open-menu | **File > Open another version (read only)...** | `wds versions open` |
+| versions.open-welcome | **Open another version (read only)...** | `wds versions open` |
+| versions.window-browse | **Read only: nothing here changes the client** | `wds find search` |
+| versions.window-locked | **Locked (encrypted, no key)** | `wds versions open` |
+| versions.window-export | **Export texture as PNG...** | `wds textures export` |
 | help.manual | **Help > User manual** | `wds manual` |
 | help.about | **Help > About WoW Data Studio** | `wds version` |
 | help.cli | **Help > The command line (wds)** | `wds manual` |

@@ -50,7 +50,9 @@ In the app, press <kbd>F1</kbd> on any screen to open the chapter about that scr
     both factions.
 24. [Other versions (experimental)](other-versions.md): read other World of Warcraft versions without a server (The
     Burning Crusade 2.4.3, Wrath of the Lich King 3.3.5a, other MPQ clients): their files and archives, a texture
-    preview, extracting files, their data tables, one row compared across versions. Read only.
+    preview, extracting files, their data tables, one row compared across versions. Read only. A modern client such as
+    the 1.60 Classic client [opens read only](other-versions.md#opening-another-version-read-only) in a window of its
+    own: Browse, its files with their FileDataID, textures.
 25. [The command line (wds)](command-line.md): every feature of the app as a command, for scripts and automation: every
     command with examples, which command does what the app does, exit codes, JSON output, recipes.
 26. [Known issues](known-issues.md): bugs and limitations that are not fixed yet, who they affect and what to do instead.

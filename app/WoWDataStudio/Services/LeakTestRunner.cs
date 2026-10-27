@@ -32,7 +32,7 @@ public static class LeakTestRunner
     public static readonly string[] Views =
     {
         "model_viewer", "model_popout", "model_compare", "model_browse", "texture_viewer", "maps_tab", "terrain_popout",
-        "data_tables", "server_data", "spell_designer", "class_designer", "quest_designer", "other_versions",
+        "data_tables", "server_data", "spell_designer", "class_designer", "quest_designer", "other_versions", "versions_window",
     };
 
     private static readonly HashSet<string> Doubled = new() { "model_viewer", "model_popout", "model_browse" };
@@ -322,6 +322,7 @@ public static class LeakTestRunner
         public List<ResultRow> Textures = new();
         public ThrowawayMySql? Db;
         public ServerDbSettings? KeepServer;
+        public MainViewModel Main = null!;
     }
 
     public static async Task<int> RunAsync(MainWindow win, MainViewModel vm, string outDir, string? clientArg, int cycles, IReadOnlyCollection<string>? only)
@@ -331,7 +332,7 @@ public static class LeakTestRunner
         outDir = Path.GetFullPath(outDir);
         Directory.CreateDirectory(outDir);
         _log = new StreamWriter(Path.Combine(outDir, "leaktest.log"), false);
-        var ctx = new Ctx { Win = win, OutDir = outDir, Session = vm.Session };
+        var ctx = new Ctx { Win = win, OutDir = outDir, Session = vm.Session, Main = vm };
         var results = new List<Result>();
         string client = clientArg ?? vm.FolderText;
         try
@@ -454,9 +455,11 @@ public static class LeakTestRunner
                 "class_designer" => i => ClassCycle(ctx, i),
                 "quest_designer" => i => QuestCycle(ctx, i),
                 "other_versions" => i => VersionsCycle(ctx, i),
+                "versions_window" => i => VersionsWindowCycle(ctx, i),
                 _ => throw new ArgumentException("unknown view " + view),
             };
             if (view == "other_versions" && !await PrepareVersions(ctx)) return new Result { View = view, Error = "no folder of other clients (WDS_SCREENSHOT_OTHER_CLIENTS)" };
+            if (view == "versions_window" && !await PrepareVersionsWindow()) return new Result { View = view, Error = "no 1.60 client (_classic_beta_) in WDS_SCREENSHOT_OTHER_CLIENTS" };
             for (int i = 0; i < n; i++)
             {
                 _cycle = i;
@@ -867,5 +870,47 @@ public static class LeakTestRunner
         b.SelectedTab = 0;
         await ScreenshotRunner.Settle(100);
         return $"{c.Name} ({c.Build}): {v.Files.Count} files";
+    }
+
+    // ------------------------------------------------------------------ M1: another version opened read only
+
+    private static WoWData.Core.Versions.ClientCopy? _betaCopy;
+
+    private static async Task<bool> PrepareVersionsWindow()
+    {
+        var folder = Environment.GetEnvironmentVariable("WDS_SCREENSHOT_OTHER_CLIENTS");
+        if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder)) return false;
+        var found = await Task.Run(() => WoWData.Core.Versions.ClientCopies.Find(folder));
+        _betaCopy = found.Where(c => c.Format == WoWData.Core.Versions.ClientFormat.Casc && c.Version.StartsWith("1.60", StringComparison.Ordinal)).OrderByDescending(c => c.Build).FirstOrDefault();
+        Log($"versions window: {(_betaCopy == null ? "no 1.60 client" : $"{_betaCopy.Name} ({_betaCopy.Build})")} in {folder}");
+        return _betaCopy != null;
+    }
+
+    private static readonly string[] OtherSearches = { "boar", "inv_sword_04", "worn shortsword", "orcbonfire" };
+
+    /// <summary>The 1.60 client opened read only in its own window (its index exists after the first cycle), a search,
+    /// an entry with its details and texture, then the window closed.</summary>
+    private static async Task<string> VersionsWindowCycle(Ctx ctx, int i)
+    {
+        var w = OtherVersionWindow.Open(ctx.Main, _betaCopy!, null, show: false);
+        ScreenshotRunner.Place(w, 1440, 900);
+        w.Show();
+        var vm = w.Vm;
+        await ScreenshotRunner.Until(() => vm.IsReady || vm.Error.Length > 0, 600000);
+        if (!vm.IsReady) throw new InvalidOperationException("the read-only window did not open: " + vm.Error);
+        var q = OtherSearches[i % OtherSearches.Length];
+        vm.SearchText = q;
+        await vm.ApplyFilterAsync();
+        vm.SelectedRow = vm.Results.FirstOrDefault();
+        await ScreenshotRunner.Until(() => vm.SelectedRow == null || vm.DetailTitle.Length > 0, 30000);
+        if (vm.SelectedTexture is { Exists: true }) await ScreenshotRunner.Until(() => vm.Viewer.IsLoaded || vm.Viewer.Error.Length > 0, 30000);
+        await ScreenshotRunner.Settle(150);
+        string item = $"{q}: {vm.Results.Count} results, {vm.DetailTitle}";
+        Watch(w, nameof(OtherVersionWindow));
+        Watch(vm, nameof(OtherVersionWindowViewModel));
+        Watch(vm.Session, "read-only AppSession");
+        w.Close();
+        await ScreenshotRunner.Settle(150);
+        return item;
     }
 }

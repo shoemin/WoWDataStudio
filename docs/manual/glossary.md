@@ -23,7 +23,7 @@ The words used in the app and in this manual, in alphabetical order.
 | Bookmark (Noggit) | A saved place in Noggit's start window; "Edit in Noggit" adds one at the tile you selected. |
 | Bounding box | The box that encloses a model, used by the game for its size and for clicking it. |
 | Breadcrumb (quest) | A quest that only leads to another one (*Breadcrumb for*): it closes when the player takes the quest it leads to. |
-| CASC | How World of Warcraft stores its data from 6.x (Warlords of Draenor) on, and in every client Battle.net installs today: one shared store of numbered data files instead of MPQ archives. The **Other versions** tab reads their files (by path or *FileDataID*), not yet their data tables. |
+| CASC | How World of Warcraft stores its data from 6.x (Warlords of Draenor) on, and in every client Battle.net installs today: one shared store of numbered data files instead of MPQ archives. The **Other versions** tab reads their files (by path or *FileDataID*) and their data tables, and **Open read only** opens one like your game. |
 | Listfile | A text file that names the files of a modern client (lines `FileDataID;path`). The app does not come with one; **Choose listfile...** in the **Other versions** tab uses one you have. |
 | FileDataID | The number a modern (CASC) client finds a file by, for example `#775971` for the Azeroth map file. Many files of the newer clients have no name inside the client, only this number. |
 | Change set | All the files that came with one import. **Revert this import** undoes a whole change set. |

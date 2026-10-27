@@ -124,6 +124,84 @@ In **Compare across versions** the modern clients are listed too, not ticked at 
 The app does not come with one and never downloads one; if you have one, click **Choose listfile...** and pick it.
 Then the files have their names, and wildcards work.
 
+## Opening another version (read only)
+
+A modern client, such as the "1.60" Classic client (`_classic_beta_`, build 1.60.1.70450), can be opened the way your
+1.12 game opens: a Browse list of its creatures, items, game objects, spell effects, textures and world models, the
+details of each (where it comes from, its files, its textures) and the texture viewer. It opens *read only*, in a
+window of its own next to your 1.12 window, so you can look at both side by side. Nothing in the client's folder is
+changed, and your 1.12 game and your changes are not involved.
+
+1. Open it in one of three ways:
+   * in the **Other versions** tab, click the client in **Clients found**, then **Open read only**;
+   * **File > Open another version (read only)...**;
+   * on the welcome screen, **Open another version (read only)...** (your game does not need to be open).
+
+   The last two look in your folder of other versions (they ask for it when it is not set yet); when it holds several
+   modern clients, pick one (the newest 1.60 build is selected).
+2. The first time, the window shows *Organizing game data...* while the app reads that version's tables and file names:
+   about 8 seconds for the 1.60 client, about 13 seconds with a listfile. The result (its index) is kept in the app's
+   folder, so the next time the window opens in about a second. **Rebuild the index** reads the client again (after
+   you chose another listfile, for example).
+3. Search as in the Browse tab: type words into the search box, tick the types to show, click a result.
+
+![The 1.60 client selected in the Other versions tab: Open read only](../screenshots/144_versions_open_tab.png)
+
+The top of the window says which version is open and **Read only: nothing here changes the client**. There are no
+buttons to edit, import, install or test anything in this window.
+
+### What is listed
+
+* *Creatures*: every creature display of the client, named by its model and skins (as your game is without the server
+  database), and the few creatures the client names itself (companion pets, a few bosses). The names of the other
+  creatures are on the server, which another version does not have here.
+* *Items*: the items the client names (more than 19,000 in 1.60), and every item display.
+* *Game objects*: every game object display, and the objects the client places itself (signposts, mailboxes...).
+* *Spell effects*: the spell effect models and the spells that show them.
+* *Textures* and *World objects*: the textures and the models under `World\` that have a name (see below).
+
+### The details
+
+**WHERE IT COMES FROM**, the facts and **TEXTURES IT USES** work as in your game. **FILES** lists every file of the
+entry with:
+
+* its *FileDataID*, the number the client finds the file by;
+* where its name comes from: *verified* (the client's own name hash confirms it, also for the names in the client's
+  own list of its interface files), *1.12 name (Era)* (a name of your 1.12 game, found through a Classic Era copy next
+  to the 1.60 client: both use the same numbers), *listfile* (your listfile; the client cannot confirm it) or *no name*
+  (the file is shown as `#123456.blp`);
+* its state: *local*, *encrypted* (the client cannot be read without a key the app does not have; the details name
+  the key) or *not downloaded* (Battle.net fetches it when the game needs it).
+
+A model's own textures are read when you click the entry. Textures the game chooses at run time (the display's skins)
+are counted in the facts.
+
+![A boar of the 1.60 client: its display, its files with FileDataID, name and state, the skin in the viewer](../screenshots/145_versions_open_creature.png)
+
+![An item the 1.60 client names, with its model and textures](../screenshots/146_versions_open_item.png)
+
+### Textures
+
+Click a texture in **TEXTURES IT USES** to see it in the texture viewer (mip levels, transparency, zoom, as in your
+game). **Export texture as PNG...** saves it as a PNG image, outside the client's folder. No `.blp.json` note is written
+next to it: a texture of another version is not imported back into your game this way (the
+[update catalog](#the-update-catalog-picking-1.60-updates-for-your-game) brings 1.60 textures into your game).
+
+![The INV_Sword_04 icon of 1.60 in the texture viewer, and what uses it](../screenshots/147_versions_open_texture.png)
+
+### Locked records and names
+
+Some rows of a modern client's data tables are encrypted (unreleased content); the app never guesses them. The line at
+the bottom of the window, **Locked (encrypted, no key)**, says how many rows of the tables the list comes from can be
+read, for the 1.60 client: 14,204 of 14,229 creature displays (25 locked), 7,056 of 7,071 item displays (15 locked),
+19,179 of 19,268 item names (89 locked), 3,223 of 3,234 game object displays (11 locked), 2,719 of 2,732 spell effects
+(13 locked). The line below it says how many files have a name and where the names come from.
+
+Without a listfile, about 184,000 of the 1.25 million files of the 1.60 client have a name: 134,000 confirmed by the
+client itself, 49,000 names of your 1.12 game. With a listfile (**Choose listfile...** in the **Other versions** tab),
+nearly every file has one; the list then shows at most 200,000 named textures and models (the others are found with
+`wds find files <pattern> --version <client>`).
+
 ## Blizzard archives only
 
 Some client copies contain archives that Blizzard did not ship: a private server's or a mod's patch, such as a
@@ -275,6 +353,8 @@ What an import writes:
 
 ## Not yet
 
+* Another version opened read only shows Browse and textures. Its 3D models, maps, player characters and "Used in game"
+  are planned, not there yet; 2.4.3 and 3.3.5a (MPQ clients) open in this tab only.
 * Most columns of the modern clients' data tables have no names yet.
 * Maps convert from 1.60 to 1.12 only: 1.12 to 1.60, and maps of 2.x and 3.x, are planned. The models and buildings
   1.12 does not have are left out (their conversion is planned), see [Known issues](known-issues.md#other-versions).
@@ -288,4 +368,6 @@ What an import writes:
 
 `wds versions find`, `info`, `files`, `extract`, `tables`, `rows`, `compare`, `convert-map`, `updates`, `update-info` and
 `import-updates` do everything this tab does, and `wds settings set other-clients <folder>` sets the folder; see
-[The command line](command-line.md#other-versions-experimental).
+[The command line](command-line.md#other-versions-experimental). `wds versions open <client>` opens another version
+read only, and the commands that read take `--version <client>`: `wds find search boar --version _classic_beta_`; see
+[Another version, read only](command-line.md#another-version-read-only).

@@ -6,6 +6,47 @@ recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
 
 ## Unreleased
 
+### Added
+
+* **Open another version read only (experimental, M1 of `docs\research\OPEN_OTHER_VERSIONS_DESIGN.md`).** A modern
+  client such as the "1.60" Classic client (`_classic_beta_`, 1.60.1.70450) opens the way your 1.12 game opens, read
+  only, in a window of its own next to the 1.12 window: **Open read only** in the Other versions tab,
+  **File > Open another version (read only)...** and the welcome screen ([Other versions](docs/manual/other-versions.md#opening-another-version-read-only)):
+  * *Browse*: every creature display (and the 178 creatures the client names), the items the client names and every
+    item display, game objects and their displays, spell effects and the spells that show them, named textures and
+    world models. The details list every file with its FileDataID, where its name comes from (the client's own name
+    hash, its interface list, your 1.12 name found through Classic Era, your listfile, or none: `#123456.blp`) and
+    its state (local, encrypted with the key's name, not downloaded); a model's own textures are read on demand.
+  * The *texture viewer* reads the other version's textures; **Export texture as PNG...** saves them (no `.blp.json`:
+    they are not imported back by accident).
+  * The status line shows the *locked* records: rows in encrypted sections are counted, never guessed. Measured on
+    1.60.1.70450: 14,204 of 14,229 creature displays readable (25 locked), 7,056 of 7,071 item displays (15),
+    19,179 of 19,268 item names (89), 3,223 of 3,234 game object displays (11), 2,719 of 2,732 spell effects (13).
+  * Its own index, built once (about 8 s; 13 s with a listfile) into the app's folder of that client (only the index,
+    never a workspace) and opened in about a second after that: the same SQLite schema as the 1.12 index, plus the
+    FileDataIDs, the locked counts and the creatures the client names (`ModernIndexBuilder`). Measured on 1.60.1.70450
+    without a listfile: 257,001 entries; 183,632 of 1,250,956 files named (134,232 confirmed by the client's own
+    hashes, 49,400 of your 1.12 names through Classic Era). With the community listfile: 1,235,606 named, 200,000
+    textures and models listed (481,289 more found by `wds find files`), 274,682 entries.
+  * The 1.12 path is unchanged: `AppSession.OpenAsync`, the 1.12 index builder and the Browse tab are not touched
+    (proof: the 1.12 index of the Client3 copy built by the code before and after has the same `entry`, `asset` and
+    `model_variant` tables, `Index112UnchangedTests`).
+  * Column names for 34 more DB2 tables of 1.60.1.70450 in our own measured layout file (`db2_layouts_70450.txt`):
+    creature, item, game object and spell effect displays, ModelFileData / TextureFileData, the component tables,
+    SpellName and the spell visual chain, ManifestInterfaceData, ChrRaces; every name proven by value matching with
+    1.12, 1.12 paths hashed into Classic Era, links and file magics (no community definition file).
+  * Command line: the global `--version <client>` (alone it still prints the version), `wds versions open <client>`
+    (builds or checks the index: entries, names and their sources, locked records per table), and `wds find search /
+    list / info / files / extract`, `wds textures info / export / export-all` with `--version`. Every other command
+    refuses `--version` with exit code 4 ("1.60.1.70450 is open read only: wds dbc set changes files.").
+  * Tests: synthetic modern clients made from our own bytes (`SyntheticClients`: a CASC install, WDC5 tables shaped by
+    our layout file, a model with a TXID chunk, BLP textures, an encrypted and a missing file, a listfile),
+    `OpenOtherVersionTests`, `VersionOpenCliTests` (every command marked VersionAware runs with `--version`, every
+    other one refuses), the opt-in `RealCopyOpenTests` on the real copy (`WOWDATA_CLIENT_COPIES`, `WOWDATA_LISTFILE`)
+    and `Index112UnchangedTests`. Screenshots 144-147 (`WDS_SCREENSHOT_ONLY=versions-open`).
+  * Not yet: the 3D models (M2), external animations and effects (M3), maps (M4), WoWDBDefs names (M5), player
+    characters (M6), and opening the MPQ versions (M7). See [Known issues](docs/manual/known-issues.md#other-versions).
+
 ### Fixed
 
 * **Browsing many models no longer grows the memory without end.** The decoded textures of the 3D viewer were all kept

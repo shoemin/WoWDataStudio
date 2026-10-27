@@ -676,6 +676,43 @@ are found by number (`#775971`). Wildcard searches need a listfile.
 
 *Status:* by design (the app does not ship or download a listfile).
 
+### Another version opened read only lists most creatures by their display
+
+*What happens:* in the read-only window of another version, creatures are listed by their model and skins (for
+example *Boar - BoarSkinBlue*), not by name, except the 178 creatures the 1.60 client names itself. Creature names are
+kept by the server, and another version has no server here.
+
+*Who is affected:* anyone looking for a creature of another version by its name.
+
+*Workaround:* search for the model or skin name (`boar`), or the display ID; your 1.12 game's names (with the server
+database) tell which display a creature uses.
+
+*Status:* by design (another version is read without a server).
+
+### Humanoid NPCs of 1.60 show numbers instead of model names
+
+*What happens:* the 1.60 client draws humanoid NPCs with new high-resolution player-race models. These files have no
+name your 1.12 game knows, so without a listfile their model and textures are shown as `#878772.m2`, `#570505.blp`.
+
+*Who is affected:* anyone browsing 1.60's humanoid NPCs without a listfile.
+
+*Workaround:* choose a listfile you have (**Choose listfile...**), then **Rebuild the index** in the read-only window.
+
+*Status:* by design (the app does not ship or download a listfile).
+
+### Another version opened read only needs a few hundred MB of memory
+
+*What happens:* the read-only window keeps its whole Browse list in memory, as the main window does: about 257,000
+entries for the 1.60 client (about 300 MB), about 275,000 with a listfile. With a listfile only 200,000 named textures
+and models are listed; the others (about 481,000 for 1.60) are left out of the list.
+
+*Who is affected:* computers with little memory, and anyone looking for a texture that is left out of the list.
+
+*Workaround:* close the read-only window when you are done; find the other files with
+`wds find files <pattern> --version <client>`.
+
+*Status:* open.
+
 ### "Blizzard archives only" knows three releases
 
 *What happens:* the app knows which patch archives Blizzard shipped with 1.12.1, 2.4.3 and 3.3.5a. For any other
