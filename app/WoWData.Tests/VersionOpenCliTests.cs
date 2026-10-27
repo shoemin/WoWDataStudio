@@ -53,6 +53,11 @@ public class VersionOpenCliTests : IDisposable
             ["textures export"] = new[] { "textures", "export", IconName, "--out", Path.Combine(outDir, "icon.png") },
             ["textures export-all"] = new[] { "textures", "export-all", "cdisplay:1", "--out", Path.Combine(outDir, "all") },
             ["versions open"] = new[] { "versions", "open" },
+            // M2: the models of another version
+            ["models info"] = new[] { "models", "info", "cdisplay:1" },
+            ["models anims"] = new[] { "models", "anims", CubeName },
+            ["models skeleton"] = new[] { "models", "skeleton", "#" + CubeModel },
+            ["models render"] = new[] { "models", "render", "cdisplay:1", Path.Combine(outDir, "cube.png"), "--size", "160x120" },
         };
     }
 
@@ -102,6 +107,52 @@ public class VersionOpenCliTests : IDisposable
         Assert.Contains("1 from your listfile", t.Out);
         // no client: a usage error
         Assert.Equal(ExitCode.Usage, Run("versions", "open").Code);
+    }
+
+    [Fact]
+    public void ModelsInfoAnimsSkeletonAndRenderReadTheCube()
+    {
+        var info = Run("models", "info", "cdisplay:1", "--version", _flavor, "--json");
+        Assert.True(info.Code == 0, info.ToString());
+        var d = info.Data;
+        Assert.Equal(CubeName, d.GetProperty("model").GetString());
+        Assert.True(d.GetProperty("readOnly").GetBoolean());
+        var f = d.GetProperty("format");
+        Assert.Equal(274, f.GetProperty("m2Version").GetInt32());
+        Assert.Equal(CubeSkin, f.GetProperty("skinFiles")[0].GetUInt32());
+        Assert.Equal(12, f.GetProperty("viewTriangles")[0].GetInt32());
+        Assert.Equal((1, 1), (f.GetProperty("inlineSequences").GetInt32(), f.GetProperty("externalSequences").GetInt32()));
+        Assert.Equal((8, 12, 1), (d.GetProperty("stats").GetProperty("vertices").GetInt32(), d.GetProperty("stats").GetProperty("triangles").GetInt32(), d.GetProperty("stats").GetProperty("bones").GetInt32()));
+        Assert.Contains(d.GetProperty("ignored").EnumerateArray(), x => x.GetString()!.StartsWith("AFID", StringComparison.Ordinal));
+        // creature displays 1 and 2 (a skin, an NPC look) and item display 20 (its model texture)
+        Assert.Equal(new[] { "creature", "creature", "item" }, d.GetProperty("looks").EnumerateArray().Select(x => x.GetProperty("kind").GetString()));
+        var text = Run("models", "info", CubeName, "--version", _flavor);
+        Assert.Contains("M2 version 274 (chunked MD21, 1 of 1 view read)", text.Out);
+        Assert.Contains($"skin file #{CubeSkin} 12 triangles", text.Out);
+
+        var anims = Run("models", "anims", CubeName, "--version", _flavor, "--json");
+        Assert.Equal(0, anims.Code);
+        var list = anims.Data.GetProperty("animations").EnumerateArray().ToList();
+        Assert.Equal(new[] { "Anim0", "Anim4" }, list.Select(x => x.GetProperty("name").GetString()));
+        Assert.Equal(new[] { "model", $".anim #{CubeAnim}" }, list.Select(x => x.GetProperty("where").GetString()));
+        Assert.Equal(new[] { 1000, 500 }, list.Select(x => x.GetProperty("durationMs").GetInt32()));
+        Assert.Equal(ExitCode.NotFound, Run("models", "anims", CubeName, "--sequence", "Moonwalk", "--version", _flavor).Code);
+
+        var sk = Run("models", "skeleton", "#" + CubeModel, "--version", _flavor, "--json");
+        Assert.Equal(0, sk.Code);
+        Assert.Equal(1, sk.Data.GetProperty("bones").GetArrayLength());
+        Assert.True(sk.Data.GetProperty("bones")[0].GetProperty("animated").GetBoolean());
+
+        // a file that is not a model, and one that is not on this computer
+        Assert.Equal(ExitCode.NotFound, Run("models", "info", "#" + MissingTexture, "--version", _flavor).Code);
+        // the picture: never into the client's folder
+        Assert.Equal(ExitCode.Refused, Run("models", "render", CubeName, Path.Combine(_flavor, "x.png"), "--version", _flavor).Code);
+        var png = Path.Combine(_root, "out", "cube_walk.png");
+        var r = Run("models", "render", CubeName, png, "--sequence", "0", "--time", "500", "--size", "200x150", "--version", _flavor, "--json");
+        Assert.True(r.Code == 0, r.ToString());
+        var img = WoWData.Core.Imaging.Png.Load(png);
+        Assert.Equal((200, 150), (img.Width, img.Height));
+        Assert.True(img.Pixels.Distinct().Count() > 4);
     }
 
     [Fact]

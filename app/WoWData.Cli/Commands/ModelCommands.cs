@@ -92,11 +92,12 @@ internal static class ModelCommands
             Path = "models info",
             Summary = "a model's statistics, its displays and skins, who a mesh change affects, your edit and its checks",
             Args = new[] { "<model>" },
-            Details = "The model is a path (Creature\\Boar\\Boar.m2) or an entry (\"Mottled Boar\", creature:3098, cdisplay:503).",
-            Examples = new[] { "wds models info Creature\\Boar\\Boar.m2", "wds models info \"Mottled Boar\" --json" },
+            Details = "The model is a path (Creature\\Boar\\Boar.m2) or an entry (\"Mottled Boar\", creature:3098, cdisplay:503). With --version: another version's model (a path, #FileDataID or an entry), the file format read, its chunks, skin and texture files, and what is not shown yet.",
+            Examples = new[] { "wds models info Creature\\Boar\\Boar.m2", "wds models info \"Mottled Boar\" --json", "wds models info cdisplay:503 --version _classic_beta_" },
             Run = async inv =>
             {
                 var s = await inv.Ctx.SessionAsync();
+                if (s.IsReadOnly) return ModelCommandsOther.Info(inv.Ctx, s, ModelCommandsOther.ModelPath(s, inv.Arg(0)));
                 var model = ModelPath(s, inv.Arg(0));
                 var svc = s.ModelPackages!;
                 var data = svc.ReadModel(model) ?? throw new CliError(ExitCode.NotFound, $"{model} is not in the game archives.");
@@ -141,6 +142,7 @@ internal static class ModelCommands
             Run = async inv =>
             {
                 var s = await inv.Ctx.SessionAsync();
+                if (s.IsReadOnly) return ModelCommandsOther.Info(inv.Ctx, s, ModelCommandsOther.ModelPath(s, inv.Arg(0)));
                 var model = ModelPath(s, inv.Arg(0));
                 var svc = s.ModelPackages!;
                 var mode = (inv.Opt("mode") ?? "current").ToLowerInvariant() switch
@@ -416,10 +418,11 @@ internal static class ModelCommands
             },
             Details = "The names are the actions of \"wds models export --with-skeleton\" (\"Stand [2]\" is the second Stand variation). " +
                       "\"Used for\" comes from the client's own animation tests; emotes from Emotes / EmotesText, spells from Spell -> SpellVisual -> SpellVisualKit.",
-            Examples = new[] { "wds models anims Creature\\Boar\\Boar.m2", "wds models anims \"Mottled Boar\" --json", "wds models anims Character\\Orc\\Male\\OrcMale.m2 --sequence EmoteDance" },
+            Examples = new[] { "wds models anims Creature\\Boar\\Boar.m2", "wds models anims \"Mottled Boar\" --json", "wds models anims Character\\Orc\\Male\\OrcMale.m2 --sequence EmoteDance", "wds models anims Creature\\Boar\\Boar.m2 --version _classic_beta_" },
             Run = async inv =>
             {
                 var s = await inv.Ctx.SessionAsync();
+                if (s.IsReadOnly) return ModelCommandsOther.Anims(s, ModelCommandsOther.ModelPath(s, inv.Arg(0)), inv.Opt("sequence"));
                 var model = ModelPath(s, inv.Arg(0));
                 var data = (!inv.Flag("original") ? s.Workspace!.ReadEdited(model) : null) ?? s.Data!.Read(model) ?? throw new CliError(ExitCode.NotFound, $"{model} is not in the game archives.");
                 var m = M2Model.Load(data);
@@ -480,14 +483,25 @@ internal static class ModelCommands
             Args = new[] { "<model>" },
             Options = new[] { new OptionSpec("original", null, "the game's model even when you edited it") },
             Details = "The bone names are those of the export (bone_015_Root: bone 15, key bone Root). Key bones are how the game finds the head, the hands, the jaw... by name.",
-            Examples = new[] { "wds models skeleton Creature\\Boar\\Boar.m2", "wds models skeleton Character\\Orc\\Male\\OrcMale.m2 --json" },
+            Examples = new[] { "wds models skeleton Creature\\Boar\\Boar.m2", "wds models skeleton Character\\Orc\\Male\\OrcMale.m2 --json", "wds models skeleton Creature\\Boar\\Boar.m2 --version _classic_beta_" },
             Run = async inv =>
             {
                 var s = await inv.Ctx.SessionAsync();
-                var model = ModelPath(s, inv.Arg(0));
-                var data = (!inv.Flag("original") ? s.Workspace!.ReadEdited(model) : null) ?? s.Data!.Read(model) ?? throw new CliError(ExitCode.NotFound, $"{model} is not in the game archives.");
-                var m = M2Model.Load(data);
-                var info = RigInfo.Read(m, s.Models!.Animations);
+                string model;
+                M2Model m;
+                if (s.IsReadOnly)
+                {
+                    // M2: another version, read by the modern reader
+                    model = ModelCommandsOther.ModelPath(s, inv.Arg(0));
+                    m = ModelCommandsOther.Load(s, model);
+                }
+                else
+                {
+                    model = ModelPath(s, inv.Arg(0));
+                    var data = (!inv.Flag("original") ? s.Workspace!.ReadEdited(model) : null) ?? s.Data!.Read(model) ?? throw new CliError(ExitCode.NotFound, $"{model} is not in the game archives.");
+                    m = M2Model.Load(data);
+                }
+                var info = RigInfo.Read(m, s.Looks!.Animations);
                 int maxBone = m.Views.Length == 0 ? 0 : m.Views.SelectMany(v => v.Submeshes).DefaultIfEmpty().Max(x => x?.BoneCount ?? 0);
                 var r = new CliResult().With(new
                 {
@@ -522,13 +536,15 @@ internal static class ModelCommands
                 new OptionSpec("size", "WxH", "the picture size (default 900x700)"),
                 new OptionSpec("original", null, "the game's files only, not your edits"),
             },
-            Details = "Runs WoWDataStudio.exe --render (installed next to wds.exe): the 3D renderer is part of the app. It needs a graphics driver with OpenGL 3.3.",
-            Examples = new[] { "wds models render Creature\\Boar\\Boar.m2 boar.png --display 503", "wds models render \"Mottled Boar\" boar.png --size 1920x1080 --original", "wds models render Creature\\Boar\\Boar.m2 walk.png --sequence Walk --time 500" },
+            Details = "Runs WoWDataStudio.exe --render (installed next to wds.exe): the 3D renderer is part of the app. It needs a graphics driver with OpenGL 3.3. With --version: another version's model with its display's skin or item texture (--original does not apply).",
+            Examples = new[] { "wds models render Creature\\Boar\\Boar.m2 boar.png --display 503", "wds models render \"Mottled Boar\" boar.png --size 1920x1080 --original", "wds models render Creature\\Boar\\Boar.m2 walk.png --sequence Walk --time 500", "wds models render cdisplay:503 boar160.png --version _classic_beta_" },
             Run = async inv =>
             {
                 var s = await inv.Ctx.SessionAsync();
+                if (s.IsReadOnly) return await RenderOther(inv, s);
                 var model = ModelPath(s, inv.Arg(0));
                 var png = Path.GetFullPath(inv.Arg(1));
+                Directory.CreateDirectory(Path.GetDirectoryName(png)!);   // M2: the renderer does not create it (it waited forever)
                 var args = new List<string> { "--render", model, png, "--home", inv.Ctx.Paths.Root, "--client", s.Client!.ClientDir };
                 if ((inv.IntOpt("display") ?? DisplayOf(s, inv.Arg(0))) is { } d) { args.Add("--display"); args.Add(d.ToString()); }
                 foreach (var o in new[] { "sequence", "time", "yaw", "size" })
@@ -542,6 +558,39 @@ internal static class ModelCommands
                 return new CliResult().With(new { model, png, output }).Line(output.FirstOrDefault() ?? png);
             },
         };
+    }
+
+    /// <summary>M2: "wds models render --version": the app's renderer on another version's model (by FileDataID), its
+    /// creature or item display's look; the animation is resolved here (by name or number) and passed by number.</summary>
+    private static async Task<CliResult> RenderOther(Invocation inv, AppSession s)
+    {
+        var model = ModelCommandsOther.ModelPath(s, inv.Arg(0));
+        var m = ModelCommandsOther.Load(s, model);
+        var png = Path.GetFullPath(inv.Arg(1));
+        var copy = s.Profile!.Copy!;
+        if (png.StartsWith(Path.GetFullPath(copy.Folder).TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase))
+            throw new CliError(ExitCode.Refused, $"Refusing to write into the folder of {copy.Name}: other versions are only read. Save the picture somewhere else.");
+        var id = s.Files!.IdOf(model) ?? throw new CliError(ExitCode.NotFound, $"{model} is not a file of {s.Profile.VersionBuild}.");
+        Directory.CreateDirectory(Path.GetDirectoryName(png)!);
+        var args = new List<string> { "--render", "#" + id, png, "--home", inv.Ctx.Paths.Root, "--version", copy.Folder };
+        if ((inv.IntOpt("display") ?? ModelCommandsOther.DisplayOf(s, inv.Arg(0))) is { } d) { args.Add("--display"); args.Add(d.ToString()); }
+        else if (ModelCommandsOther.ItemDisplayOf(s, inv.Arg(0)) is { } item) { args.Add("--item-display"); args.Add(item.ToString()); }
+        if (inv.Opt("sequence") is { } want)
+        {
+            var names = ModelExporter.ActionNames(m, s.Looks!.AnimationName);
+            int idx = int.TryParse(want, out int n) ? n : Array.FindIndex(names, x => string.Equals(x, want, StringComparison.OrdinalIgnoreCase));
+            if (idx < 0 || idx >= m.Sequences.Length) throw new CliError(ExitCode.NotFound, $"{model} has no animation \"{want}\". It has: {string.Join(", ", names.Take(30))}{(names.Length > 30 ? ", ..." : "")}.");
+            args.Add("--sequence");
+            args.Add(idx.ToString());
+        }
+        foreach (var o in new[] { "time", "yaw", "size" })
+            if (inv.Opt(o) is { } v) { args.Add("--" + o); args.Add(v); }
+        s.Dispose();   // the app opens the client itself
+        var output = new List<string>();
+        int code = await RunApp(inv.Ctx, args, output);
+        if (code != 0 || !File.Exists(png))
+            return new CliResult { Code = ExitCode.Error, Error = "The renderer failed: " + string.Join(" | ", output.TakeLast(4)) }.With(new { model, png, output, readOnly = true });
+        return new CliResult().With(new { model, png, output, readOnly = true }).Line(output.FirstOrDefault() ?? png);
     }
 
     private static void OpenBlender(CliResult r, string gltf)

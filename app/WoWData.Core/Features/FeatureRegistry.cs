@@ -70,7 +70,7 @@ public static class FeatureRegistry
         new("textures.compare", "Textures", "Compare original vs. edited", "textures compare"),
 
         // ---- models and Blender
-        new("models.info", "Models", "Model statistics", "models info"),
+        new("models.info", "Models", "Model statistics", "models info") { VersionAware = true },
         new("models.export", "Models", "Tools > Export for Blender...", "models export"),
         new("models.open", "Models", "Open in Blender", "models open"),
         new("models.import", "Models", "File > Import edited model...", "models import"),
@@ -78,13 +78,13 @@ public static class FeatureRegistry
         new("models.compare", "Models", "Compare original vs. edited model", "models compare"),
         new("models.revert", "Models", "Revert the model", "changes revert"),
         new("models.addon", "Models", "Tools > Install the Blender add-on...", "models addon"),
-        new("models.render", "Models", "Save image...", "models render"),
+        new("models.render", "Models", "Save image...", "models render") { VersionAware = true },
         // 0.10.0: skeleton and animation round trip
         new("models.export-skeleton", "Models", "Skeleton and animations (for editing)", "models export"),
         new("models.import-skeleton", "Models", "Skeleton and animations", "models import"),
         new("models.effects", "Models", "Particles and ribbons", "models import"),
-        new("models.anims", "Models", "Animations and what the game plays them for", "models anims"),
-        new("models.skeleton", "Models", "Skeleton, attachment points and events", "models skeleton"),
+        new("models.anims", "Models", "Animations and what the game plays them for", "models anims") { VersionAware = true },
+        new("models.skeleton", "Models", "Skeleton, attachment points and events", "models skeleton") { VersionAware = true },
         new("models.animation-preview", "Models", "Loop", "models render"),
         new("models.attachment-points", "Models", "Attachment points", "models skeleton"),
         new("models.compare-animations", "Models", "Same animation on both", "models compare"),
@@ -293,6 +293,11 @@ public static class FeatureRegistry
         new("versions.window-browse", "Other versions", "Read only: nothing here changes the client", "find search") { VersionAware = true },
         new("versions.window-locked", "Other versions", "Locked (encrypted, no key)", "versions open") { VersionAware = true },
         new("versions.window-export", "Other versions", "Export texture as PNG...", "textures export") { VersionAware = true },
+        // M2: models of another version in the read-only window (the modern reader; models info / anims / skeleton / render --version)
+        new("versions.window-3d", "Other versions", "3D VIEW", "models render") { VersionAware = true },
+        new("versions.window-model-info", "Other versions", "Model statistics", "models info") { VersionAware = true },
+        new("versions.window-popout", "Other versions", "Open in new window", "", FeatureFront.GuiOnly, "viewing: the 3D view of another version in a window of its own (\"wds models render --version\" draws a picture)"),
+        new("versions.window-compare", "Other versions", "Compare two skins (3D)", "", FeatureFront.GuiOnly, "viewing: two live 3D views side by side (render each skin with \"wds models render --display --version\")"),
 
         // ---- help and the command line itself
         new("help.manual", "Help", "Help > User manual", "manual"),

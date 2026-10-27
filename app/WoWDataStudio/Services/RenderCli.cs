@@ -19,6 +19,42 @@ namespace WoWDataStudio.Services;
 /// </summary>
 public static class RenderCli
 {
+    /// <summary>
+    /// M2: `--render &lt;#FileDataID&gt; &lt;png&gt; --version &lt;client folder&gt; [--display N | --item-display N]`: a model of
+    /// another version (read only), read by the modern reader, with a creature display's skins, an item display's
+    /// texture or the model's default look. "wds models render --version" resolves the model and the animation.
+    /// </summary>
+    private static async Task<int> RenderOtherAsync(string folder, string model, string outFile, int display, int itemDisplay, int sequence, double time, float yaw, int w, int h)
+    {
+        var copy = WoWData.Core.Versions.ClientPick.Resolve(folder, Array.Empty<WoWData.Core.Versions.ClientCopy>());
+        using var oc = WoWData.Core.Versions.OtherClient.Open(copy);
+        var storage = oc.Casc ?? throw new NotSupportedException($"{copy.Name} is not a CASC client.");
+        var cat = new Catalog160(storage, oc.Catalog, copy.Build > 0 ? copy.Build : storage.Build);
+        var files = new WoWData.Core.Versions.ModernClientFiles(storage);
+        var res = new WoWData.Core.M2.Modern.ModernModelResolver(cat, files);
+        var m = new WoWData.Core.M2.Modern.ModernModelSource(files).Load(model);
+        var asset = ModelAsset.Build(model, m, res.LoadBlp);
+        var look = display > 0 ? res.CreatureDisplay(display) : itemDisplay > 0 ? res.ItemDisplay(itemDisplay, model) : res.DefaultFor(model);
+        var scene = new ModelScene { Asset = asset, Look = look, Playing = false };
+        if (sequence >= asset.Model.Sequences.Length) throw new ArgumentException($"the model has {asset.Model.Sequences.Length} animations (0-{asset.Model.Sequences.Length - 1})");
+        if (sequence >= 0) scene.Sequence = sequence;
+        scene.SequenceTime = time;
+        var cam = new OrbitCamera();
+        cam.Frame(asset.BoundsMin, asset.BoundsMax);
+        if (!float.IsNaN(yaw)) cam.Yaw = yaw;
+        var vp = new ModelViewport { Scene = scene, Camera = cam };
+        var win = new Window { Content = vp, Width = 400, Height = 300, Left = -30000, Top = 0, ShowActivated = false, ShowInTaskbar = false, WindowStartupLocation = WindowStartupLocation.Manual };
+        win.Show();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var img = await vp.CaptureAsync(w, h);
+        Png.Save(img, outFile, false);
+        Console.WriteLine($"{model}: {asset.Model.Vertices.Length} vertices, view 0 {asset.TriangleCount(0)} triangles" +
+                          (asset.Model.Sequences.Length == 0 ? "" : $", animation {scene.Sequence} at {scene.SequenceTime:0} ms") +
+                          $" -> {outFile} ({copy.Name} {cat.Build}, read only; {m.Modern?.FormatText})");
+        win.Close();
+        return 0;
+    }
+
     public static async Task<int> RunAsync(string clientDir, string[] args, string? home = null)
     {
         try
@@ -47,6 +83,14 @@ public static class RenderCli
                         h = int.Parse(p[1]);
                         break;
                 }
+            }
+            int vat = Array.FindIndex(args, a => a.Equals("--version", StringComparison.OrdinalIgnoreCase));
+            if (vat >= 0 && vat + 1 < args.Length)
+            {
+                int itemDisplay = 0;
+                int iat = Array.FindIndex(args, a => a.Equals("--item-display", StringComparison.OrdinalIgnoreCase));
+                if (iat >= 0 && iat + 1 < args.Length) itemDisplay = int.Parse(args[iat + 1]);
+                return await RenderOtherAsync(args[vat + 1], model, outFile, display, itemDisplay, sequence, time, yaw, w, h);
             }
             using var client = new ClientData(Path.Combine(clientDir, "Data"));
             var cat = new Catalog(client);
