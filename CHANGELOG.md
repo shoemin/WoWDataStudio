@@ -44,11 +44,56 @@ recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
     `OpenOtherVersionTests`, `VersionOpenCliTests` (every command marked VersionAware runs with `--version`, every
     other one refuses), the opt-in `RealCopyOpenTests` on the real copy (`WOWDATA_CLIENT_COPIES`, `WOWDATA_LISTFILE`)
     and `Index112UnchangedTests`. Screenshots 144-147 (`WDS_SCREENSHOT_ONLY=versions-open`).
-  * Not yet: the 3D models (M2), external animations and effects (M3), maps (M4), WoWDBDefs names (M5), player
-    characters (M6), and opening the MPQ versions (M7). See [Known issues](docs/manual/known-issues.md#other-versions).
+  * Not yet: external animations and effects (M3), maps (M4), WoWDBDefs names (M5), player characters (M6), and
+    opening the MPQ versions (M7); the 3D models came with M2 (below). See [Known issues](docs/manual/known-issues.md#other-versions).
+
+* **3D models of another version opened read only (experimental, M2 of `docs\research\OPEN_OTHER_VERSIONS_DESIGN.md`).**
+  The read-only window shows the model of a creature display, an item, a game object, a spell effect or a world model
+  in the same 3D viewer as your game ([Other versions](docs/manual/other-versions.md#3d-models)): animations, levels of
+  detail, geosets, background, **Save image...**, the skin picker (**Displays using this model (33)**, **Item displays
+  using this model (16)**), **Open in new window** (a pop-out that follows this window's selection) and **Compare two
+  skins (3D)**.
+  * `M2ModernReader` (our own code, `WoWData.Core\M2\Modern\`) reads the chunked models of the modern clients (MD21,
+    versions 272 and 274) into the same `M2Model` the 1.12 viewer uses, so the renderer and the animation code are
+    unchanged: the MD20 header and records of version 264 and later, the views from their `.skin` files (SFID, by
+    FileDataID), the textures from TXID, the compressed bone rotations, and the tracks with one key array per
+    sequence put onto one timeline with ranges per sequence (the 1.12 shape `M2Anim` evaluates; a sequence's last key
+    is held until it ends; aliases share their target's keys; sequences in `.anim` files keep their place without
+    keys). `M2ModernInfo` lists every chunk with its use (AFID / SKID / BFID / PFID / LDV1 / TXAC / EXP2 ... are listed
+    as left out), what is not shown (particles, ribbons, lights, external animations) and what is drawn approximately.
+  * Checked on the real 1.60 copy before the viewer used it (`RealCopyModelTests`, opt-in): every distinct creature
+    model (998 of 1,017 are on this computer; 710 of version 272, 288 of 274), 420 sampled item models (419 local) and
+    457 sampled game object files (443 models; 4 not local, 10 buildings) load with no failure; every loaded model's
+    view-0 triangle count equals the count its `.skin` file states; all 56,991,534 compressed bone rotations decode to
+    unit quaternions; 61 creature models have more than 65,535 triangle indices in view 0 (the submesh's `level` is
+    the high part of its index start, not of its vertex start). 1,860 models read in about 15 s.
+  * Modern models describe their texture layers by the shader id (their texture-coordinate lookup is empty, MEASURED):
+    a reflection layer is drawn as a sphere map, and a unit with a reflection or glow layer on top of its texture is
+    drawn with its first texture (before, the Worn Shortsword's blade was black); blend mode 7 is drawn as additive.
+  * `ModernModelResolver` (the looks): creature skins from CreatureDisplayInfo's texture variations, the baked texture
+    of humanoid NPCs (CreatureDisplayInfoExtra), the item texture of the model's slot (ItemDisplayInfo's material
+    resources), the first display as a model's default look; animation names from your 1.12 game's AnimationData for
+    the same ids (`Anim<id>` otherwise); textures decoded at most 1024 x 1024 (a smaller mip level).
+  * Interfaces of the design (2.2): `IModelSource`, `IModelLooks` (the 1.12 `ModelResolver` implements it unchanged),
+    `ModelAsset.Build(path, M2Model, ...)`; `AppSession.Looks` / `ModelSource` are your game's objects for 1.12. The
+    1.12 path is unchanged (the viewer's 1.12 plan and model loading are the same code; `Index112UnchangedTests`).
+  * Command line: `wds models info`, `anims`, `skeleton` and `render` take `--version <client>`: the format read, its
+    chunks, skin and texture files, where each animation's keys are, a picture with the display's skin or item
+    texture. `FeatureParityTests` / `VersionOpenCliTests` run each of them on the synthetic client.
+  * Tests: a synthetic cube model of version 274 made from our own bytes (`SyntheticClients.CubeM2v274`: MD21, SFID,
+    TXID, AFID, one bone, an inline and an external sequence, compressed quaternions, its `.skin`), `M2ModernTests`
+    (vertices, bounds, sequence times, quaternion decode, evaluation, looks), the CLI tests, the opt-in
+    `RealCopyModelTests`. Screenshots 148 and 149; the leak test's `versions_window` view opens the 3D view too (40 cycles: the
+    managed heap flat, the GL contexts come back, handles +1.93 per cycle: the two handles each closed GL view leaves,
+    see Known issues).
+  * Not yet (see [Known issues](docs/manual/known-issues.md#other-versions)): animations in `.anim` files and the
+    skeleton files of character models, particles and ribbons, the shader combiners (M3), buildings in 3D (with the
+    maps, M4), player characters and NPC customization (M6).
 
 ### Fixed
 
+* **`wds models render` into a folder that does not exist waited forever.** The app's renderer could not write the
+  picture there and stopped on an error message nobody saw; the command line now creates the folder first.
 * **Browsing many models no longer grows the memory without end.** The decoded textures of the 3D viewer were all kept
   for the whole session (the model resolver's cache had no limit), and every 3D view kept its GPU copy of each one.
   Browsing 200 different creatures added about 110 MB to the managed heap, 220 MB of private memory and 256 GPU

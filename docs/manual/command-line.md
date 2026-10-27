@@ -54,7 +54,7 @@ The groups follow the app: `setup`, `settings`, `serverdb`, `index`, `find` (the
 |---|---|
 | `--home <folder>` | keeps the settings, the index and your edits in that folder instead of `%APPDATA%\WoWDataStudio` (the app's). Scripts and tests use it to work apart from your normal edits; the app has the same option. |
 | `--client <folder>` | uses that World of Warcraft folder for this one command, instead of the one in the settings |
-| `--version <client>` | opens another World of Warcraft version read only for this one command, instead of your game: its folder, its name in the folder of other versions, a version (`1.60`) or a build (`70450`). Only the commands that read work with it: `wds find search`, `list`, `info`, `files`, `extract`, `wds textures info`, `export`, `export-all` (and `wds versions open`); every other command refuses with exit code 4. Alone, `wds --version` prints the version of wds. See [Another version, read only](#another-version-read-only). |
+| `--version <client>` | opens another World of Warcraft version read only for this one command, instead of your game: its folder, its name in the folder of other versions, a version (`1.60`) or a build (`70450`). Only the commands that read work with it: `wds find search`, `list`, `info`, `files`, `extract`, `wds textures info`, `export`, `export-all`, `wds models info`, `anims`, `skeleton`, `render` (and `wds versions open`); every other command refuses with exit code 4. Alone, `wds --version` prints the version of wds. See [Another version, read only](#another-version-read-only). |
 | `--json` | prints one JSON object instead of text (see [JSON output](#json-output)) |
 | `--quiet` | no progress messages |
 | `--yes` | confirms a command that changes the game folder or the server, or deletes something (see [Safety](#safety)) |
@@ -517,6 +517,10 @@ render it. See [Models and Blender](model-export-import.md) and [Skeleton and an
 
 A model's statistics, its displays and skins, who a mesh change affects, your edit and its checks.
 
+The model is a path (Creature\Boar\Boar.m2) or an entry ("Mottled Boar", creature:3098, cdisplay:503). With
+`--version`: another version's model (a path, `#FileDataID` or an entry), the file format read, its chunks, skin and
+texture files, and what is not shown yet (see [Another version, read only](#another-version-read-only)).
+
 ```
 wds models info <model>
 ```
@@ -524,6 +528,7 @@ wds models info <model>
 ```
 wds models info Creature\Boar\Boar.m2
 wds models info "Mottled Boar" --json
+wds models info cdisplay:503 --version _classic_beta_
 ```
 
 #### wds models export
@@ -648,6 +653,7 @@ wds models anims <model> [options]
 wds models anims Creature\Boar\Boar.m2
 wds models anims "Mottled Boar" --json
 wds models anims Character\Orc\Male\OrcMale.m2 --sequence EmoteDance
+wds models anims Creature\Boar\Boar.m2 --version _classic_beta_
 ```
 
 #### wds models skeleton
@@ -663,6 +669,7 @@ wds models skeleton <model> [options]
 ```
 wds models skeleton Creature\Boar\Boar.m2
 wds models skeleton Character\Orc\Male\OrcMale.m2 --json
+wds models skeleton Creature\Boar\Boar.m2 --version _classic_beta_
 ```
 
 #### wds models render
@@ -684,6 +691,7 @@ wds models render <model> <png> [options]
 wds models render Creature\Boar\Boar.m2 boar.png --display 503
 wds models render "Mottled Boar" boar.png --size 1920x1080 --original
 wds models render Creature\Boar\Boar.m2 walk.png --sequence Walk --time 500
+wds models render cdisplay:503 boar160.png --version _classic_beta_
 ```
 
 ### Maps and terrain
@@ -3033,6 +3041,9 @@ wds find search boar --version _classic_beta_
 wds find info cdisplay:503 --version _classic_beta_
 wds find files Interface\Icons\INV_Sword_* --version _classic_beta_
 wds textures export Interface\Icons\INV_Sword_04.blp --out sword.png --version _classic_beta_
+wds models info cdisplay:503 --version _classic_beta_
+wds models anims Creature\Boar\Boar.m2 --version _classic_beta_
+wds models render cdisplay:503 boar160.png --version _classic_beta_
 ```
 
 * Files are named by path, or by their FileDataID as `#123456` when no name is known; `wds find info` lists every file
@@ -3041,8 +3052,14 @@ wds textures export Interface\Icons\INV_Sword_04.blp --out sword.png --version _
   your game this way). Nothing is ever written into the other client's folder (exit code 4).
 * Every command that changes something refuses `--version` with exit code 4 and one line, for example
   `1.60.1.70450 is open read only: wds dbc set changes files.`; the commands that read but do not work with other
-  versions yet (the 3D models, maps, Used in game) refuse the same way. The 3D models and maps of other versions come
-  later.
+  versions yet (maps, Used in game, the model export) refuse the same way. The maps of other versions come later.
+* `wds models info` reads the model of another version (a path, `#FileDataID` or an entry) and prints, besides the
+  statistics and its displays, the file format read (1.60: version 272 or 274, its parts in separate files), its skin
+  and texture files by FileDataID, where its animations are (in the model, or in `.anim` files: listed, not played
+  yet), what is left out and what is drawn approximately. `wds models anims` names the animations as your 1.12 game
+  does for the same numbers (`Anim<number>` for the others, or for all without a 1.12 game set) and says where each
+  one's keys are; `wds models render` draws it with its display's skin or item texture (`--display`; `--original` does
+  not apply). The picture is never written into the other client's folder (exit code 4).
 
 ### Help and the command line itself
 
@@ -3346,6 +3363,10 @@ app's tests fail when the app, the command line and this table differ.
 | versions.window-browse | **Read only: nothing here changes the client** | `wds find search` |
 | versions.window-locked | **Locked (encrypted, no key)** | `wds versions open` |
 | versions.window-export | **Export texture as PNG...** | `wds textures export` |
+| versions.window-3d | **3D VIEW** | `wds models render` |
+| versions.window-model-info | **Model statistics** | `wds models info` |
+| versions.window-popout | **Open in new window** | (app only: viewing: the 3D view of another version in a window of its own ("wds models render --version" draws a picture)) |
+| versions.window-compare | **Compare two skins (3D)** | (app only: viewing: two live 3D views side by side (render each skin with "wds models render --display --version")) |
 | help.manual | **Help > User manual** | `wds manual` |
 | help.about | **Help > About WoW Data Studio** | `wds version` |
 | help.cli | **Help > The command line (wds)** | `wds manual` |

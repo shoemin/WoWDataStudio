@@ -713,6 +713,56 @@ and models are listed; the others (about 481,000 for 1.60) are left out of the l
 
 *Status:* open.
 
+### Animations kept in `.anim` files do not play yet (other versions)
+
+*What happens:* a 1.60 model keeps some of its animations in separate `.anim` files. The 3D view of the read-only
+window lists them with their length, but the model stands still while one of them is chosen. Measured on the 1.60
+client: 5,639 of the 43,243 animations of the creature models are kept that way (usually the rarer ones; *Stand*,
+*Walk*, *Run* and the attacks are mostly in the model). Animations that share another one's keys play.
+
+*Who is affected:* anyone watching the animations of 1.60 creatures.
+
+*Workaround:* pick an animation whose keys are in the model: `wds models anims <model> --version <client>` says where
+each one is (*model*, or *.anim* with its FileDataID).
+
+*Status:* open (the `.anim` files and the skeleton files of character models come next).
+
+### Particles, ribbons and glow layers of other versions' models are not drawn
+
+*What happens:* the 3D view of another version draws the mesh and its textures, but not its particle effects, ribbons
+and lights (their records changed after 1.12). A part drawn with a reflection or a glow on top of its texture shows
+its texture only, and a blend mode 1.12 does not have (7) is drawn as additive. The model statistics say what was left
+out or approximated for each model.
+
+*Who is affected:* anyone comparing effects or shiny weapons and armour of 1.60 with 1.12.
+
+*Workaround:* none in the app yet.
+
+*Status:* open.
+
+### Player characters and NPC customization of other versions are not shown
+
+*What happens:* the read-only window lists no player races, and a humanoid NPC of 1.60 shows its baked texture with
+its model's default parts: its hair, face and clothes choices are not applied (they use the customization tables of
+the newer clients).
+
+*Who is affected:* anyone looking at 1.60 NPCs or player models.
+
+*Workaround:* none in the app yet.
+
+*Status:* open (planned with the characters).
+
+### Buildings of other versions are not shown in 3D
+
+*What happens:* a game object of another version whose model is a building (WMO) shows its files, but its 3D view
+says *this is a building*. Measured on the 1.60 client: 10 of 457 sampled game object models are buildings.
+
+*Who is affected:* anyone looking at doors, gates and other building-like objects of 1.60.
+
+*Workaround:* none in the app yet.
+
+*Status:* open (buildings of other versions come with their maps).
+
 ### "Blizzard archives only" knows three releases
 
 *What happens:* the app knows which patch archives Blizzard shipped with 1.12.1, 2.4.3 and 3.3.5a. For any other
@@ -855,7 +905,8 @@ changes it; the terrain pop-out cannot save a picture.
 
 ### Each closed 3D window leaves two small handles behind
 
-*What happens:* every 3D view that closes (a model or terrain pop-out window, the three views of a compare window)
+*What happens:* every 3D view that closes (a model or terrain pop-out window, the three views of a compare window, the
+read-only window of another version with its 3D view)
 leaves two Windows handles (a named shared-memory section and a mutex, both named after the same GUID) and about
 110 to 220 KB of memory behind. The app's own resources come back (the GL contexts, textures and buffers it counts, the
 windows and their view models), so the rest happens below the app, in the OpenGL to Direct3D bridge of the 3D control

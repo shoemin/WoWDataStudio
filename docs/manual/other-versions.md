@@ -128,7 +128,8 @@ Then the files have their names, and wildcards work.
 
 A modern client, such as the "1.60" Classic client (`_classic_beta_`, build 1.60.1.70450), can be opened the way your
 1.12 game opens: a Browse list of its creatures, items, game objects, spell effects, textures and world models, the
-details of each (where it comes from, its files, its textures) and the texture viewer. It opens *read only*, in a
+details of each (where it comes from, its files, its textures), the texture viewer and the 3D view of its models. It
+opens *read only*, in a
 window of its own next to your 1.12 window, so you can look at both side by side. Nothing in the client's folder is
 changed, and your 1.12 game and your changes are not involved.
 
@@ -176,7 +177,7 @@ entry with:
 A model's own textures are read when you click the entry. Textures the game chooses at run time (the display's skins)
 are counted in the facts.
 
-![A boar of the 1.60 client: its display, its files with FileDataID, name and state, the skin in the viewer](../screenshots/145_versions_open_creature.png)
+![A boar of the 1.60 client: its display, its files with FileDataID, name and state, the top of its 3D view](../screenshots/145_versions_open_creature.png)
 
 ![An item the 1.60 client names, with its model and textures](../screenshots/146_versions_open_item.png)
 
@@ -188,6 +189,40 @@ next to it: a texture of another version is not imported back into your game thi
 [update catalog](#the-update-catalog-picking-1.60-updates-for-your-game) brings 1.60 textures into your game).
 
 ![The INV_Sword_04 icon of 1.60 in the texture viewer, and what uses it](../screenshots/147_versions_open_texture.png)
+
+### 3D models
+
+When the entry has a model (a creature display, an item, a game object, a spell effect, a model under `World\`), the
+details show it under **3D VIEW**, with the controls of your game's [3D model viewer](model-viewer.md): turn and zoom
+with the mouse, the animations, the level of detail, the geosets, the background, **Save image...**.
+
+* *Creatures*: **Displays using this model (33)** lists every display of the model with its skin; pick one to see the
+  model with that skin. A humanoid NPC shows its baked texture.
+* *Items*: **Item displays using this model (16)** lists the item displays with their texture. An item with a model
+  per race and sex shows its first model.
+* **Open in new window** shows the model in a window of its own, as in your game's Browse tab: it follows what you
+  click in this window, or keeps its model when pinned.
+* **Compare two skins (3D)** shows two displays of the model side by side, with the same animation.
+* The animations have the names of your 1.12 game for the same animation numbers (*Stand*, *Walk*...); the others are
+  called *Anim* and their number. Without a 1.12 game set, every animation is called that way.
+* **Model statistics** say which format was read (1.60 models are a newer kind of model file than 1.12's: they keep
+  their parts in separate files, found by FileDataID) and, under the numbers, what the app left out or drew
+  approximately.
+
+![The boar of the 1.60 client in the 3D view, with the skin of its display](../screenshots/148_versions_open_creature_3d.png)
+
+![The Worn Shortsword of the 1.60 client in the 3D view, with its item texture](../screenshots/149_versions_open_item_3d.png)
+
+Not shown yet (the statistics say it for each model):
+
+* Animations kept in separate `.anim` files are listed with their length but do not move the model yet (most
+  creatures of 1.60 keep their rarer animations that way; *Stand*, *Walk*, *Run* and the attacks are usually in the
+  model).
+* Particle effects and ribbons (fire, glows, trails), and the models' lights.
+* Shine and glow layers: a part drawn with a reflection or a glow on top of its texture shows its texture only.
+* Player characters and the hair, faces and clothes of humanoid NPCs (they show their baked texture and their default
+  parts).
+* Buildings (WMO): the 3D view says *this is a building*; buildings come with the maps.
 
 ### Locked records and names
 
@@ -353,8 +388,9 @@ What an import writes:
 
 ## Not yet
 
-* Another version opened read only shows Browse and textures. Its 3D models, maps, player characters and "Used in game"
-  are planned, not there yet; 2.4.3 and 3.3.5a (MPQ clients) open in this tab only.
+* Another version opened read only shows Browse, textures and 3D models. Its maps, player characters, animations kept
+  in `.anim` files, particle effects, buildings in 3D and "Used in game" are planned, not there yet; 2.4.3 and 3.3.5a
+  (MPQ clients) open in this tab only.
 * Most columns of the modern clients' data tables have no names yet.
 * Maps convert from 1.60 to 1.12 only: 1.12 to 1.60, and maps of 2.x and 3.x, are planned. The models and buildings
   1.12 does not have are left out (their conversion is planned), see [Known issues](known-issues.md#other-versions).
@@ -369,5 +405,6 @@ What an import writes:
 `wds versions find`, `info`, `files`, `extract`, `tables`, `rows`, `compare`, `convert-map`, `updates`, `update-info` and
 `import-updates` do everything this tab does, and `wds settings set other-clients <folder>` sets the folder; see
 [The command line](command-line.md#other-versions-experimental). `wds versions open <client>` opens another version
-read only, and the commands that read take `--version <client>`: `wds find search boar --version _classic_beta_`; see
-[Another version, read only](command-line.md#another-version-read-only).
+read only, and the commands that read take `--version <client>`: `wds find search boar --version _classic_beta_`,
+`wds models info cdisplay:503 --version _classic_beta_`, `wds models render cdisplay:503 boar.png --version _classic_beta_`;
+see [Another version, read only](command-line.md#another-version-read-only).

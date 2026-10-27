@@ -1,6 +1,7 @@
 # Opening another client version the way 1.12 opens (read only): design
 
-Status: **design, not implemented** (2026-10-27). First target: the modern Classic "1.60" beta
+Status: **design** (2026-10-27); **M1 (Browse, textures) and M2 (models) implemented** (2026-10-27; see the
+CHANGELOG); M3-M7 not yet. First target: the modern Classic "1.60" beta
 (`_classic_beta_`, `WowB.exe` 1.60.1.70450, CASC) from `G:\WoW Clients and Patches\Clients\BattleNet snapshot 2026-10-20`.
 Later: 2.4.3 / 3.3.5a (MPQ), Classic Era 1.15.x and Retail (CASC).
 
