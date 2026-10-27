@@ -14,7 +14,7 @@ namespace WoWDataStudio.Rendering;
 /// skeleton, bounding box, wireframe). All methods must run with the GL context current (inside the viewport's render
 /// callback).
 /// </summary>
-public sealed class ModelRenderer : IDisposable
+public sealed partial class ModelRenderer : IDisposable
 {
     private int _modelProg, _lineProg;
     private int _vao, _vbo;
@@ -297,6 +297,8 @@ public sealed class ModelRenderer : IDisposable
         if (a == null) return;
         ComputeBones(scene, a, cam);
         DrawModel(scene, a, view, viewProj, false);
+        // M3: the particles and ribbons of another version's model (a path of its own; 1.12 models have no Modern info)
+        if (a.Model.Modern?.Effects is { } fx) DrawEffects(scene, a, fx, cam, viewProj);
         if (scene.Wireframe) DrawModel(scene, a, view, viewProj, true);
         if (scene.ShowBounds) DrawBounds(a, viewProj);
         if (scene.ShowBones) DrawSkeleton(a, viewProj);
@@ -398,6 +400,9 @@ public sealed class ModelRenderer : IDisposable
                 float alphaRef = blend switch { 0 => -1f, 1 => alpha * 224f / 255f, _ => 1f / 255f };
                 GL.Uniform1(U(_modelProg, "uAlphaRef"), alphaRef);
                 var (en, src, dst) = BlendFactors(blend);
+                // M3: a material of another version in blend mode 7 ("blend add", stored as 4 in the 1.12 shape)
+                if (m.Modern is { } mi && b.Unit.RenderFlags < mi.MaterialBlends.Length && mi.MaterialBlends[b.Unit.RenderFlags] == 7)
+                    (en, src, dst, _) = ModernBlendFactors(7);
                 if (en)
                 {
                     GL.Enable(EnableCap.Blend);
@@ -628,6 +633,7 @@ public sealed class ModelRenderer : IDisposable
         GlTracker.DeleteTexture(_magenta);
         GlTracker.DeleteProgram(_modelProg);
         GlTracker.DeleteProgram(_lineProg);
+        DisposeEffects();
         _init = false;
         _uploaded = null;
     }

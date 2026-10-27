@@ -38,15 +38,25 @@ public sealed class ModelScene
             _view = 0;
             _seqTime = 0;
             _sequence = value == null ? 0 : DefaultSequence(value.Model);
+            EnsureKeys();
             Version++;
             Raise();
         }
+    }
+
+    /// <summary>M3: a sequence of another version's model whose keys are in an .anim file is loaded when it is chosen
+    /// (once; <see cref="WoWData.Core.M2.Modern.ModernAnimations"/> keeps the keys within its budget). Your 1.12 game's
+    /// models have no such sequences.</summary>
+    private void EnsureKeys()
+    {
+        if (_asset?.Model.Modern?.Animations is { } ext) ext.Ensure(_sequence);
     }
 
     /// <summary>Swap in a rebuilt asset of the same model (new textures) keeping the animation and detail level.</summary>
     public void ReplaceAsset(ModelAsset asset)
     {
         _asset = asset;
+        EnsureKeys();
         Version++;
         Raise();
     }
@@ -79,6 +89,7 @@ public sealed class ModelScene
         set
         {
             _sequence = _asset == null || _asset.Model.Sequences.Length == 0 ? 0 : Math.Clamp(value, 0, _asset.Model.Sequences.Length - 1);
+            EnsureKeys();
             _seqTime = 0;
             Raise();
         }
@@ -104,7 +115,8 @@ public sealed class ModelScene
     public Vector3 Background { get => _background; set { _background = value; Raise(); } }
 
     /// <summary>True while something moves (an animation plays, or global sequences run).</summary>
-    public bool NeedsContinuousRedraw => _asset != null && _playing && (Duration > 0 || _asset.Model.GlobalSequences.Length > 0 || _asset.Model.TextureTransforms.Length > 0);
+    public bool NeedsContinuousRedraw => _asset != null && _playing && (Duration > 0 || _asset.Model.GlobalSequences.Length > 0 || _asset.Model.TextureTransforms.Length > 0 ||
+                                                                       _asset.Model.Modern?.Effects != null);
 
     /// <summary>Advance the clock by real time (seconds); loops the sequence.</summary>
     public void Advance(double seconds)

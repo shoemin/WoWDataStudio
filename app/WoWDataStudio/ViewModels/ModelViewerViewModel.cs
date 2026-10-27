@@ -912,7 +912,8 @@ public sealed partial class ModelViewerViewModel : ObservableObject
         if (s.ReplayMax > 0) parts.Add($"repeats {s.ReplayMin}-{s.ReplayMax}");
         var roles = AnimationRoles.Of(s.AnimId);
         AnimationInfo = $"{s.Name} (animation {s.AnimId}): {string.Join(", ", parts)}." + (roles.Count > 0 ? $" The game plays it for: {string.Join("; ", roles)}." : "") +
-                        (cat?.FallbackText(s.AnimId) is { } fb ? $" Without it the game plays {fb}." : "");
+                        (cat?.FallbackText(s.AnimId) is { } fb ? $" Without it the game plays {fb}." : "") +
+                        ExternalKeysText(Scene.Asset?.Model, si);
         var ev = r.Events.SelectMany(e => e.Triggers.Where(t => t.Sequence == si).Select(t => (e.Code, e.Meaning, t.Time))).OrderBy(x => x.Time).ToList();
         EventsInfo = ev.Count == 0 ? "" : "Events: " + string.Join("; ", ev.Select(x => $"{x.Code} {x.Meaning} at {x.Time / 1000.0:0.00} s"));
     }
@@ -938,6 +939,8 @@ public sealed partial class ModelViewerViewModel : ObservableObject
             // M2: a model of another version (the modern reader's report is under the numbers)
             AddStat("Format", $"M2 {mi.Version} (MD21)");
             AddStat("Views read", $"{mi.ViewsRead} of {mi.SkinProfiles}");
+            if (mi.ExternalSequences > 0) AddStat("In .anim files", $"{mi.ExternalSequences} (loaded when chosen)");
+            if (mi.Effects is { } fx) AddStat("Particles / ribbons", $"{fx.Particles.Count} / {fx.Ribbons.Count} (drawn approximately)");
         }
         else AddStat("Format", $"M2 version 0x{m.Version:x}");
         FormatNotes = ModernNotes(m);

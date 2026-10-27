@@ -102,6 +102,36 @@ internal static class Shaders
         }
         """;
 
+    /// <summary>M3: the particles and ribbons of another version's models (position, texture coordinates, colour).</summary>
+    public const string EffectVs = """
+        #version 330 core
+        layout(location = 0) in vec3 aPos;
+        layout(location = 1) in vec2 aUv;
+        layout(location = 2) in vec4 aColor;
+        uniform mat4 uViewProj;
+        out vec2 vUv;
+        out vec4 vColor;
+        void main() {
+            gl_Position = uViewProj * vec4(aPos, 1.0);
+            vUv = aUv;
+            vColor = aColor;
+        }
+        """;
+
+    public const string EffectFs = """
+        #version 330 core
+        in vec2 vUv;
+        in vec4 vColor;
+        uniform sampler2D uTex;
+        uniform float uAlphaRef;    // < 0: no alpha test
+        out vec4 frag;
+        void main() {
+            vec4 c = texture(uTex, vUv) * vColor;
+            if (uAlphaRef >= 0.0 && c.a < uAlphaRef) discard;
+            frag = c;
+        }
+        """;
+
     public const string LineVs = """
         #version 330 core
         layout(location = 0) in vec3 aPos;

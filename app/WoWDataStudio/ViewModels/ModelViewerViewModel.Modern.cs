@@ -129,6 +129,21 @@ public sealed partial class ModelViewerViewModel
         return plan;
     }
 
+    /// <summary>M3: where the keys of another version's sequence are (" Its keys are in .anim file #123, read when you
+    /// chose it."), empty for the sequences in the model and for your 1.12 game.</summary>
+    private static string ExternalKeysText(M2Model? m, int s)
+    {
+        if (m?.Modern?.Animations is not { } ext || !ext.IsExternal(s)) return "";
+        var st = ext.Status(s);
+        return st.State switch
+        {
+            WoWData.Core.M2.Modern.ExternalState.Loaded => $" Its keys are in .anim file #{st.File}, read when you chose it.",
+            WoWData.Core.M2.Modern.ExternalState.NoFile => " Its keys would be in an .anim file, but the model names none: it stands still.",
+            WoWData.Core.M2.Modern.ExternalState.NotLoaded => $" Its keys are in .anim file #{st.File}.",
+            _ => $" Its keys are in .anim file #{st.File}, which cannot be used ({st.Why}): it stands still.",
+        };
+    }
+
     /// <summary>The modern reader's report of a model (the "Model statistics" note under the numbers).</summary>
     private static string ModernNotes(M2Model m)
     {
@@ -136,10 +151,13 @@ public sealed partial class ModelViewerViewModel
         var lines = new List<string>
         {
             $"Read from another version: {mi.FormatText}; skin file{(mi.ViewsRead == 1 ? "" : "s")} {string.Join(", ", mi.SkinFiles.Take(Math.Max(1, mi.ViewsRead)).Select(f => "#" + f))}.",
-            $"Animations: {mi.InlineSequences} in the model" + (mi.AliasSequences > 0 ? $", {mi.AliasSequences} sharing another one's keys" : "") +
-            (mi.ExternalSequences > 0 ? $", {mi.ExternalSequences} kept in .anim files (listed with their length, not played yet)" : "") + ".",
         };
-        if (mi.NotShown.Count > 0) lines.Add("Not shown yet: " + string.Join("; ", mi.NotShown.Where(x => !x.Contains(".anim", StringComparison.Ordinal))) + ".");
+        if (mi.SkeletonFile != 0)
+            lines.Add($"Skeleton: #{mi.SkeletonFile}" + (mi.SkeletonParentFile != 0 ? $", its parent #{mi.SkeletonParentFile}" + (mi.ParentSequences > 0 ? $" ({mi.ParentSequences} animations from the parent)" : "") : "") +
+                      (mi.SkeletonRead ? "" : " (not read)") + ".");
+        lines.Add($"Animations: {mi.InlineSequences} in the model" + (mi.SkeletonFile != 0 ? " and its skeleton" : "") + (mi.AliasSequences > 0 ? $", {mi.AliasSequences} sharing another one's keys" : "") +
+                  (mi.ExternalSequences > 0 ? $", {mi.ExternalSequences} kept in .anim files (read when you choose one)" : "") + ".");
+        if (mi.NotShown.Count > 0) lines.Add("Not shown: " + string.Join("; ", mi.NotShown) + ".");
         if (mi.Approximated.Count > 0) lines.Add("Drawn approximately: " + string.Join("; ", mi.Approximated) + ".");
         if (mi.Ignored.Count > 0) lines.Add("Left out: " + string.Join("; ", mi.Ignored) + ".");
         lines.AddRange(mi.Notes);

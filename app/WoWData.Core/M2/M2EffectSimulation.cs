@@ -77,17 +77,30 @@ public sealed class M2EffectSimulation
 
     private float R(float lo, float hi) => lo + (float)_rng.NextDouble() * (hi - lo);
 
-    /// <summary>A float track's value at the time (linear between keys), else <paramref name="fallback"/>.</summary>
+    /// <summary>
+    /// A float track's value at the time (linear between keys). An animation without keys of its own takes the track's
+    /// first key, as the 1.12 client does for an empty range (M2Model_FindTrackKeys: key[first]); MEASURED on the 1.60
+    /// copy, many emitters are keyed in one animation only (Taerar's 39 emitters: only in Run); a track without any key
+    /// gives <paramref name="fallback"/>.
+    /// </summary>
     public static float Eval(M2Track<float> t, in M2Anim.Time time, uint[] gs, float fallback)
     {
-        if (!M2Anim.FindKeys(t, time, gs, out int a, out int b, out float f)) return fallback;
+        if (!M2Anim.FindKeys(t, time, gs, out int a, out int b, out float f)) return t.HasKeys ? t.Values[0] : fallback;
         if (t.Interpolation == 0 || a == b) return t.Values[a];
         return t.Values[a] + (t.Values[b] - t.Values[a]) * f;
     }
 
-    /// <summary>A step track's value at the time (the key at or before it), else <paramref name="fallback"/>.</summary>
+    /// <summary>A vector track's value with the same rule as <see cref="Eval(M2Track{float}, in M2Anim.Time, uint[], float)"/>.</summary>
+    public static Vector3 Eval(M2Track<Vector3> t, in M2Anim.Time time, uint[] gs, Vector3 fallback) =>
+        M2Anim.FindKeys(t, time, gs, out _, out _, out _) ? M2Anim.Eval(t, time, gs, fallback) : t.HasKeys ? t.Values[0] : fallback;
+
+    /// <summary>A fixed16 track (0x7fff = 1) with the same rule.</summary>
+    public static float EvalFixed16(M2Track<short> t, in M2Anim.Time time, uint[] gs, float fallback) =>
+        M2Anim.FindKeys(t, time, gs, out _, out _, out _) ? M2Anim.EvalFixed16(t, time, gs, fallback) : t.HasKeys ? t.Values[0] / 32767f : fallback;
+
+    /// <summary>A step track's value at the time (the key at or before it), with the same rule.</summary>
     public static T Step<T>(M2Track<T> t, in M2Anim.Time time, uint[] gs, T fallback) where T : struct =>
-        M2Anim.FindKeys(t, time, gs, out int a, out _, out _) ? t.Values[a] : fallback;
+        M2Anim.FindKeys(t, time, gs, out int a, out _, out _) ? t.Values[a] : t.HasKeys ? t.Values[0] : fallback;
 
     /// <summary>
     /// Advances every emitter and ribbon by <paramref name="dt"/> seconds at the animation time
@@ -108,7 +121,7 @@ public sealed class M2EffectSimulation
         var e = _fx.Particles[i];
         var list = _particles[i];
         var bone = BoneOf(bones, e.Bone);
-        var gravity = M2Anim.Eval(e.Gravity, time, _gs, Vector3.Zero);
+        var gravity = Eval(e.Gravity, time, _gs, Vector3.Zero);
         float drag = Math.Clamp(e.Drag, -1f, 10f);
         // move and age the live particles; the dead ones go
         int w = 0;

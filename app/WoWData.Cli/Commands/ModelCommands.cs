@@ -92,7 +92,7 @@ internal static class ModelCommands
             Path = "models info",
             Summary = "a model's statistics, its displays and skins, who a mesh change affects, your edit and its checks",
             Args = new[] { "<model>" },
-            Details = "The model is a path (Creature\\Boar\\Boar.m2) or an entry (\"Mottled Boar\", creature:3098, cdisplay:503). With --version: another version's model (a path, #FileDataID or an entry), the file format read, its chunks, skin and texture files, and what is not shown yet.",
+            Details = "The model is a path (Creature\\Boar\\Boar.m2) or an entry (\"Mottled Boar\", creature:3098, cdisplay:503). With --version: another version's model (a path, #FileDataID or an entry), the file format read, its chunks, skin, texture, skeleton and animation files, its particle emitters and ribbons, and what is drawn approximately or not shown.",
             Examples = new[] { "wds models info Creature\\Boar\\Boar.m2", "wds models info \"Mottled Boar\" --json", "wds models info cdisplay:503 --version _classic_beta_" },
             Run = async inv =>
             {
@@ -417,7 +417,8 @@ internal static class ModelCommands
                 new OptionSpec("original", null, "the game's model even when you edited it"),
             },
             Details = "The names are the actions of \"wds models export --with-skeleton\" (\"Stand [2]\" is the second Stand variation). " +
-                      "\"Used for\" comes from the client's own animation tests; emotes from Emotes / EmotesText, spells from Spell -> SpellVisual -> SpellVisualKit.",
+                      "\"Used for\" comes from the client's own animation tests; emotes from Emotes / EmotesText, spells from Spell -> SpellVisual -> SpellVisualKit. " +
+                      "With --version: where each animation's keys are (the model, its skeleton file, or an .anim file by FileDataID) and, for the ones in .anim files, whether they load and play.",
             Examples = new[] { "wds models anims Creature\\Boar\\Boar.m2", "wds models anims \"Mottled Boar\" --json", "wds models anims Character\\Orc\\Male\\OrcMale.m2 --sequence EmoteDance", "wds models anims Creature\\Boar\\Boar.m2 --version _classic_beta_" },
             Run = async inv =>
             {

@@ -123,7 +123,9 @@ public class VersionOpenCliTests : IDisposable
         Assert.Equal(12, f.GetProperty("viewTriangles")[0].GetInt32());
         Assert.Equal((1, 1), (f.GetProperty("inlineSequences").GetInt32(), f.GetProperty("externalSequences").GetInt32()));
         Assert.Equal((8, 12, 1), (d.GetProperty("stats").GetProperty("vertices").GetInt32(), d.GetProperty("stats").GetProperty("triangles").GetInt32(), d.GetProperty("stats").GetProperty("bones").GetInt32()));
-        Assert.Contains(d.GetProperty("ignored").EnumerateArray(), x => x.GetString()!.StartsWith("AFID", StringComparison.Ordinal));
+        // M3: the AFID chunk is used (the .anim files are read when an animation is chosen)
+        Assert.Contains(f.GetProperty("chunks").EnumerateArray(), x => x.GetProperty("magic").GetString() == "AFID" && x.GetProperty("used").GetBoolean());
+        Assert.Equal(0, d.GetProperty("effects").GetProperty("particles").GetInt32());
         // creature displays 1 and 2 (a skin, an NPC look) and item display 20 (its model texture)
         Assert.Equal(new[] { "creature", "creature", "item" }, d.GetProperty("looks").EnumerateArray().Select(x => x.GetProperty("kind").GetString()));
         var text = Run("models", "info", CubeName, "--version", _flavor);
@@ -136,7 +138,23 @@ public class VersionOpenCliTests : IDisposable
         Assert.Equal(new[] { "Anim0", "Anim4" }, list.Select(x => x.GetProperty("name").GetString()));
         Assert.Equal(new[] { "model", $".anim #{CubeAnim}" }, list.Select(x => x.GetProperty("where").GetString()));
         Assert.Equal(new[] { 1000, 500 }, list.Select(x => x.GetProperty("durationMs").GetInt32()));
+        // M3: the external one loads (its .anim file read) with its 4 keys
+        Assert.Equal(new[] { false, true }, list.Select(x => x.GetProperty("external").GetBoolean()));
+        Assert.Equal((CubeAnim, true, 4), (list[1].GetProperty("animFile").GetUInt32(), list[1].GetProperty("loads").GetBoolean(), list[1].GetProperty("keys").GetInt32()));
+        Assert.Equal((1, 1), (anims.Data.GetProperty("external").GetProperty("sequences").GetInt32(), anims.Data.GetProperty("external").GetProperty("load").GetInt32()));
+        var animsText = Run("models", "anims", CubeName, "--version", _flavor);
+        Assert.Contains("1 kept in .anim files, 1 of them load and play", animsText.Out);
+        Assert.Contains("loads (4 keys)", animsText.Out);
         Assert.Equal(ExitCode.NotFound, Run("models", "anims", CubeName, "--sequence", "Moonwalk", "--version", _flavor).Code);
+        // M3: a model whose bones and animations are in a skeleton file (and its parent), and one with effects
+        var skAnims = Run("models", "anims", "#" + CubeSkelModel, "--version", _flavor, "--json");
+        Assert.True(skAnims.Code == 0, skAnims.ToString());
+        Assert.Equal(new[] { "skeleton", $".anim #{CubeSkelAnim}", "skeleton" }, skAnims.Data.GetProperty("animations").EnumerateArray().Select(x => x.GetProperty("where").GetString()));
+        Assert.Equal((CubeSkel, CubeParentSkel), (skAnims.Data.GetProperty("external").GetProperty("skeletonFile").GetUInt32(), skAnims.Data.GetProperty("external").GetProperty("skeletonParentFile").GetUInt32()));
+        var fxInfo = Run("models", "info", "#" + CubeFx, "--version", _flavor, "--json");
+        Assert.True(fxInfo.Code == 0, fxInfo.ToString());
+        Assert.Equal((1, 1), (fxInfo.Data.GetProperty("effects").GetProperty("particles").GetInt32(), fxInfo.Data.GetProperty("effects").GetProperty("ribbons").GetInt32()));
+        Assert.Contains("effects: 1 particle emitter, 1 ribbon (drawn approximately)", Run("models", "info", "#" + CubeFx, "--version", _flavor).Out);
 
         var sk = Run("models", "skeleton", "#" + CubeModel, "--version", _flavor, "--json");
         Assert.Equal(0, sk.Code);
