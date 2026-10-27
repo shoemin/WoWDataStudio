@@ -83,7 +83,7 @@ public class VersionOpenCliTests : IDisposable
     public void VersionsOpenPrintsEntriesNamesAndLockedRecords()
     {
         var r = Run("versions", "open", _flavor, "--json");
-        Assert.Equal(0, r.Code);
+        Assert.True(r.Code == 0, r.ToString());
         var d = r.Data;
         Assert.Equal("1.60.1.70450", d.GetProperty("version").GetString());
         Assert.True(d.GetProperty("readOnly").GetBoolean());

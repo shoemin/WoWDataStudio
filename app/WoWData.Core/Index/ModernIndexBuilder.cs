@@ -451,7 +451,19 @@ public static class ModernIndexBuilder
         Meta("counts", JsonSerializer.Serialize(result.Counts));
         db.Close();
         SqliteConnection.ClearAllPools();
-        File.Move(tmp, path, overwrite: true);
+        // a just-written file can be held for a moment by another program (a virus scanner): try again before giving up
+        for (int attempt = 0; ; attempt++)
+        {
+            try
+            {
+                File.Move(tmp, path, overwrite: true);
+                break;
+            }
+            catch (IOException) when (attempt < 5)
+            {
+                Thread.Sleep(200 * (attempt + 1));
+            }
+        }
         Report(progress, StageNames.Length, 1, $"{result.Seconds} s");
     }
 
