@@ -518,8 +518,9 @@ render it. See [Models and Blender](model-export-import.md) and [Skeleton and an
 A model's statistics, its displays and skins, who a mesh change affects, your edit and its checks.
 
 The model is a path (Creature\Boar\Boar.m2) or an entry ("Mottled Boar", creature:3098, cdisplay:503). With
-`--version`: another version's model (a path, `#FileDataID` or an entry), the file format read, its chunks, skin and
-texture files, and what is not shown yet (see [Another version, read only](#another-version-read-only)).
+`--version`: another version's model (a path, `#FileDataID` or an entry), the file format read, its chunks, skin,
+texture, skeleton and animation files, its particle emitters and ribbons, and what is drawn approximately or not shown
+(see [Another version, read only](#another-version-read-only)).
 
 ```
 wds models info <model>
@@ -641,6 +642,10 @@ wds models addon --install --yes
 #### wds models anims
 
 A model's animations: names, variations, loop, chance, timing, blend, move speed, events and what the game plays them for (emotes, spells, combat, mounts).
+
+The names are the actions of `wds models export --with-skeleton` ("Stand [2]" is the second Stand variation). With
+`--version`: where each animation's keys are (the model, its skeleton file, or an `.anim` file by FileDataID) and, for
+the ones in `.anim` files, whether they load and play.
 
 ```
 wds models anims <model> [options]
@@ -3043,7 +3048,9 @@ wds find files Interface\Icons\INV_Sword_* --version _classic_beta_
 wds textures export Interface\Icons\INV_Sword_04.blp --out sword.png --version _classic_beta_
 wds models info cdisplay:503 --version _classic_beta_
 wds models anims Creature\Boar\Boar.m2 --version _classic_beta_
+wds models anims cdisplay:15363 --version _classic_beta_
 wds models render cdisplay:503 boar160.png --version _classic_beta_
+wds models render cdisplay:15363 roar.png --sequence EmoteRoar --time 1600 --version _classic_beta_
 ```
 
 * Files are named by path, or by their FileDataID as `#123456` when no name is known; `wds find info` lists every file
@@ -3055,11 +3062,15 @@ wds models render cdisplay:503 boar160.png --version _classic_beta_
   versions yet (maps, Used in game, the model export) refuse the same way. The maps of other versions come later.
 * `wds models info` reads the model of another version (a path, `#FileDataID` or an entry) and prints, besides the
   statistics and its displays, the file format read (1.60: version 272 or 274, its parts in separate files), its skin
-  and texture files by FileDataID, where its animations are (in the model, or in `.anim` files: listed, not played
-  yet), what is left out and what is drawn approximately. `wds models anims` names the animations as your 1.12 game
-  does for the same numbers (`Anim<number>` for the others, or for all without a 1.12 game set) and says where each
-  one's keys are; `wds models render` draws it with its display's skin or item texture (`--display`; `--original` does
-  not apply). The picture is never written into the other client's folder (exit code 4).
+  and texture files by FileDataID, its skeleton file and the parent skeleton (character-style models), where its
+  animations are (in the model or its skeleton, or in `.anim` files read when an animation is chosen), its particle
+  emitters and ribbons, what is left out and what is drawn approximately. `wds models anims` names the animations as
+  your 1.12 game does for the same numbers (`Anim<number>` for the others, or for all without a 1.12 game set) and says
+  where each one's keys are; for the ones in `.anim` files it reads each file and says whether it loads (*loads (4,357
+  keys)*) or why not (*no .anim file named*, *cannot be read: ...*), and `--json` gives `external`, `animFile`, `loads`
+  and `keys` per animation. `wds models render` draws it with its display's skin or item texture (`--display`;
+  `--original` does not apply), with any animation (`--sequence`, also the ones in `.anim` files) and its particle
+  effects. The picture is never written into the other client's folder (exit code 4).
 
 ### Help and the command line itself
 
@@ -3365,6 +3376,8 @@ app's tests fail when the app, the command line and this table differ.
 | versions.window-export | **Export texture as PNG...** | `wds textures export` |
 | versions.window-3d | **3D VIEW** | `wds models render` |
 | versions.window-model-info | **Model statistics** | `wds models info` |
+| versions.window-anim-files | **In .anim files** | `wds models anims` |
+| versions.window-effects | **Particles / ribbons** | `wds models info` |
 | versions.window-popout | **Open in new window** | (app only: viewing: the 3D view of another version in a window of its own ("wds models render --version" draws a picture)) |
 | versions.window-compare | **Compare two skins (3D)** | (app only: viewing: two live 3D views side by side (render each skin with "wds models render --display --version")) |
 | help.manual | **Help > User manual** | `wds manual` |

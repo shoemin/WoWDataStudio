@@ -296,6 +296,9 @@ public static class FeatureRegistry
         // M2: models of another version in the read-only window (the modern reader; models info / anims / skeleton / render --version)
         new("versions.window-3d", "Other versions", "3D VIEW", "models render") { VersionAware = true },
         new("versions.window-model-info", "Other versions", "Model statistics", "models info") { VersionAware = true },
+        // M3: animations kept in .anim files (read when chosen), skeleton files, particles and ribbons
+        new("versions.window-anim-files", "Other versions", "In .anim files", "models anims") { VersionAware = true },
+        new("versions.window-effects", "Other versions", "Particles / ribbons", "models info") { VersionAware = true },
         new("versions.window-popout", "Other versions", "Open in new window", "", FeatureFront.GuiOnly, "viewing: the 3D view of another version in a window of its own (\"wds models render --version\" draws a picture)"),
         new("versions.window-compare", "Other versions", "Compare two skins (3D)", "", FeatureFront.GuiOnly, "viewing: two live 3D views side by side (render each skin with \"wds models render --display --version\")"),
 

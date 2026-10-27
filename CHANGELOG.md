@@ -87,8 +87,42 @@ recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
     managed heap flat, the GL contexts come back, handles +1.93 per cycle: the two handles each closed GL view leaves,
     see Known issues).
   * Not yet (see [Known issues](docs/manual/known-issues.md#other-versions)): animations in `.anim` files and the
-    skeleton files of character models, particles and ribbons, the shader combiners (M3), buildings in 3D (with the
-    maps, M4), player characters and NPC customization (M6).
+    skeleton files of character models, particles and ribbons, the shader combiners (M3, below), buildings in 3D (with
+    the maps, M4), player characters and NPC customization (M6).
+
+* **Every animation of another version plays; particles, ribbons and shine layers are drawn (experimental, M3 of
+  `docs\research\OPEN_OTHER_VERSIONS_DESIGN.md`).** In the read-only window's 3D view
+  ([Other versions](docs/manual/other-versions.md#animations-in-separate-files)):
+  * *Animations in `.anim` files*: when you pick one, its file is read (AFID: raw `.anim` files, or chunked ones with
+    AFM2 / AFSB / AFSA parts) and its keys are put onto the model's timeline, so the same animation code plays it
+    (`ModernAnimations`). At most 8 MB of keys per model stay in memory; the animations chosen longest ago are let go
+    and read again when chosen. Measured on 1.60.1.70450: 6,523 of the 6,529 creature animations kept in `.anim` files
+    play (5,639 named by the models, 890 by skeleton files; 2 name no file, 4 a file without keys); all 48,787
+    animations of the 998 creature models on this computer evaluate. Fixes the known issue "Animations kept in `.anim`
+    files do not play yet".
+  * *Skeleton files* (SKID `.skel`: SKS1, SKB1, SKA1, AFID, SKPD): the bones, animations and attachment points of the
+    22 character-style creature models, and the animations their parent skeleton adds (1,377 from the 4 parents in
+    the client; the child's own version of an animation wins; bones matched by their name hash).
+  * *Particles and ribbons*: the modern records (particle emitters of 0x1EC bytes, ribbons of 0xB0, every one of the
+    9,157 emitters and 867 ribbons of the creature and spell-effect models checked on the copy before the viewer used
+    them) are drawn by a new effect drawing of the 3D view of another version (`M2EffectSimulation`,
+    `ModelRenderer.Effects.cs`), with the modern blend modes (7 = *blend add*: one, one minus source alpha; materials in
+    mode 7 too). The 1.12 viewer still does not draw particles: it has no effect drawing, and its path is unchanged.
+    What is drawn approximately is listed per model (the statistics' notes, `wds models info`).
+  * *Shine and reflection layers*: the commonest combiners of the newer clients (shader ids 0x8000-0x8003, and the
+    second-layer mod2x / add below 0x8000) are drawn; 1,641 of the 1,845 two-layer texture units that showed their
+    first texture only now combine (their second texture: a reflection map, MEASURED by the names the client has).
+  * Command line: `wds models anims --version` says where each animation's keys are (the model, its skeleton, an
+    `.anim` file by FileDataID) and, for the ones in `.anim` files, whether they load (`external`, `animFile`, `loads`,
+    `keys` in `--json`); `wds models info --version` names the skeleton files and counts the effects;
+    `wds models render --version` draws any animation and the effects.
+  * Tests: the synthetic cube's Walk in an AFM2 `.anim`, a cube with a skeleton file and a parent, a cube with a
+    particle emitter and a ribbon (`SyntheticClients`, our own bytes; `M3ModernTests`: bone transforms at chosen times,
+    the budget, missing / locked / broken / empty files, the simulation, the scene), `VersionOpenCliTests`, the opt-in
+    `RealCopyM3Tests`. Screenshots 150 and 151 (148 and 149 again: the sword's reflection). The leak test's
+    `versions_window` view plays up to 8 animations from `.anim` files per cycle (Taerar, a character-style NPC with 54)
+    and runs the effects: 40 cycles, the managed heap flat (157.2 to 157.3 MB), the GL contexts come back, handles +1.93
+    per cycle (the two handles each closed GL view leaves, as before); at most 1.6 MB of keys loaded per model there.
 
 ### Fixed
 

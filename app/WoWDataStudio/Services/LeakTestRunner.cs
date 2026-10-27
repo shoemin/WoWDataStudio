@@ -886,7 +886,12 @@ public static class LeakTestRunner
         return _betaCopy != null;
     }
 
-    private static readonly string[] OtherSearches = { "boar", "inv_sword_04", "worn shortsword", "orcbonfire" };
+    // M3: Taerar (7 animations in .anim files, 39 particle emitters) and a character-style NPC (#1733758: a skeleton
+    // file with a parent, 54 animations in .anim files, more than the 8 MB budget together)
+    private static readonly string[] OtherSearches = { "boar", "inv_sword_04", "worn shortsword", "orcbonfire", "taerar", "1733758", "arcane_missile_lvl4" };
+
+    /// <summary>The most keys a model kept in one cycle (the budget plus its largest single animation at most).</summary>
+    public static long MaxAnimBytes { get; private set; }
 
     /// <summary>The 1.60 client opened read only in its own window (its index exists after the first cycle), a search,
     /// an entry with its details and texture (and, M2, its 3D view), then the window closed.</summary>
@@ -908,6 +913,21 @@ public static class LeakTestRunner
         if (vm.IsModelEntry) await ScreenshotRunner.Until(() => !vm.ModelViewer.IsLoading && (vm.ModelViewer.HasModel || vm.ModelViewer.Message.Length > 0), 60000);
         await ScreenshotRunner.Settle(150);
         string item = $"{q}: {vm.Results.Count} results, {vm.DetailTitle}{(vm.ModelViewer.HasModel ? $", 3D {System.IO.Path.GetFileName(vm.ModelViewer.ModelPath)}" : "")}";
+        // M3: play several animations kept in .anim files in turn (each read when chosen; the keys kept stay within the
+        // model's budget) and let the effects run
+        if (vm.ModelViewer.HasModel && vm.ModelViewer.Scene.Asset?.Model.Modern?.Animations is { } ext)
+        {
+            var mv = vm.ModelViewer;
+            var external = mv.Sequences.Where(s => ext.IsExternal(s.Index)).ToList();
+            mv.Playing = true;
+            for (int k = 0; k < Math.Min(8, external.Count); k++)
+            {
+                mv.SelectedSequence = external[(i * 8 + k) % external.Count];
+                await ScreenshotRunner.Settle(120);
+                MaxAnimBytes = Math.Max(MaxAnimBytes, ext.LoadedBytes);
+            }
+            item += $"; {external.Count} in .anim files, {ext.LoadedSequences.Count} loaded ({ext.LoadedBytes / 1024} KB, {ext.FilesRead} files read)";
+        }
         Watch(w, nameof(OtherVersionWindow));
         Watch(vm, nameof(OtherVersionWindowViewModel));
         Watch(vm.ModelViewer, "read-only window's ModelViewerViewModel");

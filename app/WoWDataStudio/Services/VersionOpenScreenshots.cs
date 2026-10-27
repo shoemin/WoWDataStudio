@@ -17,6 +17,8 @@ namespace WoWDataStudio.Services;
 ///   147_versions_open_texture    an interface icon of 1.60 in the texture viewer, and what uses it
 ///   148_versions_open_creature_3d  M2: the boar display in the 3D view (read by the modern reader, its skin)
 ///   149_versions_open_item_3d      M2: the Worn Shortsword in the 3D view with its item texture
+///   150_versions_open_anim_file    M3: Taerar's EmoteRoar, kept in an .anim file, read when chosen, paused at 1.6 s
+///   151_versions_open_particles    M3: the Arcane_Missile_Lvl4 spell effect with its particles (simulated)
 /// </summary>
 internal static class VersionOpenScreenshots
 {
@@ -57,7 +59,7 @@ internal static class VersionOpenScreenshots
         var folder = Environment.GetEnvironmentVariable("WDS_SCREENSHOT_OTHER_CLIENTS");
         if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder))
         {
-            ScreenshotRunner.Log("versions-open: WDS_SCREENSHOT_OTHER_CLIENTS is not set to a folder of client copies; pictures 144-149 skipped");
+            ScreenshotRunner.Log("versions-open: WDS_SCREENSHOT_OTHER_CLIENTS is not set to a folder of client copies; pictures 144-151 skipped");
             return;
         }
         var v = b.Versions;
@@ -109,6 +111,35 @@ internal static class VersionOpenScreenshots
             await Show3D(w, "the Worn Shortsword");
             Expect(vm.ModelViewer.ModelTextures.Any(t => t.Slot.StartsWith("object skin", StringComparison.Ordinal) && t.Path != null), "versions-open: the sword's item texture fills its slot");
             await ScreenshotRunner.Shot(w, outDir, "149_versions_open_item_3d");
+
+            // M3: an animation kept in an .anim file, read when it is chosen, paused in the middle
+            await Select(vm, "taerar", e => e.Key == "cdisplay:15363", "Taerar's display (15363)");
+            await Show3D(w, "Taerar");
+            var mv = vm.ModelViewer;
+            var roar = mv.Sequences.FirstOrDefault(x => x.Name == "EmoteRoar");
+            Expect(roar != null, "versions-open: Taerar lists EmoteRoar");
+            if (roar != null)
+            {
+                mv.SelectedSequence = roar;
+                mv.Playing = false;
+                mv.TimeMs = 1600;
+                Expect(mv.AnimationInfo.Contains(".anim file #", StringComparison.Ordinal) && mv.AnimationInfo.Contains("read when you chose it", StringComparison.Ordinal),
+                    "versions-open: the animation line says EmoteRoar's keys were read from its .anim file: " + mv.AnimationInfo);
+                var m = mv.Scene.Asset!.Model;
+                Expect(m.Modern?.Animations?.Status(roar.Index).State == WoWData.Core.M2.Modern.ExternalState.Loaded, "versions-open: EmoteRoar's .anim file is loaded");
+                // the 3D view and the animation line under it (where the keys are)
+                w.ModelBox.BringIntoView(new System.Windows.Rect(0, 0, Math.Max(1, w.ModelBox.ActualWidth), 800));
+                await ScreenshotRunner.Settle(900);
+                await ScreenshotRunner.Shot(w, outDir, "150_versions_open_anim_file");
+            }
+
+            // M3: a spell effect's particles and ribbons (simulated, paused after the preroll)
+            await Select(vm, "arcane_missile_lvl4", e => e.Name.Equals("Arcane_Missile_Lvl4", StringComparison.OrdinalIgnoreCase) && e.Key.StartsWith("spell:", StringComparison.Ordinal), "the Arcane_Missile_Lvl4 spell effect");
+            await Show3D(w, "Arcane_Missile_Lvl4");
+            Expect(vm.ModelViewer.Stats.Any(x => x.Label == "Particles / ribbons" && x.Value.Contains("drawn approximately", StringComparison.Ordinal)),
+                "versions-open: the statistics count the effect's particle emitters and ribbons");
+            Expect(vm.ModelViewer.FormatNotes.Contains("drawn by the viewer's own simulation", StringComparison.Ordinal), "versions-open: the notes say the effects are drawn approximately");
+            await ScreenshotRunner.Shot(w, outDir, "151_versions_open_particles");
 
             await Select(vm, "inv_sword_04", e => e.Kind == AssetKind.Texture, "the INV_Sword_04 icon");
             Expect(vm.Viewer.IsLoaded, "versions-open: the icon is shown in the texture viewer");

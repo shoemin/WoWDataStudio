@@ -213,13 +213,46 @@ with the mouse, the animations, the level of detail, the geosets, the background
 
 ![The Worn Shortsword of the 1.60 client in the 3D view, with its item texture](../screenshots/149_versions_open_item_3d.png)
 
-Not shown yet (the statistics say it for each model):
+#### Animations in separate files
 
-* Animations kept in separate `.anim` files are listed with their length but do not move the model yet (most
-  creatures of 1.60 keep their rarer animations that way; *Stand*, *Walk*, *Run* and the attacks are usually in the
-  model).
-* Particle effects and ribbons (fire, glows, trails), and the models' lights.
-* Shine and glow layers: a part drawn with a reflection or a glow on top of its texture shows its texture only.
+A 1.60 model keeps some of its animations in separate `.anim` files (usually the rarer ones: emotes, sleeping, special
+attacks; *Stand*, *Walk*, *Run* are mostly in the model). They play like the others: when you pick one, the app reads
+its file (a moment the first time) and the model moves. The line under the animation list says where the keys of the
+chosen animation are, for example *Its keys are in .anim file #474116, read when you chose it.* Measured on the 1.60
+client: 6,523 of the 6,529 creature animations kept that way play; 2 name no file and 4 name a file without keys, and
+those stand still (the line says so).
+
+The app keeps the animations you chose in memory, up to about 8 MB per model; when you pick more, the ones you chose
+longest ago are let go and read again if you pick them again.
+
+![Taerar of the 1.60 client playing EmoteRoar, an animation kept in an .anim file](../screenshots/150_versions_open_anim_file.png)
+
+Character-style models (the new player-race models that 1.60 uses for some NPCs) keep their bones, animations and
+attachment points in a *skeleton file* (`.skel`), sometimes with a parent skeleton that adds the shared animations. The
+app reads both: the notes under the statistics name them (*Skeleton: #1838699, its parent #1838505 (359 animations
+from the parent)*). When the parent is not in the client, only the skeleton's own animations are listed (the notes
+say so). Measured on the 1.60 client: 22 creature models have a skeleton file, all are read; 4 of their 13 parent
+skeletons are in the client.
+
+#### Particles and ribbons
+
+Particle effects (sparks, smoke, glows) and ribbons (trails) of 1.60 models are drawn: the app runs its own simulation
+of what the model describes (how many particles a second, their speed, direction, life, colour, size and texture over
+their life, the bone they follow), so they look close to the game's, not exactly the same. When the view is paused,
+the effect stops too; a model is shown with its effect already running (two seconds of it). **Model statistics**
+count them (**Particles / ribbons**) and, under the numbers, say what is drawn approximately for that model (for
+example *particles with several textures drawn with their first one*).
+
+![The Arcane_Missile_Lvl4 spell effect of the 1.60 client with its particles](../screenshots/151_versions_open_particles.png)
+
+Shine and reflection layers: the commonest kinds (a reflection on armour and weapons, a glow added on top) are drawn
+with the app's version of how the newer clients combine them; the rarer kinds show their first texture only. The
+statistics say which, per model. The newer blend mode *blend add* (7) is drawn with its own blending.
+
+Not shown (the statistics say it for each model):
+
+* Particle tails, twinkling, wind, particles that are models, and the second and third textures of multi-texture
+  particles; the models' lights.
 * Player characters and the hair, faces and clothes of humanoid NPCs (they show their baked texture and their default
   parts).
 * Buildings (WMO): the 3D view says *this is a building*; buildings come with the maps.
@@ -388,9 +421,9 @@ What an import writes:
 
 ## Not yet
 
-* Another version opened read only shows Browse, textures and 3D models. Its maps, player characters, animations kept
-  in `.anim` files, particle effects, buildings in 3D and "Used in game" are planned, not there yet; 2.4.3 and 3.3.5a
-  (MPQ clients) open in this tab only.
+* Another version opened read only shows Browse, textures and 3D models with all their animations and their particle
+  effects. Its maps, player characters, buildings in 3D and "Used in game" are planned, not there yet; 2.4.3 and
+  3.3.5a (MPQ clients) open in this tab only.
 * Most columns of the modern clients' data tables have no names yet.
 * Maps convert from 1.60 to 1.12 only: 1.12 to 1.60, and maps of 2.x and 3.x, are planned. The models and buildings
   1.12 does not have are left out (their conversion is planned), see [Known issues](known-issues.md#other-versions).
@@ -406,5 +439,6 @@ What an import writes:
 `import-updates` do everything this tab does, and `wds settings set other-clients <folder>` sets the folder; see
 [The command line](command-line.md#other-versions-experimental). `wds versions open <client>` opens another version
 read only, and the commands that read take `--version <client>`: `wds find search boar --version _classic_beta_`,
-`wds models info cdisplay:503 --version _classic_beta_`, `wds models render cdisplay:503 boar.png --version _classic_beta_`;
-see [Another version, read only](command-line.md#another-version-read-only).
+`wds models info cdisplay:503 --version _classic_beta_`, `wds models render cdisplay:503 boar.png --version _classic_beta_`,
+`wds models anims cdisplay:15363 --version _classic_beta_` (which animations are in `.anim` files, and whether they
+load); see [Another version, read only](command-line.md#another-version-read-only).

@@ -713,32 +713,37 @@ and models are listed; the others (about 481,000 for 1.60) are left out of the l
 
 *Status:* open.
 
-### Animations kept in `.anim` files do not play yet (other versions)
+### A few animations of other versions stand still
 
-*What happens:* a 1.60 model keeps some of its animations in separate `.anim` files. The 3D view of the read-only
-window lists them with their length, but the model stands still while one of them is chosen. Measured on the 1.60
-client: 5,639 of the 43,243 animations of the creature models are kept that way (usually the rarer ones; *Stand*,
-*Walk*, *Run* and the attacks are mostly in the model). Animations that share another one's keys play.
+*What happens:* a 1.60 animation kept in a separate `.anim` file plays when you pick it, but a few cannot: measured on
+the 1.60 client, 6 of the 6,529 creature animations kept that way (2 whose model names no `.anim` file, 4 whose file
+holds no keys). A character-style model whose parent skeleton is not in the client (9 of the 13 parent skeletons the
+1.60 creature models name) lists only its own skeleton's animations. The line under the animation list, and
+`wds models anims <model> --version <client>`, say why.
 
-*Who is affected:* anyone watching the animations of 1.60 creatures.
+*Who is affected:* anyone watching those animations.
 
-*Workaround:* pick an animation whose keys are in the model: `wds models anims <model> --version <client>` says where
-each one is (*model*, or *.anim* with its FileDataID).
+*Workaround:* none; the client does not have their keys.
 
-*Status:* open (the `.anim` files and the skeleton files of character models come next).
+*Status:* by design (the data is not in the client).
 
-### Particles, ribbons and glow layers of other versions' models are not drawn
+### Particles, ribbons and shine layers of other versions are drawn approximately
 
-*What happens:* the 3D view of another version draws the mesh and its textures, but not its particle effects, ribbons
-and lights (their records changed after 1.12). A part drawn with a reflection or a glow on top of its texture shows
-its texture only, and a blend mode 1.12 does not have (7) is drawn as additive. The model statistics say what was left
-out or approximated for each model.
+*What happens:* the 3D view of another version draws particle effects and ribbons with the app's own simulation: they
+look close to the game's, not the same (sizes, speeds and timing can differ). Left out: particle tails, twinkling,
+wind, particles that are models, the second and third textures of multi-texture particles, and the models' lights. An
+effect that the model animates in one animation only is shown in the others with that animation's first value. The
+commonest reflection and glow layers are combined the way the app understands the newer clients' combiners; the rarer
+ones show their first texture only. The model statistics say what was approximated for each model. Measured on the
+1.60 client: 9,157 particle emitters and 867 ribbons of creature and spell-effect models, every one read; 1,845 of
+2,241 two-layer texture units of creature and sampled item models had their first texture only before, 1,641 of them
+are combined now (204 still show their first texture only).
 
 *Who is affected:* anyone comparing effects or shiny weapons and armour of 1.60 with 1.12.
 
-*Workaround:* none in the app yet.
+*Workaround:* none in the app.
 
-*Status:* open.
+*Status:* open (particles of your 1.12 game's models are not drawn either, see above).
 
 ### Player characters and NPC customization of other versions are not shown
 

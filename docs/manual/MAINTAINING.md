@@ -92,9 +92,10 @@ MySQL server loaded with the fixture and its quest-chain supplement `serverdb\qu
 Forest, and the Updates tab with the update catalog and a preview of Elwynn Forest's terrain; dry runs that write
 nothing; the catalog's first scan takes a minute or two) needs a folder of client copies in the environment variable
 `WDS_SCREENSHOT_OTHER_CLIENTS` (else these pictures are skipped); `WDS_SCREENSHOT_ONLY=versions` makes only them.
-`Services\VersionOpenScreenshots.cs` (144-149: the 1.60 client opened read only in its own window: the Other versions
-tab's **Open read only**, a boar's display with its files, an item, an interface icon in the texture viewer, and (M2)
-the boar and the Worn Shortsword in the 3D view) needs the
+`Services\VersionOpenScreenshots.cs` (144-151: the 1.60 client opened read only in its own window: the Other versions
+tab's **Open read only**, a boar's display with its files, an item, an interface icon in the texture viewer, (M2)
+the boar and the Worn Shortsword in the 3D view, and (M3) Taerar playing EmoteRoar from its `.anim` file and the
+Arcane_Missile_Lvl4 spell effect with its particles) needs the
 same folder (with the `_classic_beta_` copy); its index is built in the run's temporary app folder (about 10 seconds);
 `WDS_SCREENSHOT_ONLY=versions-open` makes only them. Use `--client` with a copy of the 1.12 client (`Client3`), never
 the folder you play with.
@@ -160,7 +161,8 @@ closed), `model_compare` (the compare window of two skins), `model_browse` (anot
 user browses the list), `texture_viewer`, `maps_tab` (two maps in turn, a tile with its 3D preview), `terrain_popout`,
 `data_tables`, `server_data`, `spell_designer`, `class_designer`, `quest_designer`, `other_versions` (the 2.4.3 and
 3.3.5a copies in turn), `versions_window` (the 1.60 client opened read only in its own window: a search, an
-entry with its texture and, for a model, its 3D view, the window closed; the first cycle builds its index). Each runs `--cycles` times (default 100); `model_viewer`, `model_popout` and `model_browse`
+entry with its texture and, for a model, its 3D view with up to 8 of its animations kept in `.anim` files played in
+turn and its particles running, the window closed; the first cycle builds its index). Each runs `--cycles` times (default 100); `model_viewer`, `model_popout` and `model_browse`
 run twice as many.
 
 After every cycle the run collects the garbage (full, blocking, compacting) and records the managed heap
