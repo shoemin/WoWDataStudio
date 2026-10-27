@@ -238,6 +238,9 @@ public sealed partial class ModelViewerViewModel : ObservableObject
     public (IndexEntry Entry, EntryDetails Details)? Loaded => _entry != null && _details != null ? (_entry, _details) : null;
     private EntryDetails? _details;
 
+    /// <summary>M2: the looks of the open game's models (your 1.12 game's resolver, or another version's).</summary>
+    private IModelLooks Looks => _session.Looks!;
+
     public void RefreshModified() => IsModelModified = ModelPath.Length > 0 && _session.Workspace?.IsModified(ModelPath) == true;
 
     public bool IsCharacter => Subject == ViewerSubject.Character;
@@ -283,6 +286,7 @@ public sealed partial class ModelViewerViewModel : ObservableObject
         Geosets.Clear();
         ModelTextures.Clear();
         Stats.Clear();
+        FormatNotes = "";
         SkinColors.Clear();
         Faces.Clear();
         HairStyles.Clear();
@@ -318,7 +322,7 @@ public sealed partial class ModelViewerViewModel : ObservableObject
         var sw = Stopwatch.StartNew();
         try
         {
-            var plan = await Task.Run(() => MakePlan(entry, details));
+            var plan = await Task.Run(() => _session.IsReadOnly ? MakePlanModern(entry, details) : MakePlan(entry, details));
             if (token != _token) return;
             if (plan == null)
             {
@@ -349,6 +353,13 @@ public sealed partial class ModelViewerViewModel : ObservableObject
     private ModelAsset LoadAsset(string model)
     {
         if (_assetCache.TryGet(model, out var hit)) return hit;
+        if (_session.IsReadOnly)
+        {
+            // M2: another version: the modern reader (.skin files by FileDataID), its looks' texture loader
+            var ma = ModelAsset.Build(model, _session.ModelSource!.Load(model), Looks.LoadBlp);
+            _assetCache.Add(model, ma);
+            return ma;
+        }
         var res = _session.Models!;
         // your edited model (an imported mesh) wins over the game's
         var data = _session.Workspace?.ReadEdited(model) ?? _session.Data!.Read(model) ?? throw new IOException($"{model} is not in the game archives");
@@ -360,7 +371,7 @@ public sealed partial class ModelViewerViewModel : ObservableObject
     /// <summary>Forget cached models and decoded textures (after an edit was imported or reverted).</summary>
     public void InvalidateTextures()
     {
-        _session.Models?.ClearTextureCache();
+        _session.Looks?.ClearTextureCache();
         _assetCache.Clear();
     }
 
@@ -384,10 +395,10 @@ public sealed partial class ModelViewerViewModel : ObservableObject
             {
                 var (race, sex) = _race.Value;
                 var look = new CharacterLook(SkinColor, Face, HairStyle, HairColor, FacialHair);
-                await ApplyLookAsync(() => _session.Models!.Character(race, sex, look));
+                await ApplyLookAsync(() => Looks.Character(race, sex, look));
             }
             else if (v != null)
-                await ApplyLookAsync(() => v.IsItem ? _session.Models!.ItemDisplay((int)v.DisplayId, path) : _session.Models!.CreatureDisplay((int)v.DisplayId));
+                await ApplyLookAsync(() => v.IsItem ? Looks.ItemDisplay((int)v.DisplayId, path) : Looks.CreatureDisplay((int)v.DisplayId));
             else RefreshModelTextures();
         }
         catch (Exception e) when (e is IOException or M2Exception)
@@ -565,7 +576,14 @@ public sealed partial class ModelViewerViewModel : ObservableObject
             SelectedSequence = Sequences.FirstOrDefault(s => s.Index == Scene.Sequence);
             DurationMs = Scene.Duration;
             for (int i = 0; i < a.Views.Length; i++)
-                Lods.Add(new LodItem { Index = i, Label = $"{i + 1}: {a.Views[i].BoneLimit} bones, {m.Views[i].Submeshes.Length} parts, {a.Views[i].TriangleCount:N0} triangles" });
+                Lods.Add(new LodItem
+                {
+                    Index = i,
+                    // M2: the .skin files of 1.60 leave the bone limit at 0 (MEASURED in every sampled model): not shown
+                    Label = m.Modern != null && a.Views[i].BoneLimit == 0
+                        ? $"{i + 1}: {m.Views[i].Submeshes.Length} parts, {a.Views[i].TriangleCount:N0} triangles"
+                        : $"{i + 1}: {a.Views[i].BoneLimit} bones, {m.Views[i].Submeshes.Length} parts, {a.Views[i].TriangleCount:N0} triangles",
+                });
             SelectedLod = Lods.FirstOrDefault();
 
             if (plan.Options is { } o)
@@ -608,7 +626,7 @@ public sealed partial class ModelViewerViewModel : ObservableObject
     /// = the second variation).</summary>
     private void FillSequences(M2Model m)
     {
-        var res = _session.Models!;
+        var res = Looks;
         var names = WoWData.Core.ModelIO.ModelExporter.ActionNames(m, res.AnimationName);
         Sequences.Clear();
         for (int i = 0; i < m.Sequences.Length; i++)
@@ -661,7 +679,7 @@ public sealed partial class ModelViewerViewModel : ObservableObject
     partial void OnSelectedVariantChanged(VariantItem? value)
     {
         if (_applyingVariant || value == null || Scene.Asset == null) return;
-        _ = ApplyLookAsync(() => value.IsItem ? _session.Models!.ItemDisplay((int)value.DisplayId, ModelPath) : _session.Models!.CreatureDisplay((int)value.DisplayId));
+        _ = ApplyLookAsync(() => value.IsItem ? Looks.ItemDisplay((int)value.DisplayId, ModelPath) : Looks.CreatureDisplay((int)value.DisplayId));
     }
 
     private int _lookToken;
@@ -685,7 +703,7 @@ public sealed partial class ModelViewerViewModel : ObservableObject
         if (_syncing || _race == null || Subject != ViewerSubject.Character) return;
         var (race, sex) = _race.Value;
         var look = new CharacterLook(SkinColor, Face, HairStyle, HairColor, FacialHair);
-        _ = ApplyLookAsync(() => _session.Models!.Character(race, sex, look));
+        _ = ApplyLookAsync(() => Looks.Character(race, sex, look));
     }
 
     partial void OnSkinColorChanged(int value)
@@ -729,7 +747,7 @@ public sealed partial class ModelViewerViewModel : ObservableObject
         FacialHair = look.FacialHair;
         _syncing = false;
         var (race, sex) = _race.Value;
-        return ApplyLookAsync(() => _session.Models!.Character(race, sex, look));
+        return ApplyLookAsync(() => Looks.Character(race, sex, look));
     }
 
     [RelayCommand]
@@ -835,7 +853,7 @@ public sealed partial class ModelViewerViewModel : ObservableObject
             string slot = M2Schema.TextureTypes.TryGetValue(t.Type, out var tn) ? tn : $"slot {t.Type}";
             if (t.Type == 0)
             {
-                var p = _session.Catalog!.Canonical(t.FileName);
+                var p = Looks.Canonical(t.FileName);
                 if (!seen.Add(p)) continue;
                 bool ok = a.FileTextures.TryGetValue(i, out var img) && img != null;
                 ModelTextures.Add(new ModelTextureItem { Slot = "model file", FileName = System.IO.Path.GetFileName(p), Path = ok ? p : null, Tip = ok ? p : p + " (missing)" });
@@ -867,7 +885,7 @@ public sealed partial class ModelViewerViewModel : ObservableObject
     {
         var a = Scene.Asset;
         if (a == null) { SkeletonInfo = ""; _rig = null; return; }
-        _rig = RigInfo.Read(a.Model, _session.Models?.Animations);
+        _rig = RigInfo.Read(a.Model, _session.Looks?.Animations);
         var r = _rig;
         var keys = r.Bones.Where(b => b.KeyBoneId >= 0).Select(b => $"{b.KeyBoneName} = {b.Name}").ToList();
         var sb = new System.Text.StringBuilder();
@@ -886,7 +904,7 @@ public sealed partial class ModelViewerViewModel : ObservableObject
         int si = Scene.Sequence;
         if (r == null || si < 0 || si >= r.Sequences.Count) { AnimationInfo = EventsInfo = ""; return; }
         var s = r.Sequences[si];
-        var cat = _session.Models?.Animations;
+        var cat = _session.Looks?.Animations;
         var parts = new List<string> { s.Loops ? "loops" : "plays once" };
         if (s.Variations > 1) parts.Add($"variation {s.Variation + 1} of {s.Variations}, chance {s.ChancePercent:0.#} %");
         parts.Add($"blend {s.BlendTime} ms");
@@ -915,7 +933,14 @@ public sealed partial class ModelViewerViewModel : ObservableObject
         AddStat("Textures", m.Textures.Length.ToString("N0"));
         AddStat("Geosets", a.GeosetIds.Length.ToString("N0"));
         if (m.ParticleCount + m.RibbonCount > 0) AddStat("Particles / ribbons", $"{m.ParticleCount} / {m.RibbonCount} (not drawn)");
-        AddStat("Format", $"M2 version 0x{m.Version:x}");
+        if (m.Modern is { } mi)
+        {
+            // M2: a model of another version (the modern reader's report is under the numbers)
+            AddStat("Format", $"M2 {mi.Version} (MD21)");
+            AddStat("Views read", $"{mi.ViewsRead} of {mi.SkinProfiles}");
+        }
+        else AddStat("Format", $"M2 version 0x{m.Version:x}");
+        FormatNotes = ModernNotes(m);
     }
 
     // ---------------------------------------------------------------- animation and display options
@@ -1018,7 +1043,7 @@ public sealed partial class ModelViewerViewModel : ObservableObject
     {
         if (Capture == null || Scene.Asset == null) return;
         var name = System.IO.Path.GetFileNameWithoutExtension(ModelPath) + (SelectedVariant != null ? "_" + SelectedVariant.DisplayId : "") +
-                   (SelectedSequence != null ? "_" + _session.Models!.AnimationName(Scene.Asset.Model.Sequences[SelectedSequence.Index].AnimId) : "") + ".png";
+                   (SelectedSequence != null ? "_" + Looks.AnimationName(Scene.Asset.Model.Sequences[SelectedSequence.Index].AnimId) : "") + ".png";
         var dir = System.IO.Path.Combine(_session.Settings.DefaultExportDir, "Images");
         Directory.CreateDirectory(dir);
         var file = Dialogs.PickSaveFile("Save image of the 3D view", "PNG image (*.png)|*.png", name, dir);
@@ -1041,7 +1066,7 @@ public sealed partial class ModelViewerViewModel : ObservableObject
     {
         var asset = Scene.Asset;
         if (asset == null) return null;
-        var res = _session.Models!;
+        var res = Looks;
         var path = ModelPath;
         if (Subject == ViewerSubject.Character && _race != null)
         {
@@ -1101,7 +1126,7 @@ public sealed partial class ModelViewerViewModel : ObservableObject
             _applyingVariant = true;
             SelectedVariant = mine;
             _applyingVariant = false;
-            await ApplyLookAsync(() => mine.IsItem ? _session.Models!.ItemDisplay((int)mine.DisplayId, ModelPath) : _session.Models!.CreatureDisplay((int)mine.DisplayId));
+            await ApplyLookAsync(() => mine.IsItem ? Looks.ItemDisplay((int)mine.DisplayId, ModelPath) : Looks.CreatureDisplay((int)mine.DisplayId));
         }
         if (other.SelectedSequence is { } s) SelectedSequence = Sequences.FirstOrDefault(x => x.Index == s.Index) ?? SelectedSequence;
         if (other.SelectedLod is { } lod) SelectedLod = Lods.FirstOrDefault(x => x.Index == lod.Index) ?? SelectedLod;

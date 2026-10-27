@@ -77,16 +77,27 @@ public abstract partial class PopoutViewModelBase : ObservableObject
     public IRelayCommand? FullScreenCommand { get; set; }
 }
 
+/// <summary>M2: what a model pop-out window follows: the main window's Browse tab (<see cref="BrowserViewModel"/>) or a
+/// read-only window of another version (<see cref="OtherVersionWindowViewModel"/>).</summary>
+public interface IModelViewerHost
+{
+    WoWData.Core.Session.AppSession Session { get; }
+    /// <summary>The docked 3D viewer (a pop-out window opens on what it shows).</summary>
+    ModelViewerViewModel ModelViewer { get; }
+    /// <summary>A model entry's details were shown (following pop-out windows load it too).</summary>
+    event Action<IndexEntry, EntryDetails>? ModelEntryShown;
+}
+
 /// <summary>
 /// The model pop-out window (docs\manual\model-viewer.md#open-in-a-new-window): its own <see cref="ModelViewerViewModel"/>
 /// (all the controls of the docked viewer), following the selection of the main window or pinned to its model.
 /// </summary>
 public sealed partial class ModelPopoutViewModel : PopoutViewModelBase
 {
-    private readonly BrowserViewModel _browser;
+    private readonly IModelViewerHost _browser;
     public ModelViewerViewModel Viewer { get; }
 
-    public ModelPopoutViewModel(BrowserViewModel browser, ModelAssetCache cache)
+    public ModelPopoutViewModel(IModelViewerHost browser, ModelAssetCache cache)
     {
         _browser = browser;
         Viewer = new ModelViewerViewModel(browser.Session, cache);

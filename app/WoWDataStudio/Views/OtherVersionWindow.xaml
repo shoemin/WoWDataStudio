@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:c="clr-namespace:WoWDataStudio.Controls"
+        xmlns:v="clr-namespace:WoWDataStudio.Views"
         xmlns:h="clr-namespace:WoWDataStudio.Helpers"
         xmlns:s="clr-namespace:WoWDataStudio.Services"
         s:Manual.Topic="other-versions"
@@ -187,7 +188,7 @@
                                 <TextBlock Style="{StaticResource Muted}" TextAlignment="Center" MaxWidth="380" TextWrapping="Wrap"
                                            Text="Search above, then click a result: where it comes from, its files with their FileDataID, where their names come from and whether they can be read, and its textures." />
                             </StackPanel>
-                            <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding HasSelection, Converter={StaticResource BoolVis}}">
+                            <ScrollViewer x:Name="DetailsScroll" VerticalScrollBarVisibility="Auto" Visibility="{Binding HasSelection, Converter={StaticResource BoolVis}}">
                                 <StackPanel Margin="16,14">
                                     <TextBlock Text="{Binding DetailTitle}" Style="{StaticResource H2}" FontSize="20" TextWrapping="Wrap" />
                                     <TextBlock Text="{Binding DetailSubtitle}" Style="{StaticResource Muted}" TextWrapping="Wrap" />
@@ -256,6 +257,21 @@
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
+
+                                    <!-- M2: the 3D view (the same viewer as your game's; pop-out and compare skins) -->
+                                    <Border x:Name="ModelBox" Visibility="{Binding IsModelEntry, Converter={StaticResource BoolVis}}" Margin="0,4,0,0" s:Manual.Topic="other-versions">
+                                        <StackPanel>
+                                            <DockPanel Margin="0,0,0,6">
+                                                <Button DockPanel.Dock="Right" Command="{Binding CompareSkinsCommand}" Padding="10,4" VerticalAlignment="Bottom"
+                                                        IsEnabled="{Binding ModelViewer.HasVariants}"
+                                                        ToolTip="Two skins (displays) of this model side by side, with synchronized cameras and the same animation.">
+                                                    <TextBlock Text="Compare two skins (3D)" />
+                                                </Button>
+                                                <TextBlock Text="3D VIEW" Style="{StaticResource H3}" FontSize="11" VerticalAlignment="Bottom" Margin="0" />
+                                            </DockPanel>
+                                            <v:ModelViewerView x:Name="ModelViewer" DataContext="{Binding ModelViewer}" />
+                                        </StackPanel>
+                                    </Border>
 
                                     <!-- textures -->
                                     <TextBlock Style="{StaticResource H3}" FontSize="11">

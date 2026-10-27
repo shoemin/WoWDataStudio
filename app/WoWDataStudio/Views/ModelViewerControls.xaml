@@ -5,6 +5,7 @@
     <!-- The controls of the 3D viewer under the view: animation, display options, character creation, textures, geosets, statistics (docked viewer and pop-out side panel). DataContext = ModelViewerViewModel. -->
     <UserControl.Resources>
         <h:BoolToCollapsedConverter x:Key="BoolVis" />
+        <h:NullToCollapsedConverter x:Key="NullVis" />
         <Style x:Key="Label" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource TextMuted}" />
             <Setter Property="FontSize" Value="12" />
@@ -174,5 +175,8 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
         </Expander>
+        <!-- M2: a model of another version: what the modern reader read, left out or drew approximately -->
+        <TextBlock Text="{Binding FormatNotes}" TextWrapping="Wrap" Foreground="{StaticResource TextMuted}" FontSize="12" Margin="4,4,0,0"
+                   Visibility="{Binding FormatNotes, Converter={StaticResource NullVis}}" />
     </StackPanel>
 </UserControl>

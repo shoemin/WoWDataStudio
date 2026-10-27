@@ -889,7 +889,7 @@ public static class LeakTestRunner
     private static readonly string[] OtherSearches = { "boar", "inv_sword_04", "worn shortsword", "orcbonfire" };
 
     /// <summary>The 1.60 client opened read only in its own window (its index exists after the first cycle), a search,
-    /// an entry with its details and texture, then the window closed.</summary>
+    /// an entry with its details and texture (and, M2, its 3D view), then the window closed.</summary>
     private static async Task<string> VersionsWindowCycle(Ctx ctx, int i)
     {
         var w = OtherVersionWindow.Open(ctx.Main, _betaCopy!, null, show: false);
@@ -904,10 +904,13 @@ public static class LeakTestRunner
         vm.SelectedRow = vm.Results.FirstOrDefault();
         await ScreenshotRunner.Until(() => vm.SelectedRow == null || vm.DetailTitle.Length > 0, 30000);
         if (vm.SelectedTexture is { Exists: true }) await ScreenshotRunner.Until(() => vm.Viewer.IsLoaded || vm.Viewer.Error.Length > 0, 30000);
+        // M2: a model entry opens its 3D view (a GL view: closing it leaks 2 handles, see known-issues.md)
+        if (vm.IsModelEntry) await ScreenshotRunner.Until(() => !vm.ModelViewer.IsLoading && (vm.ModelViewer.HasModel || vm.ModelViewer.Message.Length > 0), 60000);
         await ScreenshotRunner.Settle(150);
-        string item = $"{q}: {vm.Results.Count} results, {vm.DetailTitle}";
+        string item = $"{q}: {vm.Results.Count} results, {vm.DetailTitle}{(vm.ModelViewer.HasModel ? $", 3D {System.IO.Path.GetFileName(vm.ModelViewer.ModelPath)}" : "")}";
         Watch(w, nameof(OtherVersionWindow));
         Watch(vm, nameof(OtherVersionWindowViewModel));
+        Watch(vm.ModelViewer, "read-only window's ModelViewerViewModel");
         Watch(vm.Session, "read-only AppSession");
         w.Close();
         await ScreenshotRunner.Settle(150);

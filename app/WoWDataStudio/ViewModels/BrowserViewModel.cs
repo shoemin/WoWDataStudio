@@ -97,7 +97,7 @@ public enum SortColumn { Name, Type, Id, Path }
 /// texture, keep the "_s" file's shine map, keep the black background of an additive texture black.</summary>
 public sealed record ImportChoices(bool EditBoth = true, bool KeepShineMap = true, bool KeepBlackBlack = true);
 
-public sealed partial class BrowserViewModel : ObservableObject
+public sealed partial class BrowserViewModel : ObservableObject, IModelViewerHost
 {
     private readonly AppSession _session;
     private readonly MainViewModel _main;

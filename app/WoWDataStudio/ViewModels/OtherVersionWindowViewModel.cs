@@ -31,7 +31,7 @@ public sealed class OtherFileRow
 /// with FileDataIDs, name sources and lock states) and the texture viewer with PNG export. Nothing here can change the
 /// client: there is no edit, import, install or server command in this window.
 /// </summary>
-public sealed partial class OtherVersionWindowViewModel : ObservableObject, IDisposable
+public sealed partial class OtherVersionWindowViewModel : ObservableObject, IDisposable, IModelViewerHost
 {
     private readonly ClientCopy _copy;
     private readonly Func<ClientData?> _client112;
@@ -42,6 +42,15 @@ public sealed partial class OtherVersionWindowViewModel : ObservableObject, IDis
 
     public AppSession Session { get; }
     public TextureViewerViewModel Viewer { get; }
+    /// <summary>M2: the 3D view of the selected entry (the same viewer as your game's, read by the modern reader).</summary>
+    public ModelViewerViewModel ModelViewer { get; }
+    /// <summary>The built models, shared by the 3D view and this window's pop-out windows.</summary>
+    public ModelAssetCache ModelCache { get; } = new();
+    /// <summary>This window's model pop-out windows (closed with it).</summary>
+    public List<Views.ModelPopoutWindow> ModelPopouts { get; } = new();
+    /// <summary>A model entry's details were shown (following pop-out windows load it too).</summary>
+    public event Action<IndexEntry, EntryDetails>? ModelEntryShown;
+    private readonly AppPaths _paths;
     public ObservableCollection<FilterChip> Chips { get; } = new();
     public ObservableCollection<StageItem> Stages { get; } = new();
 
@@ -50,8 +59,11 @@ public sealed partial class OtherVersionWindowViewModel : ObservableObject, IDis
         _copy = copy;
         _client112 = client112;
         _found = found;
+        _paths = paths;
         Session = new AppSession(paths, settings);
         Viewer = new TextureViewerViewModel(Session);
+        ModelViewer = new ModelViewerViewModel(Session, ModelCache) { PopOutCommand = OpenModelPopoutCommand, ShowPopoutCommand = ShowFollowingPopoutCommand };
+        ModelViewer.OpenTextureRequested += (path, _) => ShowTexture(path);
         foreach (var s in AppSession.OtherStageNames) Stages.Add(new StageItem { Name = s });
         _searchTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(220) };
         _searchTimer.Tick += (_, _) => { _searchTimer.Stop(); _ = ApplyFilterAsync(); };
@@ -101,6 +113,8 @@ public sealed partial class OtherVersionWindowViewModel : ObservableObject, IDis
     [ObservableProperty] private List<OtherFileRow> _files = new();
     [ObservableProperty] private ObservableCollection<TextureItem> _textures = new();
     [ObservableProperty] private TextureItem? _selectedTexture;
+    /// <summary>M2: the selected entry has a model (the 3D view is shown).</summary>
+    [ObservableProperty] private bool _isModelEntry;
 
     public bool CanExport => SelectedTexture is { Exists: true } && Viewer.IsLoaded;
 
@@ -230,6 +244,8 @@ public sealed partial class OtherVersionWindowViewModel : ObservableObject, IDis
             Textures = new();
             Files = new();
             Viewer.Clear();
+            IsModelEntry = false;
+            ModelViewer.Clear();
             return;
         }
         var entry = row.Entry;
@@ -241,6 +257,13 @@ public sealed partial class OtherVersionWindowViewModel : ObservableObject, IDis
         Facts = d.Facts;
         UsedBy = d.UsedBy;
         Files = d.Files.Select(f => new OtherFileRow(f)).ToList();
+        IsModelEntry = entry.Kind != AssetKind.Texture && d.Models.Count > 0;
+        if (IsModelEntry)
+        {
+            _ = ModelViewer.LoadAsync(entry, d);
+            ModelEntryShown?.Invoke(entry, d);
+        }
+        else ModelViewer.Clear();
         Textures = new ObservableCollection<TextureItem>(d.Textures.Select(t => new TextureItem(t, false)));
         SelectedTexture = Textures.FirstOrDefault(t => entry.Path != null && string.Equals(t.Path, entry.Path, StringComparison.OrdinalIgnoreCase))
                           ?? Textures.FirstOrDefault(t => t.Exists) ?? Textures.FirstOrDefault();
@@ -294,11 +317,83 @@ public sealed partial class OtherVersionWindowViewModel : ObservableObject, IDis
         }
     }
 
+    // ------------------------------------------------------------------ M2: 3D view, pop-out, compare skins
+
+    /// <summary>A texture clicked in the 3D view's texture list: shown in the texture viewer below.</summary>
+    private void ShowTexture(string path)
+    {
+        var t = Textures.FirstOrDefault(x => string.Equals(x.Path, path, StringComparison.OrdinalIgnoreCase));
+        if (t == null)
+        {
+            t = new TextureItem(new TextureRef(path, "model texture", "CASC", ""), false);
+            Textures.Add(t);
+        }
+        SelectedTexture = t;
+    }
+
+    [RelayCommand]
+    private Task OpenModelPopout() => OpenModelPopoutAsync();
+
+    /// <summary>"Open in new window": a pop-out 3D window on what this window's 3D view shows (same look, animation,
+    /// camera), following the selection here or pinned.</summary>
+    public async Task<Views.ModelPopoutWindow?> OpenModelPopoutAsync(Action<Views.ModelPopoutWindow>? beforeShow = null)
+    {
+        if (ModelViewer.Loaded == null) return null;
+        var settings = Session.Settings.Popout("model");
+        var vm = new ModelPopoutViewModel(this, ModelCache);
+        vm.Viewer.OpenTextureRequested += (path, _) => ShowTexture(path);
+        var win = new Views.ModelPopoutWindow(vm, settings, () => Session.Settings.Save(_paths));
+        if (settings.Placement == null) win.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen;
+        vm.FollowChanged += UpdateDockedPause;
+        win.Closed += (_, _) =>
+        {
+            ModelPopouts.Remove(win);
+            UpdateDockedPause();
+        };
+        beforeShow?.Invoke(win);
+        ModelPopouts.Add(win);
+        win.Show();
+        UpdateDockedPause();
+        await vm.Viewer.CopyFromAsync(ModelViewer);
+        return win;
+    }
+
+    [RelayCommand]
+    private void ShowFollowingPopout()
+    {
+        var w = ModelPopouts.FirstOrDefault(p => p.Vm.FollowSelection) ?? ModelPopouts.FirstOrDefault();
+        if (w == null) return;
+        if (w.WindowState == System.Windows.WindowState.Minimized) w.WindowState = System.Windows.WindowState.Normal;
+        w.Activate();
+    }
+
+    private void UpdateDockedPause() => ModelViewer.PausedForPopout = ModelPopouts.Any(w => w.Vm.FollowSelection);
+
+    /// <summary>"Compare two skins (3D)": two skins of the shown model side by side (synchronized cameras).</summary>
+    [RelayCommand]
+    private async Task CompareSkins()
+    {
+        var vm = IsModelEntry ? await MakeCompareAsync() : null;
+        if (vm == null)
+        {
+            Dialogs.Info("Compare two skins (3D)", "Select a model with at least two skins first, for example a creature display whose model other displays use too.");
+            return;
+        }
+        var owner = System.Windows.Application.Current?.Windows.OfType<Views.OtherVersionWindow>().FirstOrDefault(w => ReferenceEquals(w.Vm, this));
+        new Views.ModelCompareWindow(vm) { Owner = owner }.Show();
+    }
+
+    /// <summary>The compare window's view model for the shown model (screenshots, tests), or null.</summary>
+    public Task<ModelCompareViewModel?> MakeCompareAsync() => ModelViewer.MakeCompareAsync();
+
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
         _searchTimer.Stop();
+        foreach (var w in ModelPopouts.ToList()) w.Close();
+        ModelViewer.Clear();
+        ModelCache.Clear();
         Viewer.Clear();
         Session.Dispose();
     }
