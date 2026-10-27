@@ -451,6 +451,8 @@ M1-M4 make 1.60 open like 1.12: about **20-28 working days**.
 
 ### 6.2 Open questions for the user
 
+Working defaults until the user answers (2026-10-27): the recommended option of 1 and 2, and M6 later.
+
 1. **Window:** open another version in its own read-only window next to the 1.12 window (recommended), or replace the
    main window's session?
 2. **Column names:** extend our own measured layout file for the ~30 tables the features need and keep WoWDBDefs
@@ -462,7 +464,7 @@ M1-M4 make 1.60 open like 1.12: about **20-28 working days**.
 
 ## Appendix A. Measurements and probes
 
-Scripts in `<a scratch folder, not in the repo>`
+Scripts in the maintainer's scratch folder (`openver_probe\`, not in the repo)
 (Python 3.11, `-I`, below-normal priority, using the earlier `casc_probe\casc.py` / `content.py`; read-only; key
 names and values not printed):
 
