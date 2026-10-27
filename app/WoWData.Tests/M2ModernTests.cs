@@ -76,7 +76,9 @@ public class M2ModernTests : IDisposable
         Assert.Equal(new uint[] { ModelTexture, 0, SkinTexture }, info.TextureFiles);
         Assert.Equal(new M2AnimFile(4, 0, CubeAnim), Assert.Single(info.AnimFiles));
         Assert.Equal(new[] { "MD21", "SFID", "TXID", "AFID" }, info.Chunks.Select(c => c.Magic));
-        Assert.Contains(info.Ignored, x => x.StartsWith("AFID: 1 external animation file", StringComparison.Ordinal));
+        // M3: AFID is used (the .anim files load when an animation is chosen, M3ModernTests)
+        Assert.DoesNotContain(info.Ignored, x => x.StartsWith("AFID", StringComparison.Ordinal));
+        Assert.NotNull(info.Animations);
         Assert.Empty(info.Notes);
         // the M1 TXID helper reads the same chunk
         Assert.Equal(new uint[] { ModelTexture, 0, SkinTexture }, WoWData.Core.Index.Catalog160.TextureIds(CubeM2v274()));
@@ -92,7 +94,7 @@ public class M2ModernTests : IDisposable
         Assert.Equal((0, 0u, 1000u, 0x20u, (uint)150), (stand.AnimId, stand.Start, stand.End, stand.Flags, stand.BlendTime));
         Assert.Equal((4, 1001u, 1501u, 500u, 0u), (walk.AnimId, walk.Start, walk.End, walk.Duration, walk.Flags));
         Assert.Equal((1, 1, 0), (m.Modern!.InlineSequences, m.Modern.ExternalSequences, m.Modern.AliasSequences));
-        Assert.Contains(m.Modern.NotShown, x => x.Contains("1 animation kept in external .anim files", StringComparison.Ordinal));
+        Assert.Equal(1, m.Modern.Animations!.ExternalCount);   // M3: read when chosen (M3ModernTests); until then without keys
 
         var bone = Assert.Single(m.Bones);
         Assert.Equal(-1, bone.Parent);

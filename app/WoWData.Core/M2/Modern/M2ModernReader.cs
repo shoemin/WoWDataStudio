@@ -10,8 +10,9 @@ namespace WoWData.Core.M2.Modern;
 /// (FORMAT KNOWLEDGE, each part checked on the real 1.60 copy, see the real-copy tests):
 /// <list type="bullet">
 /// <item>the chunks: MD21 (the MD20 header and its arrays, offsets relative to the chunk's data), SFID (the .skin files
-///   by FileDataID: the views first, then LOD skins), TXID (one texture FileDataID per texture record); every other
-///   chunk is listed in <see cref="M2ModernInfo"/> and not used (AFID / SKID come in M3);</item>
+///   by FileDataID: the views first, then LOD skins), TXID (one texture FileDataID per texture record), M3: AFID (the
+///   .anim files, <see cref="ModernAnimations"/>) and SKID (the skeleton file and its parent); every other chunk is
+///   listed in <see cref="M2ModernInfo"/> and not used;</item>
 /// <item>the header of version 264 and later: no playable-animation table, no texture flip-books, the views replaced by
 ///   a skin profile count; bones of 0x58 bytes (a name hash before the tracks), sequences of 0x40 bytes (a duration
 ///   instead of start / end, blend in / out), attachments 0x28, events 0x24;</item>
@@ -20,7 +21,8 @@ namespace WoWData.Core.M2.Modern;
 ///   sequence: exactly the 1.12 shape <see cref="M2Anim"/> evaluates. A sequence's last key is repeated at its end so
 ///   the value holds there (1.12 would lean towards the next sequence's first key). Sequences without keys for a
 ///   track get no range (the track's default applies); aliases (flag 0x40) share their target's part of the timeline;
-///   external sequences (flag 0x20 clear: their keys are in .anim files, M3) keep their place without keys;</item>
+///   external sequences (flag 0x20 clear: their keys are in .anim files) keep their place without keys until
+///   <see cref="ModernAnimations.Ensure"/> loads them;</item>
 /// <item>bone rotations as compressed quaternions (four int16): a negative value v is (v + 32768) / 32767, a positive
 ///   one (v - 32767) / 32767, so 0x7FFF is 0 and -1 is 1;</item>
 /// <item>the .skin file (SKIN): vertex list, triangles, bone palettes, submeshes of 0x30 bytes and texture units (the
@@ -28,8 +30,8 @@ namespace WoWData.Core.M2.Modern;
 ///   998 creature models have more than 65,535 triangle indices in view 0; their triangles stay in the vertex range
 ///   of the plain 16-bit vertex start).</item>
 /// </list>
-/// Particles, ribbons, lights and cameras changed their records (M3): they are counted in
-/// <see cref="M2ModernInfo.NotShown"/>, not converted.
+/// M3: particle emitters and ribbons are read into <see cref="M2ModernInfo.Effects"/> (drawn by the 3D view of another
+/// version); lights and cameras are counted in <see cref="M2ModernInfo.NotShown"/>, not converted.
 /// </summary>
 public static class M2ModernReader
 {
@@ -95,15 +97,8 @@ public static class M2ModernReader
         var skid = chunks.FirstOrDefault(c => c.Magic == "SKID");
         if (skid.Magic != null && skid.Size >= 4) info.SkeletonFile = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(skid.Offset));
         foreach (var c in chunks.Where(c => !M2ModernInfo.Describe(c.Magic).Used).GroupBy(c => c.Magic))
-        {
-            var meaning = M2ModernInfo.Describe(c.Key).Meaning;
-            info.Ignored.Add(c.Key switch
-            {
-                "AFID" => $"AFID: {info.AnimFiles.Count} external animation file{(info.AnimFiles.Count == 1 ? "" : "s")} (.anim): later (M3)",
-                "SKID" => $"SKID: skeleton file #{info.SkeletonFile} (.skel): later (M3)",
-                _ => $"{c.Key}: {meaning}",
-            });
-        }
+            info.Ignored.Add($"{c.Key}: {M2ModernInfo.Describe(c.Key).Meaning}");
+        var skel = info.SkeletonFile != 0 ? ReadSkeleton(info.SkeletonFile, readFile, info) : null;
 
         var views = new List<M2View>();
         int want = Math.Min(profiles, sfid.Length);
@@ -134,8 +129,132 @@ public static class M2ModernReader
         if (want == 0) info.Notes.Add(profiles == 0 ? "the model has no views (skin profiles)" : "the model names no skin files (SFID)");
         info.ViewsRead = views.Count;
         var unitLookup = TextureLayers(views, info);
-        var file = new Converter(b, info).Build(nameOf, txid, unitLookup);
-        return M2Model.FromModern(file, views.ToArray(), info);
+        var conv = new Converter(b, info, skel);
+        var file = conv.Build(nameOf, txid, unitLookup);
+        var model = M2Model.FromModern(file, views.ToArray(), info);
+        // M3: the particle emitters and ribbons, drawn by the 3D view of another version
+        var fx = conv.Effects(model.Bones.Length, model.Textures.Length, model.RenderFlags.Length);
+        if (fx.Particles.Count + fx.Ribbons.Count > 0)
+        {
+            info.Effects = fx;
+            info.Approximated.Add($"{Plural(fx.Particles.Count, "particle emitter")} and {Plural(fx.Ribbons.Count, "ribbon")} drawn by the viewer's own simulation (close to the game's look, not exact)");
+            info.Approximated.AddRange(fx.Approximated());
+        }
+        conv.Finish();
+        // M3: the external animations, loaded when a sequence is chosen
+        if (info.ExternalSequences > 0)
+        {
+            var anims = new ModernAnimations(readFile, conv);
+            anims.Bind(model, info.Effects, conv.ExtRecords);
+            info.Animations = anims;
+            int noFile = Enumerable.Range(0, model.Sequences.Length).Count(i => anims.IsExternal(i) && anims.FileOf(i) == 0);
+            if (noFile > 0) info.Notes.Add($"{Plural(noFile, "animation")} kept outside the model name{(noFile == 1 ? "s" : "")} no .anim file (AFID): {(noFile == 1 ? "it has" : "they have")} no keys");
+        }
+        return model;
+    }
+
+    private static string Plural(int n, string word) => $"{n} {word}{(n == 1 ? "" : "s")}";
+
+    private static byte[]? TryRead(Func<uint, byte[]?> readFile, uint id, out string why)
+    {
+        try
+        {
+            var d = readFile(id);
+            why = d == null ? "not in this client" : "";
+            return d;
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            why = e.Message;
+            return null;
+        }
+    }
+
+    /// <summary>The chunks of a skeleton file by magic (the first of each), as buffers of their data.</summary>
+    private static Dictionary<string, Buf> SkelChunks(byte[] s)
+    {
+        var res = new Dictionary<string, Buf>();
+        foreach (var (m, off, size) in Chunks(s))
+            if (!res.ContainsKey(m)) res[m] = new Buf(s.AsSpan(off, size).ToArray());
+        return res;
+    }
+
+    private static List<M2AnimFile> AnimFilesOf(Buf? afid)
+    {
+        var res = new List<M2AnimFile>();
+        if (afid == null) return res;
+        for (int i = 0; i + 8 <= afid.Length; i += 8)
+        {
+            uint f = afid.U32(i + 4);
+            if (f != 0) res.Add(new M2AnimFile(afid.U16(i), afid.U16(i + 2), f));
+        }
+        return res;
+    }
+
+    /// <summary>
+    /// M3: the skeleton file of a model with a SKID chunk (FORMAT KNOWLEDGE, MEASURED on the 1.60 copy: 22 creature
+    /// models, their own bone, sequence and attachment arrays empty): SKS1 (global sequences, sequences, lookup), SKB1
+    /// (bones, key bone lookup), SKA1 (attachment points, lookup), AFID (its .anim files), SKPD (the parent skeleton's
+    /// FileDataID at +8); every offset relative to its chunk's data. A child skeleton's bones equal its parent's
+    /// (MEASURED: index, name hash, key bone and parent of every bone); the parent adds the sequences the child does not
+    /// have. Returns null (with a note) when the skeleton cannot be read: the model then shows without bones.
+    /// </summary>
+    private static SkeletonSource? ReadSkeleton(uint fdid, Func<uint, byte[]?> readFile, M2ModernInfo info)
+    {
+        var s = TryRead(readFile, fdid, out var why);
+        if (s == null)
+        {
+            info.Notes.Add($"skeleton file #{fdid} cannot be read ({why}): the model is shown without bones and animations");
+            return null;
+        }
+        Dictionary<string, Buf> c;
+        try { c = SkelChunks(s); }
+        catch (M2Exception e)
+        {
+            info.Notes.Add($"skeleton file #{fdid} is broken ({e.Message}): the model is shown without bones and animations");
+            return null;
+        }
+        if (!c.TryGetValue("SKS1", out var sks1) || !c.TryGetValue("SKB1", out var skb1))
+        {
+            info.Notes.Add($"skeleton file #{fdid} has no bones or sequences (SKB1 / SKS1): the model is shown without them");
+            return null;
+        }
+        var src = new SkeletonSource { File = fdid, Sks1 = sks1, Skb1 = skb1, Ska1 = c.GetValueOrDefault("SKA1"), AnimFiles = AnimFilesOf(c.GetValueOrDefault("AFID")) };
+        info.AnimFiles.AddRange(src.AnimFiles);
+        info.SkeletonRead = true;
+        foreach (var x in c.Keys.Where(k => k is not ("SKL1" or "SKS1" or "SKB1" or "SKA1" or "SKPD" or "AFID")))
+            info.Ignored.Add($"skeleton {x}: {M2ModernInfo.Describe(x).Meaning}");
+        if (c.TryGetValue("SKPD", out var skpd) && skpd.Length >= 12 && skpd.U32(8) is var parent and not 0)
+        {
+            info.SkeletonParentFile = parent;
+            var p = TryRead(readFile, parent, out var pwhy);
+            Dictionary<string, Buf>? pc = null;
+            if (p != null)
+                try { pc = SkelChunks(p); }
+                catch (M2Exception e) { pwhy = e.Message; }
+            if (pc == null || !pc.TryGetValue("SKS1", out var psks1) || !pc.TryGetValue("SKB1", out var pskb1))
+                info.Notes.Add($"parent skeleton #{parent} cannot be read ({(p == null || pc == null ? pwhy : "no bones or sequences")}): only the skeleton's own animations are shown");
+            else
+            {
+                src.ParentFile = parent;
+                src.ParentSks1 = psks1;
+                src.ParentSkb1 = pskb1;
+                src.ParentAnimFiles = AnimFilesOf(pc.GetValueOrDefault("AFID"));
+                // child bone -> parent bone by the bone's name hash (+0x0C), else the same index
+                int n = (int)skb1.U32(0), pn = (int)pskb1.U32(0);
+                uint o = skb1.U32(4), po = pskb1.U32(4);
+                var byHash = new Dictionary<uint, int>();
+                for (int i = 0; i < pn && pskb1.Fits((uint)(i + 1), po, 0x58); i++) byHash.TryAdd(pskb1.U32((int)po + i * 0x58 + 0x0C), i);
+                src.ParentBone = new int[n];
+                for (int i = 0; i < n; i++)
+                {
+                    uint h = skb1.Fits((uint)(i + 1), o, 0x58) ? skb1.U32((int)o + i * 0x58 + 0x0C) : 0;
+                    src.ParentBone[i] = h != 0 && byHash.TryGetValue(h, out int j) ? j : i < pn ? i : -1;
+                }
+                if (pc.ContainsKey("SKPD")) info.Notes.Add($"parent skeleton #{parent} has a parent of its own: its animations are not added");
+            }
+        }
+        return src;
     }
 
     /// <summary>
