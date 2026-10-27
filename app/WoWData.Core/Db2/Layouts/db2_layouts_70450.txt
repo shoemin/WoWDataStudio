@@ -1,6 +1,8 @@
 # WoW Data Studio: column names for DB2 tables of the "1.60" Classic beta client (1.60.1.70450, wow_classic_beta).
 # Experimental and read-only: used by the DB2 reader (WoWData.Core.Db2.Db2Layouts.ForBuild(70450) / Load) for the
-# tables a 1.60 -> 1.12 map conversion needs. Every other table opens with raw columns (col_N).
+# tables a 1.60 -> 1.12 map conversion needs, and (M1 of docs\research\OPEN_OTHER_VERSIONS_DESIGN.md) the tables
+# Browse needs when the 1.60 client is opened read only: creature, item, game object and spell effect displays and
+# their files. Every other table opens with raw columns (col_N).
 #
 # Same format as Dbc\Layouts\dbc_layouts_5875.txt (one [Table] section, keys, then one line per column), with these
 # differences:
@@ -21,6 +23,9 @@
 #     not 0 or empty;
 #   * links: the share of non-zero values (and not -1) that are IDs of the linked 1.60 table;
 #   * FileDataID columns: the files they name were read from the local CASC storage (their magic);
+#   * chains through the 1.12 tables: a 1.12 path (model, skin, icon, item model or texture name) hashed into the
+#     Classic Era root gives a FileDataID (FileDataIDs are shared between the flavors), compared with the 1.60 value
+#     (directly, or through ModelFileData / TextureFileData); sizes of the linked BLP textures;
 #   * the 1.60 terrain itself (MH2O instances of every map with tiles, 285,312 instances) and the 1.60 map survey
 #     (docs\research\MAP_SURVEY_160.md, per-chunk 1.12 liquid kinds against 1.60 liquid type IDs).
 # A name without "~" has such evidence (normally >= 95% value equality, or a fully resolving link plus a value
@@ -52,6 +57,16 @@
   1 = Height + texture coordinates (8 bytes)
   2 = Depth only (1 byte)
   3 = Height + texture coordinates + depth (9 bytes)
+
+@enum ComponentSection
+  0 = Arm upper
+  1 = Arm lower
+  2 = Hand
+  3 = Torso upper
+  4 = Torso lower
+  5 = Leg upper
+  6 = Leg lower
+  7 = Foot
 
 # ---------------------------------------------------------------------------------------------- tables
 
@@ -282,3 +297,789 @@ SetName            string
 SilenceIntervalMin[2] uint                    | Milliseconds (day, night).
 SilenceIntervalMax[2] uint
 Sounds[2]          uint                       | SoundEntries IDs (day, night).
+
+# ---------------------------------------------------------------------------------------------- Browse (M1)
+
+[CreatureDisplayInfo]
+category: Creatures and models
+about: The looks of creatures: which model (CreatureModelData), its size and transparency, the character look of a humanoid NPC (CreatureDisplayInfoExtra) and up to four skin textures by FileDataID.
+layout-hash: 7275F5F6
+fields: 28
+label: ModelID
+evidence: 28 fields, 31 columns, 14,204 rows of which 25 are in encrypted sections; the ID is stored in the record (column 0). ModelID links 14,204/14,204 to CreatureModelData; on 10,533 IDs shared with 1.12 the model file is the 1.12 display's model in 3,758 rows, the others are the high-resolution player-race models of humanoid NPCs (sampled: HumanMale, OrcMale, TaurenMale...). ExtendedDisplayInfoID links 9,099/9,099 to CreatureDisplayInfoExtra and = 1.12 in 6,980/7,034; CreatureModelScale 10,474/10,533 = 1.12; CreatureModelAlpha 10,527/10,529; SizeClass 7,606/7,612; NPCSoundID 4,503/4,540; BloodID 36/36. TextureVariationFileDataID1-3 equal the FileDataID of 1.12's <model folder>\<TextureVariation>.blp (name hash in Classic Era) in 3,324/3,404, 962/1,037, 214/223 rows whose 1.12 name resolves; every sampled value is a BLP2 file (343 local, 7 encrypted, 1 unknown of 351).
+ID                 id
+ModelID            uint                      -> CreatureModelData | The model (CreatureModelData row; its FileDataID is the .m2).
+~SoundID           uint                      | 251/316 equal to 1.12.
+SizeClass          int
+CreatureModelScale float                     | Size of the model (1 = normal).
+CreatureModelAlpha uint                      | Transparency, 0 (invisible) to 255 (opaque).
+BloodID            uint
+ExtendedDisplayInfoID int                    -> CreatureDisplayInfoExtra | The character look of a humanoid NPC (race, sex, baked texture).
+NPCSoundID         uint
+col_9              uint
+~PortraitCreatureDisplayInfoID int           | 4 rows; every value is a CreatureDisplayInfo ID.
+~PortraitTextureFileDataID int               | 95 rows; every value is a BLP2 interface texture.
+col_12             uint
+col_13             uint
+col_14             int
+col_15             int
+col_16             float
+col_17             float
+col_18             int
+col_19             int
+col_20             int
+col_21             int
+col_22             int
+col_23             int
+col_24             uint
+col_25             float
+col_26             uint
+TextureVariationFileDataID[4] int            | The skins: FileDataIDs of BLP textures that fill the model's replaceable texture slots 11, 12, 13 (as 1.12's TextureVariation1-3; the fourth is new).
+
+[CreatureModelData]
+category: Creatures and models
+about: The creature models: the .m2 file by FileDataID, its bounds, footprints, sounds and scale.
+layout-hash: 0F5449F8
+fields: 34
+evidence: 34 fields, 40 columns, 1,193 rows (22 of them copy-table rows) (ID list). FileDataID = the FileDataID of 1.12's ModelName (.mdx read as .m2, name hash in Classic Era) in 420/425 shared rows whose name resolves (430 shared IDs); 348 of 356 sampled values are M2 files (6 encrypted, 2 unknown). FootprintTextureLength / Width / ParticleScale 389/389 = 1.12; SoundID 425/430; SizeClass 357/357; ~Flags 168/184; ~BloodID 308/430.
+~GeoBox[6]         float                     | Bounding box (min x, y, z, max x, y, z).
+~Flags             int
+FileDataID         uint                      | The .m2 model.
+col_8              float
+col_9              float
+~BloodID           uint
+col_11             uint
+FootprintTextureLength float
+FootprintTextureWidth float
+FootprintParticleScale float
+col_15             uint
+col_16             uint
+col_17             uint
+SoundID            uint
+SizeClass          int
+col_20             float
+col_21             float
+col_22             float
+col_23             uint
+col_24             float
+col_25             float
+col_26             float
+col_27             float
+col_28             float
+col_29             float
+col_30             float
+col_31             float
+col_32             float
+col_33             float
+col_34             float
+col_35             int
+col_36             float
+col_37             uint
+col_38             float
+col_39             float
+
+[CreatureDisplayInfoExtra]
+category: Creatures and models
+about: The character looks of humanoid NPCs: race, sex and the baked texture (skin, face, hair and clothes in one picture).
+layout-hash: 4D9FE25C
+fields: 7
+evidence: 7 fields, 8,994 rows of which 1 is in an encrypted section; the ID is stored in the record. DisplayRaceID 6,939/6,939 = 1.12 and DisplaySexID 2,401/2,405 = 1.12 on 6,939 shared IDs. BakeMaterialResourcesID links 8,637/8,637 to TextureFileData.MaterialResourcesID, one BLP per material, 256 x 256 in 147/147 sampled (the size of 1.12's baked NPC textures); col_6 links 8,990/8,990 the same way, 512 x 256 in 150/150 sampled (a high-resolution bake). 1.12's BakeName files have no name hash in Classic Era, so the textures could not be compared by name.
+ID                 id
+DisplayRaceID      int                       | Player race (ChrRaces).
+DisplaySexID       int                       | 0 male, 1 female.
+~DisplayClassID    int                       | 64 rows, 1-11.
+col_4              int
+BakeMaterialResourcesID int                  | TextureFileData.MaterialResourcesID of the baked texture (256 x 256), slot 1 of the model.
+~HDBakeMaterialResourcesID int               | The same for a 512 x 256 bake.
+
+[CreatureDisplayInfoOption]
+category: Creatures and models
+about: Character customization choices of humanoid NPCs (the modern character look; used by later milestones).
+layout-hash: 2F331C33
+fields: 2
+evidence: 2 fields, 87,919 rows of which 9 are in an encrypted section (ID list); the parent ID links 87,919/87,919 to CreatureDisplayInfoExtra. Its columns are not measured yet.
+col_0              int
+col_1              int
+
+[NPCModelItemSlotDisplayInfo]
+category: Creatures and models
+about: The equipment humanoid NPCs wear (one row per slot), for their character look.
+layout-hash: C2057F5B
+fields: 2
+evidence: 2 fields, 53,120 rows of which 6 are in an encrypted section (ID list); the parent ID links 53,120/53,120 to CreatureDisplayInfoExtra; ItemDisplayInfoID links 53,120/53,120 to ItemDisplayInfo.
+ItemDisplayInfoID  int                       -> ItemDisplayInfo
+~ItemSlot          int                       | 0-10.
+
+[Creature]
+category: Creatures and models
+about: The few creatures the client names itself (companion pets, some bosses): name and up to four displays. The other creatures are named by the server.
+layout-hash: 6E14C900
+fields: 11
+label: Name
+evidence: 11 fields, 19 columns, 179 rows (1 of them copy-table rows) of which 10 are in encrypted sections (ID list). Name holds text in every row ("Mechanical Squirrel", "Siamese"...); DisplayID1 links 179/179 and DisplayID2 6/6 to CreatureDisplayInfo; ~AlwaysItem1-3 link 30/30, 20/20, 16/16 to Item.
+Name               string
+~NameAlt           string
+~Title             string                    | "Lord of Terror" (3 rows).
+~TitleAlt          string
+col_4              int
+~CreatureType      uint                      | 1, 7, 10, 12.
+col_6              uint
+col_7              int
+DisplayID[4]       int                       -> CreatureDisplayInfo | The displays the creature picks from.
+~DisplayProbability[4] float
+~AlwaysItem[3]     int                       -> Item
+
+[GameObjects]
+category: Game objects
+about: The game objects the client places itself (signposts, mailboxes, doors of the world): name, position, display.
+layout-hash: 44BD453C
+fields: 14
+label: Name
+evidence: 14 fields, 26 columns, 1,526 rows; the ID is stored in the record (column 8, the header's ID index; = the record ID 1,526/1,526). Name: text in 1,421 rows ("Old Coast Road", "Sentinel Hill"...); DisplayID links 1,526/1,526 to GameObjectDisplayInfo.
+Name               string
+~Position[3]       float                     | World position.
+~Rotation[4]       float                     | A quaternion.
+ID                 id
+col_9              int
+DisplayID          int                       -> GameObjectDisplayInfo
+col_11             int
+~Scale             float
+~TypeID            int                       | 5, 38, 48.
+col_14             int
+col_15             int
+col_16             int
+col_17             uint
+col_18             int
+col_19             int
+col_20             int
+col_21             int
+col_22             int
+col_23             int
+col_24             int
+col_25             int
+
+[GameObjectDisplayInfo]
+category: Game objects
+about: The looks of game objects: the model (.m2 or .wmo) by FileDataID and its bounds.
+layout-hash: 16D1DD61
+fields: 9
+evidence: 9 fields, 14 columns, 3,243 rows (20 of them copy-table rows) of which 11 are in encrypted sections (ID list). FileDataID = the FileDataID of 1.12's ModelName (name hash in Classic Era) in 1,597/1,601 shared rows whose name resolves (1,618 shared IDs); 388 of 400 sampled values are M2 files and 8 WMO roots (4 unknown).
+~GeoBox[6]         float                     | Bounding box.
+FileDataID         int                       | The model: an .m2, or a .wmo building.
+col_7              int
+col_8              float
+col_9              float
+col_10             int
+col_11             int
+col_12             int
+col_13             uint
+
+[Item]
+category: Items
+about: Every item the client knows: class, subclass, inventory type and icon (the name is in ItemSparse).
+layout-hash: 9A2A4834
+fields: 16
+evidence: 16 fields, 31,849 rows (22,811 of them copy-table rows) of which 80 are in encrypted sections (ID list). ~IconFileDataID: every value is a FileDataID (30,243/30,243), 376 of 378 sampled are BLP2 interface textures (2 encrypted); it equals the default icon of the item's appearance (ItemModifiedAppearance -> ItemAppearance) in 11,338 of 16,683 items. The other columns are guesses from the values.
+~ClassID           int
+~SubclassID        uint
+~Material          uint
+~InventoryType     int
+~SheatheType       uint
+col_5              int
+col_6              int
+~IconFileDataID    int                       | A BLP icon.
+col_8              uint
+col_9              int
+col_10             int
+col_11             uint
+col_12             int
+col_13             int
+col_14             float
+col_15             uint
+
+[ItemSparse]
+category: Items
+about: Item names and stats (one row per item). The app reads only the name.
+layout-hash: 6FCC3191
+fields: 68
+label: Display
+evidence: 68 fields, 103 columns, 19,231 rows (52 of them copy-table rows) of which 89 are in encrypted sections (sparse, ID list). Display equals ItemSearchName's name on all 6,625 shared IDs ("Worn Shortsword", "Bent Staff"...); every ItemSparse ID is an Item ID (19,231/19,231).
+~Description       string
+col_1              string
+col_2              string
+col_3              string
+Display            string                    | The item's name.
+col_5              int
+col_6              float
+col_7              int
+col_8              uint
+col_9              float
+col_10             uint
+col_11             int
+col_12             int
+col_13             float
+col_14             float
+col_15             float
+col_16             float
+col_17             float
+col_18             float
+col_19             float
+col_20             float
+col_21             float
+col_22             float
+col_23             float
+col_24             int
+col_25             int
+col_26             int
+col_27             int
+col_28             int
+col_29             int
+col_30             int
+col_31             int
+col_32             int
+col_33             int
+col_34             int
+col_35             int
+col_36             int
+col_37             int
+col_38             int
+col_39             int
+col_40             int
+col_41             int
+col_42             int
+col_43             int
+col_44             int
+col_45             int
+col_46             int
+col_47             uint
+col_48             int
+col_49             int
+col_50             uint
+col_51             uint
+col_52             uint
+col_53             float
+col_54             float
+col_55             int
+col_56             int
+col_57             int
+col_58             int
+col_59             int
+col_60             int
+col_61             int
+col_62             int
+col_63             int
+col_64             int
+col_65             int
+col_66             int
+col_67             uint
+col_68             uint
+col_69             uint
+col_70             uint
+col_71             uint
+col_72             uint
+col_73             uint
+col_74             uint
+col_75             uint
+col_76             uint
+col_77             uint
+col_78             uint
+col_79             uint
+col_80             uint
+col_81             uint
+col_82             uint
+col_83             uint
+col_84             int
+col_85             uint
+col_86             uint
+col_87             uint
+col_88             uint
+col_89             uint
+col_90             uint
+col_91             uint
+col_92             uint
+col_93             uint
+col_94             uint
+col_95             uint
+col_96             uint
+col_97             uint
+col_98             int
+col_99             int
+col_100            int
+col_101            int
+col_102            uint
+
+[ItemSearchName]
+category: Items
+about: Item names for searching (a smaller copy of the names of ItemSparse).
+layout-hash: 4516C8B0
+fields: 13
+label: Display
+evidence: 13 fields, 18 columns, 6,625 rows (36 of them copy-table rows) of which 19 are in encrypted sections. Display = ItemSparse.Display on 6,625/6,625 shared IDs.
+Display            string
+col_1              uint
+col_2              int
+col_3              uint
+col_4              int
+col_5              int
+col_6              int
+col_7              uint
+col_8              uint
+col_9              uint
+col_10             uint
+col_11             int
+col_12             int
+col_13             int
+col_14             int
+col_15             int
+col_16             int
+col_17             int
+
+[ItemModifiedAppearance]
+category: Items
+about: Which appearance an item has (an item can have several, one per modifier).
+layout-hash: 03A6C979
+fields: 7
+evidence: 7 fields, 16,790 rows of which 19 are in encrypted sections; the ID is stored in the record. ItemID links 16,697/16,790 to Item and equals the parent ID in every row; ItemAppearanceID links 16,776/16,777 to ItemAppearance.
+ID                 id
+ItemID             int                       -> Item
+~ItemAppearanceModifierID int
+ItemAppearanceID   int                       -> ItemAppearance
+~OrderIndex        int
+~TransmogSourceTypeEnum uint
+col_6              int
+
+[ItemAppearance]
+category: Items
+about: An item appearance: the item display (models, textures) and the default icon.
+layout-hash: 481C4281
+fields: 5
+evidence: 5 fields, 9,042 rows of which 17 are in encrypted sections (ID list). ItemDisplayInfoID links 9,032/9,033 to ItemDisplayInfo. DefaultIconFileDataID: 322 of 323 sampled values are BLP2 files, 9,025/9,037 are interface files (ManifestInterfaceData IDs), and the file equals Interface\Icons\<1.12 InventoryIcon of the display>.blp (name hash in Classic Era) in 3,776 of 4,741 rows whose name resolves (1.60 replaced some icons).
+~DisplayType       int
+ItemDisplayInfoID  int                       -> ItemDisplayInfo
+DefaultIconFileDataID int                    | The icon (a BLP).
+~UiOrder           int
+col_4              int
+
+[ItemDisplayInfo]
+category: Items
+about: The looks of items: up to two models (one per hand or per shoulder) and their textures by resource ID (ModelFileData, TextureFileData), body textures (ItemDisplayInfoMaterialRes), geosets.
+layout-hash: 9F3AB8A9
+fields: 16
+evidence: 16 fields, 30 columns, 42,524 rows (35,468 of them copy-table rows) of which 15 are in encrypted sections (ID list). ModelResourcesID1/2 link 8,454/8,544 and 2,056/2,077 to ModelFileData.ModelResourcesID, and on IDs shared with 1.12 its model files are 1.12's ModelName1/2 by file name (the name, or name_<race><sex> for helmets) in 5,084/5,084 and 1,212/1,212 rows whose files have 1.12 names; ModelMaterialResourcesID1/2 link 8,982/9,045 and 2,056/2,073 to TextureFileData.MaterialResourcesID, and one of its files is the 1.12 file named ModelTexture1 in 5,547/5,547 rows. ItemVisual 360/365 = 1.12; GeosetGroup1-3 5,147/5,147, 331/348, 1,019/1,019 = 1.12; HelmetGeosetVis1/2 1,289/1,289 and 1,276/1,276.
+col_0              int
+ItemVisual         int
+col_2              int
+col_3              uint
+col_4              uint
+col_5              int
+col_6              int
+col_7              int
+col_8              uint
+~Flags             int
+ModelResourcesID[2] uint                     | ModelFileData.ModelResourcesID: the model files (one per race and sex for helmets and shoulders).
+ModelMaterialResourcesID[2] int              | TextureFileData.MaterialResourcesID: the model texture (slot 2).
+~ModelType[2]      int
+GeosetGroup[6]     int                       | Group 1-3 as 1.12.
+~AttachmentGeosetGroup[6] int
+HelmetGeosetVis[2] int
+
+[ItemDisplayInfoMaterialRes]
+category: Items
+about: The body textures of an item display (armour drawn on the character), one row per body region.
+layout-hash: AA462C0E
+fields: 2
+evidence: 2 fields, 55,644 rows of which 16 are in encrypted sections (ID list); the parent ID links 55,644/55,644 to ItemDisplayInfo. MaterialResourcesID links 55,575/55,644 to TextureFileData.MaterialResourcesID. ComponentSection is 1.12's region order: the textures of section i are 1.12's Texture<region i> of the same display by file name in 4,449/4,449 (arm upper), 5,562/5,562, 2,502/2,502, 5,563/5,563, 5,209/5,212, 4,478/4,480, 5,069/5,069, 2,566/2,571 (foot) rows.
+ComponentSection   int enum(ComponentSection)| The body region.
+MaterialResourcesID int                      | TextureFileData.MaterialResourcesID.
+
+[ModelFileData]
+category: Files
+about: Model resources: which .m2 files belong to a ModelResourcesID (an item's model per race and sex).
+layout-hash: 2AE4E788
+fields: 5
+evidence: 5 fields, 10 columns, 121,131 rows; the ID is stored in the record (column 6, = the record ID in 121,131/121,131) and is the model's FileDataID (165 of 300 sampled are M2 files, the rest not in this build's root). ModelResourcesID: see ItemDisplayInfo.ModelResourcesID.
+~GeoBox[6]         float
+ID                 id
+~Flags             int
+~LodCount          uint
+ModelResourcesID   uint
+
+[TextureFileData]
+category: Files
+about: Texture resources: which BLP files belong to a MaterialResourcesID.
+layout-hash: BD7C74C2
+fields: 3
+evidence: 3 fields, 58,693 rows; the ID is stored in the record (= the record ID 58,693/58,693) and is the texture's FileDataID (300 of 300 sampled are BLP2 files). MaterialResourcesID: see ItemDisplayInfo, ItemDisplayInfoMaterialRes and CreatureDisplayInfoExtra.
+ID                 id
+~UsageType         uint
+MaterialResourcesID int
+
+[ComponentModelFileData]
+category: Files
+about: Item models made per race and sex (helmets, shoulders): which race and sex a model file is for. The ID is the model's FileDataID.
+layout-hash: AD90D87A
+fields: 4
+evidence: 4 fields, 50,267 rows (50,209 of them copy-table rows) (ID list; 205 of 300 sampled IDs are M2 files). On the 1,795 rows whose file has a 1.12 name ending in _<race><M|F> (Classic Era name hash): RaceID = the race of the name 1,795/1,795; GenderIndex 0 for every M (898), 1 for every F (897).
+GenderIndex        int                       | 0 male, 1 female.
+~ClassID           int
+RaceID             int
+~PositionIndex     int                       | -1, 0, 1 (left / right shoulder).
+
+[ComponentTextureFileData]
+category: Files
+about: Item textures made per race or sex (body textures). The ID is the texture's FileDataID.
+layout-hash: B32B030A
+fields: 3
+evidence: 3 fields, 14,371 rows (14,344 of them copy-table rows) (ID list; 300 of 300 sampled IDs are BLP2 files). On 9,450 rows whose file has a 1.12 name ending in _M, _F or _U: GenderIndex 0 for every _M (1,938), 1 for every _F (1,906), 3 for every _U (5,606).
+GenderIndex        int                       | 0 male, 1 female, 3 either.
+~ClassID           int
+~RaceID            int
+
+[Spell]
+category: Spells
+about: Spell texts: the rank or subtext, the description and the aura description (the name is in SpellName).
+layout-hash: E3D134FB
+fields: 3
+evidence: 3 fields, 31,939 rows (18,123 of them copy-table rows) of which 488 are in encrypted sections (sparse). On 16,499 IDs shared with 1.12: NameSubtext 3,826/4,253, Description 8,533/9,956, AuraDescription 3,319/4,009 = 1.12 (texts were edited).
+~NameSubtext       string
+~Description       string
+~AuraDescription   string
+
+[SpellName]
+category: Spells
+about: Spell names.
+layout-hash: 782EE721
+fields: 1
+label: Name
+evidence: 1 field, 31,939 rows (14,578 of them copy-table rows) of which 623 are in encrypted sections. Name = 1.12 Spell.Name on 16,091 of 16,499 shared IDs.
+Name               string
+
+[SpellMisc]
+category: Spells
+about: Spell attributes, school, icons (the parent ID is the spell).
+layout-hash: 434B3607
+fields: 16
+evidence: 16 fields, 32 columns, 31,919 rows of which 968 are in encrypted sections; the parent ID links 31,918/31,919 to Spell. ~SpellIconFileDataID: 391 of 394 sampled values are BLP2 files (3 encrypted), 31,744/31,777 are interface files.
+col_0              int
+col_1              int
+col_2              int
+col_3              int
+col_4              int
+col_5              int
+col_6              int
+col_7              int
+col_8              int
+col_9              int
+col_10             int
+col_11             int
+col_12             int
+col_13             int
+col_14             int
+col_15             int
+col_16             int
+col_17             int
+col_18             uint
+col_19             uint
+col_20             uint
+col_21             uint
+col_22             uint
+col_23             float
+col_24             float
+col_25             float
+~SpellIconFileDataID int
+~ActiveIconFileDataID int
+col_28             int
+col_29             int
+col_30             int
+col_31             int
+
+[SpellXSpellVisual]
+category: Spells
+about: Which spell visuals a spell shows (the parent ID is the spell).
+layout-hash: 7994A890
+fields: 12
+evidence: 12 fields, 20,392 rows of which 670 are in encrypted sections; the ID is stored in the record; the parent ID links 20,384/20,392 to SpellName. SpellVisualID links 19,401/19,403 to SpellVisual (2 more are encrypted).
+ID                 id
+col_1              int
+SpellVisualID      uint                      -> SpellVisual
+~Probability       float
+col_4              int
+col_5              int
+col_6              int
+col_7              int
+col_8              uint
+col_9              uint
+col_10             uint
+col_11             uint
+
+[SpellVisual]
+category: Spells
+about: A spell visual: its events (SpellVisualEvent, kits) and its missiles.
+layout-hash: 4B85C90F
+fields: 17
+evidence: 17 fields, 21 columns, 6,102 rows (3,801 of them copy-table rows) of which 24 are in encrypted sections (ID list). StateKit 712/741 = 1.12 on 2,165 shared IDs; SpellVisualMissileSetID matches the parent ID of SpellVisualMissile rows in 726/745 rows.
+col_0              float
+col_1              float
+col_2              float
+col_3              float
+col_4              float
+col_5              float
+StateKit           int
+col_7              uint
+col_8              int
+col_9              int
+col_10             int
+col_11             uint
+col_12             uint
+col_13             int
+col_14             uint
+col_15             uint
+SpellVisualMissileSetID uint                 | The missiles (SpellVisualMissile rows with this parent ID).
+col_17             uint
+col_18             uint
+col_19             uint
+col_20             int
+
+[SpellVisualKit]
+category: Spells
+about: A spell visual kit: its effects are in SpellVisualKitEffect and SpellVisualKitModelAttach.
+layout-hash: C069D9C4
+fields: 9
+evidence: 9 fields, 10 columns, 7,960 rows (7,910 of them copy-table rows) of which 14 are in encrypted sections (ID list). Its columns are not measured yet.
+col_0              int
+col_1              int
+col_2              uint
+col_3              uint
+col_4              int
+col_5              int
+col_6              int
+col_7              int
+col_8              int
+col_9              int
+
+[SpellVisualKitModelAttach]
+category: Spells
+about: An effect model attached by a spell visual kit (the parent ID is the kit).
+layout-hash: 02CF8554
+fields: 22
+evidence: 22 fields, 26 columns, 8,963 rows of which 51 are in encrypted sections; the parent ID links 8,962/8,963 to SpellVisualKit. SpellVisualEffectNameID links 8,962/8,963 to SpellVisualEffectName (the last one is encrypted). Every row is also a SpellVisualKitEffect of type 2 (8,963/8,963).
+~Offset[3]         float
+~OffsetVariation[3] float
+SpellVisualEffectNameID int                  -> SpellVisualEffectName
+~AttachmentID      int
+col_8              int
+col_9              float
+col_10             float
+col_11             float
+col_12             float
+col_13             float
+col_14             float
+~Scale             float
+col_16             float
+col_17             int
+col_18             int
+col_19             int
+col_20             int
+col_21             int
+col_22             int
+col_23             float
+col_24             float
+col_25             uint
+
+[SpellVisualEffectName]
+category: Spells
+about: The spell effect models and textures, by FileDataID.
+layout-hash: 2245CEE6
+fields: 16
+evidence: 16 fields, 2,962 rows (243 of them copy-table rows) of which 13 are in encrypted sections (ID list). ModelFileDataID = the FileDataID of 1.12's FileName (.mdx read as .m2, name hash in Classic Era) in 653/655 shared rows whose name resolves (775 shared IDs); 387 of 389 sampled values are M2 files (2 unknown). ~TextureFileDataID: 45/45 values are BLP2 files.
+ModelFileDataID    int                       | The effect model (.m2).
+col_1              float
+col_2              float
+col_3              float
+col_4              float
+col_5              float
+col_6              int
+~TextureFileDataID int                       | A texture (45 rows).
+col_8              float
+col_9              int
+col_10             int
+col_11             uint
+col_12             int
+col_13             int
+col_14             int
+col_15             uint
+
+[SpellVisualEvent]
+category: Spells
+about: When a spell visual plays a kit (the parent ID is the spell visual).
+layout-hash: 865F512E
+fields: 10
+evidence: 10 fields, 15,660 rows of which 64 are in encrypted sections; the parent ID links 15,656/15,660 to SpellVisual. SpellVisualKitID links 15,658/15,659 to SpellVisualKit (the last one is encrypted).
+~StartEvent        int
+~EndEvent          int
+col_2              int
+col_3              int
+col_4              int
+col_5              int
+~TargetType        int
+SpellVisualKitID   int                       -> SpellVisualKit
+col_8              int
+col_9              int
+
+[SpellVisualMissile]
+category: Spells
+about: The missiles of a spell visual (the parent ID is SpellVisual.SpellVisualMissileSetID).
+layout-hash: EC765EB2
+fields: 22
+evidence: 22 fields, 26 columns, 732 rows of which 1 is in an encrypted section; the ID is stored in the record (column 6). SpellVisualEffectNameID links 720/720 to SpellVisualEffectName.
+col_0              float
+col_1              float
+col_2              float
+col_3              float
+col_4              float
+col_5              float
+ID                 id
+SpellVisualEffectNameID uint                 -> SpellVisualEffectName
+col_8              uint
+col_9              int
+col_10             int
+col_11             uint
+col_12             uint
+col_13             int
+col_14             uint
+col_15             uint
+col_16             int
+col_17             uint
+col_18             uint
+col_19             int
+col_20             int
+col_21             uint
+col_22             int
+col_23             int
+col_24             int
+col_25             int
+
+[SpellVisualKitEffect]
+category: Spells
+about: The effects of a spell visual kit (the parent ID is the kit): a type and what it points at.
+layout-hash: E3206CA2
+fields: 2
+evidence: 2 fields, 18,234 rows of which 102 are in encrypted sections; the parent ID links 18,223/18,234 to SpellVisualKit. Effect by EffectType: type 2 links 8,963/8,963 to SpellVisualKitModelAttach, types 7 and 16 to CreatureDisplayInfo (7/7, 34/37), type 10 to SpellVisualKit (10/10).
+EffectType         int
+Effect             int                       | A row of the table the type names (2 = SpellVisualKitModelAttach).
+
+[ChrRaces]
+category: Characters
+about: The player races (used by later milestones for characters).
+layout-hash: 4F44C796
+fields: 51
+label: Name
+evidence: 51 fields, 61 columns, 58 rows (ID list). On the 9 IDs shared with 1.12: ClientPrefix 8/9, ClientFileString 9/9, Name 9/9, FactionID 9/9, CinematicSequenceID 8/8, ResSicknessSpellID 9/9, SplashSoundID 8/9, BaseLanguage 9/9, CreatureType 9/9 = 1.12.
+ClientPrefix       string
+ClientFileString   string
+Name               string
+~NameFemale        string
+~NameLowercase     string
+~NameFemaleLowercase string
+col_6              string
+col_7              string
+col_8              string
+col_9              string
+col_10             string
+col_11             string
+col_12             string
+col_13             string
+col_14             string
+col_15             int
+FactionID          int
+CinematicSequenceID int
+ResSicknessSpellID int
+SplashSoundID      int
+col_20             int
+col_21             int
+col_22             int
+col_23             int
+col_24             int
+col_25             int
+col_26             int
+col_27             int
+col_28             int
+col_29             int
+col_30             int
+col_31             int
+col_32             int
+col_33             int
+col_34             float
+col_35             float
+col_36             float
+col_37             float
+col_38             float
+col_39             float
+col_40             float
+col_41             float
+col_42             float
+col_43             float
+BaseLanguage       int
+CreatureType       uint
+col_46             int
+col_47             int
+col_48             int
+col_49             int
+col_50             int
+col_51             int
+col_52             int
+col_53             int
+col_54             int
+col_55             int
+col_56             int
+col_57             int
+col_58             int
+col_59             int
+col_60             int
+
+[ChrModel]
+category: Characters
+about: The player character models (used by later milestones).
+layout-hash: 03FAB755
+fields: 17
+evidence: 17 fields, 21 columns, 127 rows; the ID is stored in the record (column 6). Its columns are not measured yet.
+col_0              float
+col_1              float
+col_2              float
+col_3              float
+col_4              float
+col_5              float
+ID                 id
+col_7              int
+col_8              int
+col_9              int
+col_10             int
+col_11             int
+col_12             int
+col_13             int
+col_14             int
+col_15             float
+col_16             float
+col_17             float
+col_18             float
+col_19             float
+col_20             float
+
+[ChrCustomizationMaterial]
+category: Characters
+about: Character customization textures (used by later milestones).
+layout-hash: BE9767E9
+fields: 2
+evidence: 2 fields, 51,686 rows (25,990 of them copy-table rows) (ID list). Its columns are not measured yet.
+col_0              int
+col_1              int
+
+[ManifestInterfaceData]
+category: Files
+about: The client's own list of its interface files: folder and file name per FileDataID.
+layout-hash: 618AD009
+fields: 2
+label: FileName
+evidence: 2 fields, 134,284 rows (ID list). FilePath\FileName hashes (the root's name hash) to the record's own FileDataID in 134,186 of 134,284 rows; 300 of 300 sampled IDs are BLP2 files.
+FilePath           string
+FileName           string
