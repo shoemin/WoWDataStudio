@@ -60,10 +60,21 @@ public sealed class EntryDetails
     public List<TextureRef> Textures { get; } = new();
     public List<string> Facts { get; } = new();
     public List<string> UsedBy { get; } = new();
+    /// <summary>Another version opened read only (M1): every file of the entry with its FileDataID, where its name
+    /// comes from and whether it can be read. Empty for your 1.12 game.</summary>
+    public List<ModernFileRef> Files { get; } = new();
+}
+
+/// <summary>A file of a modern client in the details panel: name (or #FileDataID), role, FileDataID, name source, state.</summary>
+public sealed record ModernFileRef(string Path, string Role, uint FileDataId, WoWData.Core.Versions.NameSource Source, string State)
+{
+    public bool Readable => State == "local";
+    /// <summary>"FileDataID 123456 · verified · local"</summary>
+    public string Facts => $"FileDataID {FileDataId} · {WoWData.Core.Versions.NameSources.Short(Source)} · {State}";
 }
 
 /// <summary>Queries over a built index (read-only).</summary>
-public sealed class AssetIndex : IDisposable
+public sealed partial class AssetIndex : IDisposable
 {
     private readonly SqliteConnection _db;
     public string Path { get; }

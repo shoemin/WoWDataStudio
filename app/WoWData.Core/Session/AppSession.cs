@@ -21,6 +21,36 @@ public sealed class AppSession : IDisposable
     /// <summary>Model export / import through Blender (Phase 3c).</summary>
     public WoWData.Core.ModelIO.ModelPackageService? ModelPackages { get; private set; }
     public List<IndexEntry> Entries { get; private set; } = new();
+
+    // ------------------------------------------------------------------ M1: another version opened read only
+    // (docs\research\OPEN_OTHER_VERSIONS_DESIGN.md). For your 1.12 game the concrete properties above are set as before
+    // and these stay null (except Profile); for another version only these are set.
+
+    /// <summary>What is open and what it may do: <see cref="WoWData.Core.Versions.GameProfile.Own112"/> after
+    /// <see cref="OpenAsync"/>, a read-only profile after <see cref="OpenOtherAsync"/>; null when nothing is open.</summary>
+    public WoWData.Core.Versions.GameProfile? Profile { get; private set; }
+    /// <summary>True when another version is open (read only): no workspace, no edits, no installs.</summary>
+    public bool IsReadOnly => Profile is { IsOwnClient: false };
+    /// <summary>The other version's client (its files and DB2 tables).</summary>
+    public WoWData.Core.Versions.OtherClient? Other { get; private set; }
+    /// <summary>The other version's files by name or #FileDataID (names from the index).</summary>
+    public WoWData.Core.Versions.ModernClientFiles? Files { get; private set; }
+    /// <summary>The other version's display chains (DB2 tables with our measured column names).</summary>
+    public Catalog160? Displays { get; private set; }
+    /// <summary>The other version's app folder (only its index lives there; never a workspace).</summary>
+    public ClientPaths? OtherPaths { get; private set; }
+
+    /// <summary>The details panel of an entry, for either kind of index.</summary>
+    public EntryDetails Details(IndexEntry e)
+    {
+        var index = Index ?? throw new InvalidOperationException("Nothing is open.");
+        return index.IsModern && Displays != null && Files?.Names != null ? index.DetailsModern(e, Displays, Files.Names) : index.Details(e, Catalog);
+    }
+
+    /// <summary>A file of the other version (by name or #FileDataID); throws <see cref="WoWData.Core.Versions.ClientFileException"/>
+    /// when it is encrypted or not on this computer, returns null when the client has no such file.</summary>
+    public byte[]? ReadOther(string path) => Files?.Read(path);
+
     private WoWData.Core.Maps.MapCatalog? _maps;
     private readonly object _mapsGate = new();
 
@@ -79,7 +109,13 @@ public sealed class AppSession : IDisposable
     public WoWData.Core.Maps.NoggitService? Noggit => Client == null ? null : new WoWData.Core.Maps.NoggitService(Client, Settings);
 
     /// <summary>A map file as the app has it: your workspace's version, else the game's.</summary>
-    public byte[]? ReadCurrent(string path) => Workspace != null && Workspace.IsModified(path) ? Workspace.ReadEdited(path) ?? Data?.Read(path) : Data?.Read(path);
+    public byte[]? ReadCurrent(string path) => Workspace != null && Workspace.IsModified(path) ? Workspace.ReadEdited(path) ?? Data?.Read(path) : Data != null ? Data.Read(path) : ReadOtherOrNull(path);
+
+    private byte[]? ReadOtherOrNull(string path)
+    {
+        try { return ReadOther(path); }
+        catch (WoWData.Core.Versions.ClientFileException) { return null; }
+    }
     /// <summary>0.6.1: the game's terrain specular settings (its WTF\Config.wtf, read only).</summary>
     public WoWData.Core.Maps.TerrainSpecularSettings GameSpecular => WoWData.Core.Maps.TerrainSpecularSettings.Read(Client?.ClientDir ?? Settings.ClientDir);
 
@@ -87,7 +123,7 @@ public sealed class AppSession : IDisposable
     public bool SpecularGround => WoWData.Core.Maps.GroundTextures.SpecularOn(Settings.GroundTextures, GameSpecular);
 
     /// <summary>Whether the game (or your workspace) has a file.</summary>
-    public bool FileExists(string path) => Data?.Exists(path) == true || Workspace?.IsModified(path) == true;
+    public bool FileExists(string path) => Data?.Exists(path) == true || Workspace?.IsModified(path) == true || (Data == null && Files?.Exists(path) == true);
 
     /// <summary>The ground texture pair (base + "_s") of a texture, or null when it is not a ground texture.</summary>
     public WoWData.Core.Maps.GroundTexturePair? GroundPair(string path) =>
@@ -318,12 +354,83 @@ public sealed class AppSession : IDisposable
             var ws = Workspace;
             Models = new ModelResolver(Catalog, p => (ws.IsModified(p) ? ws.ReadEdited(p) : null) ?? data.Read(p));
             ModelPackages = new WoWData.Core.ModelIO.ModelPackageService(data, Catalog, index, ws, Models, Textures);
+            Profile = WoWData.Core.Versions.GameProfile.Own112(clientDir);
             ReadMeta();
         }
         catch
         {
             data.Dispose();
             throw;
+        }
+    }
+
+    /// <summary>The stages of the organizing screen for another version (<see cref="ModernIndexBuilder.StageNames"/>).</summary>
+    public static IReadOnlyList<string> OtherStageNames => ModernIndexBuilder.StageNames;
+
+    /// <summary>
+    /// M1: opens another version read only (a modern CASC client; design section 2.3): the client, its index (built by
+    /// <see cref="ModernIndexBuilder"/> when missing or out of date, in the app's folder of that client: only the index,
+    /// never a workspace), its file names and display chains. The 1.12 open path (<see cref="OpenAsync"/>) is not used.
+    /// </summary>
+    public async Task OpenOtherAsync(WoWData.Core.Versions.ClientCopy copy, OtherOpenOptions opts, IProgress<BuildProgress>? progress, CancellationToken ct = default)
+    {
+        CloseClient();
+        if (copy.Format != WoWData.Core.Versions.ClientFormat.Casc)
+            throw new NotSupportedException($"{copy.Name} ({copy.Label}) stores its data in MPQ archives: opening it like your game comes later. The Other versions tab reads its files and tables.");
+        var oc = await Task.Run(() => WoWData.Core.Versions.OtherClient.Open(copy), ct);
+        WoWData.Core.Casc.CascStorage? era = null;
+        try
+        {
+            var storage = oc.Casc!;
+            // an executable without a version resource: the version and build of the CASC build (.build.info)
+            if (copy.Build == 0 && storage.Build > 0 && storage.Version.LastIndexOf('.') is > 0 and var dot)
+                copy = copy with { Version = storage.Version[..dot], Build = storage.Build };
+            var cat = await Task.Run(() => new Catalog160(storage, oc.Catalog, copy.Build), ct);
+            var eraCopy = WoWData.Core.Maps.Conversion.ConvertNames.FindEra(copy, opts.Found);
+            if (eraCopy != null)
+            {
+                try { era = WoWData.Core.Casc.CascStorage.Open(eraCopy.Folder); }
+                catch (Exception e) when (e is IOException or InvalidDataException or ArgumentException or WoWData.Core.Casc.CascMissingException) { era = null; }
+            }
+            var names112 = opts.Client112?.Names().Values.Select(v => v.Path).ToList();
+            var mopts = new ModernIndexOptions
+            {
+                Listfile = string.IsNullOrWhiteSpace(opts.Listfile) ? null : opts.Listfile,
+                Names112 = names112,
+                Names112Fingerprint = opts.Client112 == null ? "" : $"{names112!.Count} {opts.Client112.Fingerprint()}",
+                Era = era,
+                MaxFileEntries = opts.MaxFileEntries,
+            };
+            var cp = Paths.ForClient(copy.Folder);
+            Directory.CreateDirectory(cp.Dir);
+            var fingerprint = await Task.Run(() => ModernIndexBuilder.Fingerprint(storage, mopts), ct);
+            bool current = !opts.ForceRebuild && await Task.Run(() => ModernIndexBuilder.IsCurrent(cp.IndexFile, fingerprint), ct);
+            if (!current)
+            {
+                await ModernIndexBuilder.BuildAsync(storage, cat, cp.IndexFile, mopts, progress, ct);
+                // the build read whole tables; the session needs none of them (details read the index and the models)
+                cat = new Catalog160(storage, oc.Catalog, copy.Build);
+            }
+            var index = new AssetIndex(cp.IndexFile);
+            var entries = await Task.Run(index.LoadEntries, ct);
+            Other = oc;
+            Displays = cat;
+            Files = new WoWData.Core.Versions.ModernClientFiles(storage, index.ModernNames(storage));
+            OtherPaths = cp;
+            Index = index;
+            Entries = entries;
+            _byKey = null;
+            Profile = WoWData.Core.Versions.GameProfile.ReadOnly(copy);
+            ReadMeta();
+        }
+        catch
+        {
+            oc.Dispose();
+            throw;
+        }
+        finally
+        {
+            era?.Dispose();
         }
     }
 
@@ -369,6 +476,12 @@ public sealed class AppSession : IDisposable
         Textures = null;
         Models = null;
         ModelPackages = null;
+        Other?.Dispose();
+        Other = null;
+        Files = null;
+        Displays = null;
+        OtherPaths = null;
+        Profile = null;
         lock (_mapsGate)
         {
             _maps = null;
@@ -383,4 +496,17 @@ public sealed class AppSession : IDisposable
     }
 
     public void Dispose() => CloseClient();
+}
+
+/// <summary>What <see cref="AppSession.OpenOtherAsync"/> takes besides the client (all optional).</summary>
+public sealed class OtherOpenOptions
+{
+    /// <summary>A listfile the user chose (setting other-clients.listfile).</summary>
+    public string? Listfile { get; init; }
+    /// <summary>The user's 1.12 game (its file names name the other version's files, design 2.6).</summary>
+    public ClientData? Client112 { get; init; }
+    /// <summary>The clients found in the folder of other versions (to find a Classic Era copy).</summary>
+    public IReadOnlyList<WoWData.Core.Versions.ClientCopy>? Found { get; init; }
+    public bool ForceRebuild { get; init; }
+    public int MaxFileEntries { get; init; } = ModernIndexBuilder.DefaultMaxFileEntries;
 }
