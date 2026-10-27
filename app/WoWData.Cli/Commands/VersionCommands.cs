@@ -2,6 +2,7 @@ using WoWData.Core.Dbc;
 using WoWData.Core.Maps.Conversion;
 using WoWData.Core.Mpq;
 using WoWData.Core.Versions;
+using WoWData.Core.Index;
 
 namespace WoWData.Cli.Commands;
 
@@ -69,6 +70,47 @@ internal static class VersionCommands
     {
         yield return new CommandSpec
         {
+            Path = "versions open",
+            Summary = "open another version read only (the app's \"Open read only\"): build or check its index and show what it holds: entries, file names and where they come from, locked records",
+            Args = new[] { "[client]" },
+            Options = new[] { Folder, Listfile, new OptionSpec("rebuild", null, "build the index again (\"Rebuild the index\")") },
+            NeedsClient = false,
+            Details = "<client> is the client's folder, its name in \"wds versions find\", a version (1.60) or a build (70450); or --version <client>. " +
+                      "The first time its index is built from the client's own tables and file names, your 1.12 game's file names (when your game folder is set) and the listfile you chose. " +
+                      "Then the commands that read take --version <client>: find search / list / info / files / extract, textures info / export / export-all. Nothing in the client is changed; its index is kept in the app's folder.",
+            Examples = new[] { "wds versions open _classic_beta_", "wds versions open 1.60 --listfile \"G:\\listfile\\community-listfile.csv\"", "wds versions open _classic_beta_ --rebuild --json", "wds find search boar --version _classic_beta_" },
+            Run = async inv =>
+            {
+                var text = inv.ArgOrNull(0) ?? inv.Ctx.VersionOverride ?? throw new CliError(ExitCode.Usage, "give the client: wds versions open <client> (or --version <client>).");
+                if (inv.Opt("folder") is { } folder) inv.Ctx.Settings.OtherClientsDir = folder;
+                var lf = inv.Opt("listfile");
+                if (lf != null && !File.Exists(lf)) throw new CliError(ExitCode.NotFound, $"the listfile \"{lf}\" does not exist.");
+                var s = await inv.Ctx.OtherSessionAsync(text, inv.Flag("rebuild"), lf);
+                var st = OtherVersionStatus.Of(s);
+                var copy = s.Profile!.Copy!;
+                var r = new CliResult().With(new
+                {
+                    client = CopyJson(copy), version = st.Version, label = st.Label, readOnly = true, index = s.Index!.Path, built = st.Built, seconds = st.Seconds,
+                    entries = st.Entries, entriesByKind = st.EntriesByKind, clientFiles = st.ClientFiles, names = st.Names, verifiedNames = st.VerifiedNames,
+                    fileEntriesLeftOut = st.FileEntriesLeftOut, listfile = st.Listfile, era = st.Era,
+                    locked = st.Locked.Select(l => new { table = l.Table, readable = l.Readable, locked = l.Locked, total = l.Total, copies = l.Copies }),
+                    problems = st.Problems, statusLine = st.StatusLine,
+                });
+                r.Line($"{copy.Name}: {st.Label}");
+                r.Line($"  index    {s.Index.Path} (built {st.Built}{(st.Seconds > 0 ? $" in {st.Seconds:0.#} s" : "")})");
+                r.Line($"  entries  {st.Entries:N0}: " + string.Join(", ", st.EntriesByKind.OrderBy(k => k.Key).Select(k => $"{k.Value:N0} {k.Key.ToLowerInvariant()}")));
+                if (st.FileEntriesLeftOut > 0) r.Line($"           {st.FileEntriesLeftOut:N0} more named textures and models are not Browse entries (the limit); \"wds find files <pattern> --version {text}\" lists them");
+                r.Line("  " + st.NamesLine);
+                if (st.Era.Length > 0) r.Line($"           Classic Era copy used for your 1.12 names: {st.Era}");
+                r.Line("  locked   records in encrypted sections (no key): never guessed, left out");
+                foreach (var l in st.Locked) r.Line($"    {l.Table,-28} {l.Readable,9:N0} readable  {l.Locked,6:N0} locked" + (l.Copies > 0 ? $"  ({l.Copies:N0} copy rows)" : ""));
+                foreach (var p in st.Problems) r.Warnings.Add(p);
+                r.Line($"Read it with --version {text}: wds find search <words> --version {text}");
+                return r;
+            },
+        };
+        yield return new CommandSpec
+        {
             Path = "versions find",
             Summary = "the World of Warcraft clients in the folder of other versions: version, release, data format, readable or not",
             Options = new[] { Folder },
@@ -82,7 +124,7 @@ internal static class VersionCommands
                 foreach (var l in Common.Table(new[] { "Name", "Version", "Build", "Release", "Data", "Readable" },
                              found.Select(c => (IReadOnlyList<string>)new[] { c.Name, c.Version, c.Build.ToString(), c.Release, c.Format.ToString().ToUpperInvariant(), c.Readable ? "yes" : "not yet" }), 50))
                     r.Line(l);
-                if (found.Any(c => c.Format == ClientFormat.Casc)) r.Line("CASC clients (6.x and later, and Battle.net clients): their files can be read, their data tables not yet.");
+                if (found.Any(c => c.Format == ClientFormat.Casc)) r.Line("CASC clients (6.x and later, and Battle.net clients): their files and data tables can be read; \"wds versions open <client>\" opens one read only like your game (Browse, textures).");
                 return Task.FromResult(r);
             },
         };

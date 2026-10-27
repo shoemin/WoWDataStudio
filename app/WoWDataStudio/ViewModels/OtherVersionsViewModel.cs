@@ -463,6 +463,18 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
         CompareNote = cmp.Notes.Count == 0 ? $"{table} {id}: {cmp.Columns.Count} named columns in {cmp.Clients.Count} versions." : string.Join(" ", cmp.Notes);
     }
 
+    /// <summary>M1: "Open read only": the selected modern client in a read-only window of its own.</summary>
+    [RelayCommand]
+    private void OpenReadOnly()
+    {
+        if (SelectedClient is not { Copy.Format: ClientFormat.Casc } row)
+        {
+            SetStatus("Pick a modern (CASC) client first: older clients are read in this tab.", true);
+            return;
+        }
+        WoWDataStudio.Views.OtherVersionWindow.Open(_main, row.Copy, _found);
+    }
+
     /// <summary>The view model of "Convert map..." for the selected client (also used by the screenshots).</summary>
     internal MapConvertViewModel MakeConvertViewModel()
     {

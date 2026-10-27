@@ -17,6 +17,7 @@ public static class CliApp
     {
         new("home", "folder", "keep settings, index and edits in this folder instead of %APPDATA%\\WoWDataStudio (scripts and tests run isolated)"),
         new("client", "folder", "use this World of Warcraft folder for this run instead of the one in the settings"),
+        new("version", "client", "open another World of Warcraft version read only for this run (its folder, its name in the folder of other versions, a version such as 1.60 or a build); only the commands that read work (find, textures info / export); alone, --version prints the version of wds"),
         new("json", null, "print one JSON object (machine-readable) instead of text"),
         new("quiet", null, "no progress on stderr"),
         new("yes", null, "confirm a command that changes the game folder or the server, or deletes something (without it, wds says what it would do and exits with code 5)"),
@@ -89,10 +90,16 @@ public static class CliApp
                     case "--yes": case "-y": ctx.Yes = true; break;
                     case "--dry-run": ctx.DryRun = true; rest.Add(a); break;
                     case "--help": case "-h": case "-?": case "/?": help = true; break;
-                    case "--version": version = true; break;
+                    case "--version":
+                        // "--version <client>" opens another version; "--version" alone (or before an option or a group) prints wds's version
+                        if (i + 1 < args.Length && !args[i + 1].StartsWith('-') && !Groups.Any(g => string.Equals(g.Name, args[i + 1], StringComparison.OrdinalIgnoreCase)))
+                            ctx.VersionOverride = args[++i];
+                        else version = true;
+                        break;
                     default:
                         if (a.StartsWith("--home=", StringComparison.OrdinalIgnoreCase)) ctx.Home = a[7..];
                         else if (a.StartsWith("--client=", StringComparison.OrdinalIgnoreCase)) ctx.ClientOverride = a[9..];
+                        else if (a.StartsWith("--version=", StringComparison.OrdinalIgnoreCase)) ctx.VersionOverride = a[10..];
                         else rest.Add(a);
                         break;
                 }
@@ -129,6 +136,9 @@ public static class CliApp
                 Write(ctx, spec.Path, new CliResult().With(CommandJson(spec)), CommandHelp(spec));
                 return ExitCode.Ok;
             }
+            // M1: another version is open read only; only the commands that read it run
+            if (ctx.VersionOverride != null && !spec.VersionAware)
+                throw new CliError(ExitCode.Refused, ReadOnlyRefusal(ctx, spec));
             // the command's arguments and options
             var positional = new List<string>();
             var opts = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
@@ -183,6 +193,23 @@ public static class CliApp
             Write(ctx, commandPath, CliResult.Fail(e.Code, e.Message));
             return e.Code;
         }
+    }
+
+    /// <summary>Read-only commands that do not open other versions yet (later milestones of the design).</summary>
+    private static readonly HashSet<string> LaterForOtherVersions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "find used", "find where", "models info", "models anims", "models skeleton", "models render", "models compare", "maps list", "maps zones",
+        "maps tiles", "maps minimap", "maps tile", "maps render", "maps breakdown", "maps compare", "index status", "setup status", "textures compare",
+    };
+
+    /// <summary>Why a command does not run with --version (exit code 4).</summary>
+    public static string ReadOnlyRefusal(CliContext ctx, CommandSpec spec)
+    {
+        var v = ctx.OtherVersionText(ctx.VersionOverride!);
+        var works = string.Join(", ", Tree.Where(c => c.VersionAware).Select(c => c.Path));
+        return LaterForOtherVersions.Contains(spec.Path)
+            ? $"{v} is open read only: wds {spec.Path} does not work with other versions yet. With --version: {works}."
+            : $"{v} is open read only: wds {spec.Path} changes files. With --version: {works}.";
     }
 
     /// <summary>The exit code of an exception from Core.</summary>
@@ -296,7 +323,8 @@ public static class CliApp
             foreach (var o in c.Options) sb.AppendLine($"  {o.Synopsis + (o.Repeatable ? " ..." : ""),-28} {o.Help}");
         }
         sb.AppendLine();
-        sb.AppendLine("Global options: --home <folder>, --client <folder>, --json, --quiet, --yes (see \"wds --help\").");
+        sb.AppendLine("Global options: --home <folder>, --client <folder>, --version <client>, --json, --quiet, --yes (see \"wds --help\").");
+        if (c.VersionAware) sb.AppendLine("Works on another version opened read only: --version <client>.");
         var features = Core.Features.FeatureRegistry.ForCommand(c.Path).Where(f => f.HasGui).Select(f => f.Gui).Distinct().ToList();
         if (features.Count > 0) sb.AppendLine("In the app: " + string.Join("; ", features));
         if (c.Examples.Length > 0)
@@ -318,6 +346,7 @@ public static class CliApp
         options = c.Options.Select(o => new { name = o.Name, value = o.Value, help = o.Help, repeatable = o.Repeatable }),
         examples = c.Examples,
         needsClient = c.NeedsClient,
+        versionAware = c.VersionAware,
         features = Core.Features.FeatureRegistry.ForCommand(c.Path).Select(f => f.Id),
     };
 

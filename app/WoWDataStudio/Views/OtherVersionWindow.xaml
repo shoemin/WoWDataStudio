@@ -1,0 +1,337 @@
+<Window x:Class="WoWDataStudio.Views.OtherVersionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="clr-namespace:WoWDataStudio.Controls"
+        xmlns:h="clr-namespace:WoWDataStudio.Helpers"
+        xmlns:s="clr-namespace:WoWDataStudio.Services"
+        s:Manual.Topic="other-versions"
+        Style="{StaticResource AppWindow}"
+        Title="{Binding Title}" Width="1360" Height="860" MinWidth="900" MinHeight="600">
+    <Window.Resources>
+        <h:BoolToCollapsedConverter x:Key="BoolVis" />
+        <h:BoolToCollapsedConverter x:Key="BoolVisInv" Invert="True" />
+        <h:NullToCollapsedConverter x:Key="NullVis" />
+        <h:NullToCollapsedConverter x:Key="NullVisInv" Invert="True" />
+        <Style x:Key="HeaderButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+        </Style>
+        <SolidColorBrush x:Key="ReadOnlyBar" Color="#FF3B4A5C" />
+    </Window.Resources>
+    <DockPanel>
+        <!-- ============================== TOP BAR: which version, read only ============================== -->
+        <Border DockPanel.Dock="Top" Background="{StaticResource ReadOnlyBar}" Padding="16,10">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Left" Orientation="Vertical" VerticalAlignment="Center" Margin="0,0,20,0" MaxWidth="460">
+                    <TextBlock Text="{Binding Title}" Foreground="White" FontSize="17" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                        <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" Foreground="#FFFFD38A" Margin="0,1,6,0" />
+                        <TextBlock Text="Read only: nothing here changes the client" Foreground="#FFFFD38A" FontSize="11"
+                                   ToolTip="Another version opened read only: no editing, no import, no install, no server. Your 1.12 game and your changes are not involved." />
+                    </StackPanel>
+                </StackPanel>
+                <Button DockPanel.Dock="Right" Command="{Binding RebuildCommand}" Padding="10,5" Margin="12,0,0,0" Background="#22FFFFFF" BorderBrush="#55FFFFFF"
+                        ToolTip="Read the client again and rebuild its index (after you chose another listfile, for example). The client is only read.">
+                    <TextBlock Text="Rebuild the index" Foreground="White" />
+                </Button>
+                <Grid MaxWidth="760" HorizontalAlignment="Stretch" IsEnabled="{Binding IsReady}">
+                    <TextBox x:Name="SearchBox" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" FontSize="15" Padding="34,7,8,7" BorderThickness="0"
+                             ToolTip="Type any words: model and file names, paths, ids, the names the client knows (items, a few creatures, spells). All words must match." />
+                    <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="15" Foreground="{StaticResource TextMuted}" Margin="11,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" />
+                    <TextBlock Text="Search models, textures, creatures, items..." FontSize="15" Foreground="#FF97A1AE" Margin="35,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"
+                               Visibility="{Binding SearchText, Converter={StaticResource NullVisInv}}" />
+                </Grid>
+            </DockPanel>
+        </Border>
+
+        <!-- ============================== STATUS LINE: locked rows, names ============================== -->
+        <Border DockPanel.Dock="Bottom" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0" Padding="14,6" Visibility="{Binding IsReady, Converter={StaticResource BoolVis}}">
+            <StackPanel>
+                <TextBlock TextTrimming="CharacterEllipsis" ToolTip="{Binding StatusLine}">
+                    <Run Text="Locked (encrypted, no key)" FontWeight="SemiBold" Foreground="{StaticResource TextMuted}" /><Run Text=": " /><Run Text="{Binding StatusLine, Mode=OneWay}" />
+                </TextBlock>
+                <TextBlock Text="{Binding NamesLine}" Foreground="{StaticResource TextMuted}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip="{Binding NamesLine}" />
+            </StackPanel>
+        </Border>
+
+        <Grid>
+            <!-- ============================== ORGANIZING ============================== -->
+            <Border Style="{StaticResource Card}" Width="680" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="32"
+                    Visibility="{Binding IsOrganizing, Converter={StaticResource BoolVis}}">
+                <StackPanel>
+                    <TextBlock Text="Organizing game data..." Style="{StaticResource H1}" />
+                    <TextBlock Style="{StaticResource Muted}" Margin="0,8,0,16" TextWrapping="Wrap"
+                               Text="The other version's tables and file names are read once and kept in the app's folder; next time it opens at once. The client is only read, never changed." />
+                    <ProgressBar Height="12" Value="{Binding ProgressPercent}" Maximum="100" Foreground="{StaticResource Accent}" />
+                    <TextBlock Text="{Binding ProgressDetail}" Margin="0,8,0,12" Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis" />
+                    <ItemsControl ItemsSource="{Binding Stages}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" Margin="0,2">
+                                    <TextBlock Text="{Binding Glyph}" FontFamily="Segoe MDL2 Assets" Width="24" Foreground="{StaticResource Accent}" />
+                                    <TextBlock Text="{Binding Name}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Border Background="{StaticResource BadSoft}" CornerRadius="5" Padding="12,8" Margin="0,12,0,0" Visibility="{Binding Error, Converter={StaticResource NullVis}}">
+                        <TextBlock Text="{Binding Error}" TextWrapping="Wrap" />
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <!-- ============================== BROWSE ============================== -->
+            <DockPanel Visibility="{Binding IsReady, Converter={StaticResource BoolVis}}">
+                <Border DockPanel.Dock="Top" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1" Padding="16,10,16,4">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Left" Text="Show:" VerticalAlignment="Top" Margin="0,5,10,0" Foreground="{StaticResource TextMuted}" />
+                        <WrapPanel>
+                            <ItemsControl ItemsSource="{Binding Chips}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <ToggleButton Style="{StaticResource Chip}" IsChecked="{Binding IsChecked}" ToolTip="{Binding Tip}" Content="{Binding Text}">
+                                            <ToggleButton.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="Show only this type" Command="{Binding PlacementTarget.Tag.OnlyKindCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" />
+                                                    <MenuItem Header="Show all types" Command="{Binding PlacementTarget.Tag.SelectAllKindsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                                </ContextMenu>
+                                            </ToggleButton.ContextMenu>
+                                            <ToggleButton.Tag>
+                                                <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=ItemsControl}" />
+                                            </ToggleButton.Tag>
+                                        </ToggleButton>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Button Content="All" Command="{Binding SelectAllKindsCommand}" Margin="0,0,6,6" Padding="10,4" ToolTip="Tick every type. (Right-click a type to show only that one.)" />
+                        </WrapPanel>
+                    </DockPanel>
+                </Border>
+
+                <Grid Margin="12,10,12,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="1*" MinWidth="360" />
+                        <ColumnDefinition Width="8" />
+                        <ColumnDefinition Width="1*" MinWidth="460" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- results -->
+                    <Border Style="{StaticResource Card}" Padding="0">
+                        <DockPanel>
+                            <DockPanel DockPanel.Dock="Top" Margin="12,8">
+                                <TextBlock Text="Click a row to see where it comes from, its files and textures." DockPanel.Dock="Right" Foreground="{StaticResource TextMuted}" FontSize="12" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding ResultCountText}" FontWeight="SemiBold" FontSize="14" />
+                            </DockPanel>
+                            <ListView x:Name="ResultsList" ItemsSource="{Binding Results}" SelectedItem="{Binding SelectedRow}" BorderThickness="0,1,0,0" BorderBrush="{StaticResource Border}"
+                                      VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Item" SelectionMode="Single">
+                                <ListView.ItemContainerStyle>
+                                    <Style TargetType="ListViewItem">
+                                        <Setter Property="ToolTip" Value="{Binding Info}" />
+                                        <Setter Property="Padding" Value="2,3" />
+                                    </Style>
+                                </ListView.ItemContainerStyle>
+                                <ListView.View>
+                                    <GridView>
+                                        <GridViewColumn Width="220">
+                                            <GridViewColumn.Header>
+                                                <Button Content="Name" Style="{StaticResource HeaderButton}" Command="{Binding SortCommand}" CommandParameter="Name" />
+                                            </GridViewColumn.Header>
+                                            <GridViewColumn.CellTemplate>
+                                                <DataTemplate><TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" /></DataTemplate>
+                                            </GridViewColumn.CellTemplate>
+                                        </GridViewColumn>
+                                        <GridViewColumn Width="90">
+                                            <GridViewColumn.Header>
+                                                <Button Content="Type" Style="{StaticResource HeaderButton}" Command="{Binding SortCommand}" CommandParameter="Type" />
+                                            </GridViewColumn.Header>
+                                            <GridViewColumn.CellTemplate>
+                                                <DataTemplate><TextBlock Text="{Binding Type}" Foreground="{StaticResource TextMuted}" /></DataTemplate>
+                                            </GridViewColumn.CellTemplate>
+                                        </GridViewColumn>
+                                        <GridViewColumn Width="64">
+                                            <GridViewColumn.Header>
+                                                <Button Content="ID" Style="{StaticResource HeaderButton}" Command="{Binding SortCommand}" CommandParameter="Id" />
+                                            </GridViewColumn.Header>
+                                            <GridViewColumn.CellTemplate>
+                                                <DataTemplate><TextBlock Text="{Binding IdText}" /></DataTemplate>
+                                            </GridViewColumn.CellTemplate>
+                                        </GridViewColumn>
+                                        <GridViewColumn Width="260">
+                                            <GridViewColumn.Header>
+                                                <Button Content="File path" Style="{StaticResource HeaderButton}" Command="{Binding SortCommand}" CommandParameter="Path" />
+                                            </GridViewColumn.Header>
+                                            <GridViewColumn.CellTemplate>
+                                                <DataTemplate><TextBlock Text="{Binding Path}" Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis" /></DataTemplate>
+                                            </GridViewColumn.CellTemplate>
+                                        </GridViewColumn>
+                                    </GridView>
+                                </ListView.View>
+                            </ListView>
+                        </DockPanel>
+                    </Border>
+
+                    <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" Background="Transparent" />
+
+                    <!-- details -->
+                    <Border Grid.Column="2" Style="{StaticResource Card}" Padding="0">
+                        <Grid>
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="30" Visibility="{Binding HasSelection, Converter={StaticResource BoolVisInv}}">
+                                <TextBlock Text="&#xE8A1;" FontFamily="Segoe MDL2 Assets" FontSize="40" Foreground="#FFB0B8C4" HorizontalAlignment="Center" />
+                                <TextBlock Text="Select something in the list" Style="{StaticResource H2}" HorizontalAlignment="Center" Margin="0,10,0,4" />
+                                <TextBlock Style="{StaticResource Muted}" TextAlignment="Center" MaxWidth="380" TextWrapping="Wrap"
+                                           Text="Search above, then click a result: where it comes from, its files with their FileDataID, where their names come from and whether they can be read, and its textures." />
+                            </StackPanel>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding HasSelection, Converter={StaticResource BoolVis}}">
+                                <StackPanel Margin="16,14">
+                                    <TextBlock Text="{Binding DetailTitle}" Style="{StaticResource H2}" FontSize="20" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding DetailSubtitle}" Style="{StaticResource Muted}" TextWrapping="Wrap" />
+
+                                    <TextBlock Text="WHERE IT COMES FROM" Style="{StaticResource H3}" FontSize="11" />
+                                    <ItemsControl ItemsSource="{Binding Chain}" AlternationCount="1000">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                                    <TextBlock x:Name="arrow" Text="&#x2192;" Margin="6,0" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}" />
+                                                    <Border Background="{StaticResource AccentSoft}" CornerRadius="4" Padding="7,2">
+                                                        <TextBlock Text="{Binding}" TextWrapping="Wrap" MaxWidth="460" />
+                                                    </Border>
+                                                </StackPanel>
+                                                <DataTemplate.Triggers>
+                                                    <Trigger Property="ItemsControl.AlternationIndex" Value="0">
+                                                        <Setter TargetName="arrow" Property="Visibility" Value="Collapsed" />
+                                                    </Trigger>
+                                                </DataTemplate.Triggers>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <ItemsControl ItemsSource="{Binding Facts}" Margin="0,6,0,0">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <DockPanel Margin="0,2">
+                                                    <TextBlock DockPanel.Dock="Left" Text="&#x2022;" Margin="2,0,8,0" Foreground="{StaticResource TextMuted}" />
+                                                    <TextBlock Text="{Binding}" TextWrapping="Wrap" Foreground="{StaticResource TextMuted}" />
+                                                </DockPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <!-- files with FileDataID, name source, state -->
+                                    <TextBlock Style="{StaticResource H3}" FontSize="11">
+                                        <Run Text="FILES" /> <Run Text="{Binding Files.Count, Mode=OneWay, StringFormat=({0})}" />
+                                    </TextBlock>
+                                    <ItemsControl ItemsSource="{Binding Files}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,1" ToolTip="{Binding Tip}">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" MinWidth="70" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="{Binding FileDataId}" Foreground="{StaticResource TextMuted}" FontFamily="Consolas" Margin="0,0,8,0" />
+                                                    <TextBlock Grid.Column="1" TextTrimming="CharacterEllipsis"><Run Text="{Binding FileName, Mode=OneWay}" /><Run Text="  " /><Run Text="{Binding Role, Mode=OneWay}" Foreground="{StaticResource TextMuted}" FontSize="11" /></TextBlock>
+                                                    <TextBlock Grid.Column="2" Text="{Binding NameSource}" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="8,0" VerticalAlignment="Center" />
+                                                    <Border Grid.Column="3" VerticalAlignment="Center">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border" BasedOn="{StaticResource Badge}">
+                                                                <Setter Property="Background" Value="{StaticResource GoodSoft}" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsLocked}" Value="True"><Setter Property="Background" Value="{StaticResource WarnSoft}" /></DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <TextBlock Text="{Binding State}" FontSize="11" FontWeight="SemiBold" />
+                                                    </Border>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <!-- textures -->
+                                    <TextBlock Style="{StaticResource H3}" FontSize="11">
+                                        <Run Text="TEXTURES IT USES" /> <Run Text="{Binding Textures.Count, Mode=OneWay, StringFormat=({0})}" />
+                                    </TextBlock>
+                                    <TextBlock Text="No textures: the game chooses them at run time, or the entry has none." Style="{StaticResource Muted}"
+                                               Visibility="{Binding Textures.Count, Converter={StaticResource NullVisInv}}" />
+                                    <ListBox x:Name="TextureList" ItemsSource="{Binding Textures}" SelectedItem="{Binding SelectedTexture}" MaxHeight="170" BorderBrush="{StaticResource Border}"
+                                             Visibility="{Binding Textures.Count, Converter={StaticResource NullVis}}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <DockPanel ToolTip="{Binding Note}" Margin="0,1">
+                                                    <TextBlock DockPanel.Dock="Right" Text="{Binding Role}" Foreground="{StaticResource TextMuted}" Margin="8,0" FontSize="12" />
+                                                    <TextBlock Text="&#xEB9F;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource Accent}" Margin="0,2,6,0" DockPanel.Dock="Left" />
+                                                    <TextBlock Text="{Binding FileName}" TextTrimming="CharacterEllipsis" />
+                                                </DockPanel>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+
+                                    <!-- texture viewer -->
+                                    <Border x:Name="TextureViewerBox" s:Manual.Topic="texture-viewer" Margin="0,12,0,0" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="6" Padding="10"
+                                            Visibility="{Binding SelectedTexture, Converter={StaticResource NullVis}}">
+                                        <StackPanel>
+                                            <DockPanel>
+                                                <Button DockPanel.Dock="Right" Content="Export texture as PNG..." Command="{Binding ExportTextureCommand}" IsEnabled="{Binding CanExport}" Padding="10,4"
+                                                        ToolTip="Saves the full-size texture as a PNG image, outside the client's folder. No .blp.json is written: a texture of another version is not imported back into your game this way." />
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding SelectedTexture.FileName}" FontWeight="SemiBold" FontSize="14" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{Binding Viewer.ShowingLabel}" Foreground="{StaticResource TextMuted}" FontSize="12" />
+                                                </StackPanel>
+                                            </DockPanel>
+                                            <Grid Height="330" Margin="0,8,0,6">
+                                                <c:ZoomPanViewer x:Name="TexViewer" Source="{Binding Viewer.Image}" View="{Binding Viewer.View}" Checkerboard="{Binding Viewer.Checkerboard}" CornerRadius="4" />
+                                                <TextBlock Text="{Binding Viewer.Error}" Foreground="#FFFFB4A9" TextWrapping="Wrap" Margin="16" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                                            </Grid>
+                                            <WrapPanel>
+                                                <ComboBox SelectedIndex="{Binding Viewer.AlphaView, Converter={x:Static h:AlphaViewIndex.Instance}}" Width="215" Margin="0,0,8,4" ToolTip="How transparent pixels are shown.">
+                                                    <ComboBoxItem Content="Transparency: checkerboard" />
+                                                    <ComboBoxItem Content="Transparency: ignore (colour only)" />
+                                                    <ComboBoxItem Content="Alpha channel only" />
+                                                </ComboBox>
+                                                <TextBlock Text="Mip level" VerticalAlignment="Center" Margin="0,0,4,4" Foreground="{StaticResource TextMuted}" />
+                                                <ComboBox ItemsSource="{Binding Viewer.Levels}" SelectedItem="{Binding Viewer.MipLevel}" Width="52" Margin="0,0,8,4"
+                                                          ToolTip="Smaller copies of the texture that the game shows at a distance. 0 = full size." />
+                                                <Button Content="Fit" Click="Fit_Click" Margin="0,0,4,4" Padding="8,3" ToolTip="Fit the texture into the view (or double-click it)." />
+                                                <Button Content="100%" Click="Actual_Click" Margin="0,0,6,4" Padding="8,3" ToolTip="One texture pixel per screen pixel." />
+                                                <TextBlock Text="{Binding Viewer.View.ZoomText}" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}" Margin="0,0,0,4" />
+                                            </WrapPanel>
+                                            <TextBlock Margin="0,4,0,0" TextWrapping="Wrap">
+                                                <Run Text="Format: " Foreground="{StaticResource TextMuted}" /><Run Text="{Binding Viewer.FormatInfo, Mode=OneWay}" FontWeight="SemiBold" />
+                                            </TextBlock>
+                                            <TextBlock Text="{Binding Viewer.SizeInfo}" TextWrapping="Wrap" Foreground="{StaticResource TextMuted}" />
+                                            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextMuted}">
+                                                <Run Text="{Binding Viewer.SourceInfo, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding SelectedTexture.Path, Mode=OneWay}" />
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- used by -->
+                                    <Expander Margin="0,8,0,0" IsExpanded="True" Visibility="{Binding UsedBy.Count, Converter={StaticResource NullVis}}">
+                                        <Expander.Header>
+                                            <TextBlock FontWeight="SemiBold"><Run Text="Used by" /> <Run Text="{Binding UsedBy.Count, Mode=OneWay, StringFormat=({0})}" /></TextBlock>
+                                        </Expander.Header>
+                                        <ItemsControl ItemsSource="{Binding UsedBy}" Margin="4,4,0,0">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap" Foreground="{StaticResource TextMuted}" Margin="0,1" /></DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Expander>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </DockPanel>
+        </Grid>
+    </DockPanel>
+</Window>

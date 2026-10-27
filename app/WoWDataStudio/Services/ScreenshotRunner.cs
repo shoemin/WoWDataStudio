@@ -149,6 +149,13 @@ public static class ScreenshotRunner
                 Log(Failures.Count == 0 ? "ALL STEPS OK" : "FAILURES:" + string.Join("", Failures.Select(f => Environment.NewLine + "  " + f)));
                 return Failures.Count == 0 ? 0 : 1;
             }
+            if (Environment.GetEnvironmentVariable("WDS_SCREENSHOT_ONLY") == "versions-open")
+            {
+                // developers: only the pictures of another version opened read only (144-147), from WDS_SCREENSHOT_OTHER_CLIENTS
+                await VersionOpenScreenshots.RunAsync(win, vm, b, outDir);
+                Log(Failures.Count == 0 ? "ALL STEPS OK" : "FAILURES:" + string.Join("", Failures.Select(f => Environment.NewLine + "  " + f)));
+                return Failures.Count == 0 ? 0 : 1;
+            }
             if (Environment.GetEnvironmentVariable("WDS_SCREENSHOT_ONLY") == "tables")
             {
                 // developers: only the Data tables pictures (83-94), for a quick look at that tab
@@ -324,6 +331,9 @@ public static class ScreenshotRunner
             // 23. 0.14.0: the Other versions tab, from client copies named by WDS_SCREENSHOT_OTHER_CLIENTS (skipped
             // without them; VersionScreenshots.cs)
             await VersionScreenshots.RunAsync(win, b, outDir);
+
+            // 24. M1: another version opened read only in its own window (VersionOpenScreenshots.cs; skipped without the copies)
+            await VersionOpenScreenshots.RunAsync(win, vm, b, outDir);
 
             Log(Failures.Count == 0 ? "ALL STEPS OK" : "FAILURES:\n  " + string.Join("\n  ", Failures));
             return Failures.Count == 0 ? 0 : 1;

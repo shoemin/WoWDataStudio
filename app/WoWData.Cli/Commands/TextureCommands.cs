@@ -2,6 +2,7 @@ using WoWData.Core.Blp;
 using WoWData.Core.Imaging;
 using WoWData.Core.Index;
 using WoWData.Core.Session;
+using WoWData.Core.Versions;
 using WoWData.Core.Workspace;
 
 namespace WoWData.Cli.Commands;
@@ -12,6 +13,7 @@ internal static class TextureCommands
     private static string TexturePath(AppSession s, string text)
     {
         var p = Common.GamePath(s, text);
+        if (s.IsReadOnly && p.StartsWith('#') && !p.Contains('.')) return p;   // another version: a texture known only by its number
         if (!p.EndsWith(".blp", StringComparison.OrdinalIgnoreCase)) throw new CliError(ExitCode.Usage, $"{p} is not a texture (.blp). \"wds find info {text}\" lists the textures it uses; \"wds textures export-all\" exports them.");
         return p;
     }
@@ -23,6 +25,26 @@ internal static class TextureCommands
         var png = outFile != null ? Path.GetFullPath(outFile) : TextureService.SuggestedPng(outDir ?? s.Settings.DefaultExportDir, path, edited);
         if (FindCommands.IsInside(png, s.Client!.DataDir)) throw new CliError(ExitCode.Refused, "Refusing to write into the game's Data folder: export somewhere else.");
         return s.Textures!.Export(path, png, ctx, edited);
+    }
+
+    // ------------------------------------------------------------------ M1: another version opened read only
+
+    private static string OtherPng(AppSession s, string path, string? outFile, string? outDir)
+    {
+        var png = outFile != null ? Path.GetFullPath(outFile) : Path.Combine(outDir ?? Path.Combine(s.Settings.DefaultExportDir, s.Profile!.Id), OtherTextures.PngName(path));
+        var copy = s.Profile!.Copy!;
+        if (FindCommands.IsInside(png, copy.Folder) || FindCommands.IsInside(png, s.Files!.Storage.DataDirectory))
+            throw new CliError(ExitCode.Refused, $"Refusing to write into the folder of {copy.Name}: other versions are only read. Export somewhere else.");
+        return png;
+    }
+
+    private static object OtherExport(AppSession s, string path, string png)
+    {
+        BlpFile blp;
+        try { blp = OtherTextures.ExportPng(s, path, png); }
+        catch (ClientFileException e) { throw new CliError(ExitCode.NotFound, e.Message); }
+        var info = s.Files!.Info(path);
+        return new { path, png, sidecar = (string?)null, source = s.Profile!.VersionBuild, format = blp.FormatName, width = blp.Width, height = blp.Height, fileDataId = info?.FileDataId };
     }
 
     public static IEnumerable<CommandSpec> All()
@@ -37,6 +59,27 @@ internal static class TextureCommands
             {
                 var s = await inv.Ctx.SessionAsync();
                 var path = TexturePath(s, inv.Arg(0));
+                if (s.IsReadOnly)
+                {
+                    var info = s.Files!.Info(path);
+                    BlpFile? b = null;
+                    string? problem = null;
+                    try { b = OtherTextures.Read(s, path); }
+                    catch (ClientFileException ex) { problem = ex.Message; }
+                    var ousers = s.Index!.TextureUsers(path, 400);
+                    var rr = new CliResult().With(new
+                    {
+                        path, version = s.Profile!.VersionBuild, readOnly = true, fileDataId = info?.FileDataId, nameSource = info == null ? null : NameSources.Code(info.Source), state = info?.StateText,
+                        original = b == null ? null : new { format = b.FormatName, width = b.Width, height = b.Height, mipLevels = b.LevelCount, alphaDepth = (int)b.AlphaDepth, archive = $"#{info?.FileDataId}" },
+                        edited = (object?)null, modified = false, problem, users = ousers.Count, usedBy = ousers.Take(50),
+                    });
+                    rr.Line(path);
+                    if (info != null) rr.Line($"  {s.Profile.VersionBuild}: FileDataID {info.FileDataId}, {NameSources.Describe(info.Source)}, {info.StateText}");
+                    if (b != null) rr.Line($"  texture:   {b.FormatName}, {b.Width}x{b.Height}, {b.LevelCount} mip levels");
+                    if (problem != null) rr.Line("  " + problem);
+                    rr.Line($"  used by {Common.Plural(ousers.Count, "thing")}" + (ousers.Count > 0 ? ": " + string.Join(", ", ousers.Take(5)) + (ousers.Count > 5 ? ", ..." : "") : ""));
+                    return rr;
+                }
                 var ts = s.Textures!;
                 var orig = ts.ReadOriginal(path);
                 var edited = s.Workspace!.ReadEdited(path);
@@ -81,6 +124,14 @@ internal static class TextureCommands
             {
                 var s = await inv.Ctx.SessionAsync();
                 var path = TexturePath(s, inv.Arg(0));
+                if (s.IsReadOnly)
+                {
+                    if (inv.Flag("with-partner")) throw new CliError(ExitCode.Usage, "--with-partner is for the ground textures of your game.");
+                    var opng = OtherPng(s, path, inv.Opt("out"), null);
+                    var fj = OtherExport(s, path, opng);
+                    return new CliResult().With(new { files = new[] { fj } })
+                        .Line($"Exported {path} ({s.Profile!.VersionBuild}, read only) -> {opng}. No .blp.json is written: a texture of another version is not imported back.");
+                }
                 bool edited = !inv.Flag("original") && s.Workspace!.IsModified(path);
                 var (png, side) = Export(s, path, inv.Opt("out"), null, edited, new() { ["selected"] = s.FindEntry("file:" + path)?.Key ?? "", ["name"] = Path.GetFileNameWithoutExtension(path) });
                 var files = new List<object> { ExportJson(path, png, side) };
@@ -113,7 +164,30 @@ internal static class TextureCommands
             {
                 var s = await inv.Ctx.SessionAsync();
                 var e = Common.FindEntry(s, inv.Arg(0));
-                var d = s.Index!.Details(e, s.Catalog);
+                var d = s.Details(e);
+                if (s.IsReadOnly)
+                {
+                    var tex = d.Textures.Where(t => t.Exists).Select(t => t.Path).ToList();
+                    if (inv.Flag("variants"))
+                        foreach (var m in d.Models)
+                            foreach (var v in s.Index!.ModelVariants(m))
+                                if (v.Texture.Length > 0 && v.Archive == "local") tex.Add(v.Texture);
+                    tex = tex.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                    if (tex.Count == 0) return CliResult.Fail(ExitCode.NotFound, $"{e.Name} uses no texture that can be read in {s.Profile!.VersionBuild}.");
+                    var odir = inv.Opt("out") is { } oo ? Path.GetFullPath(oo) : Path.Combine(s.Settings.DefaultExportDir, s.Profile!.Id);
+                    var ofiles = new List<object>();
+                    var rr = new CliResult();
+                    foreach (var p in tex)
+                    {
+                        var png = OtherPng(s, p, null, odir);
+                        try { ofiles.Add(OtherExport(s, p, png)); }
+                        catch (CliError ex) { rr.Warnings.Add(ex.Message); continue; }
+                        rr.Line($"{p} -> {png}");
+                        inv.Ctx.Progress($"exported {p}");
+                    }
+                    rr.Line($"{Common.Plural(ofiles.Count, "texture")} of {e.Name} ({s.Profile!.VersionBuild}) exported into {odir}.");
+                    return rr.With(new { entry = Common.EntryJson(e), folder = odir, files = ofiles });
+                }
                 var paths = d.Textures.Where(t => t.Exists || s.Workspace!.IsModified(t.Path)).Select(t => t.Path).ToList();
                 if (inv.Flag("variants"))
                     foreach (var m in d.Models)

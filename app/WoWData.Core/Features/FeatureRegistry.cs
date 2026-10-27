@@ -17,6 +17,10 @@ public sealed record Feature(string Id, string Area, string Gui, string Cli, Fea
 {
     public bool HasGui => Front != FeatureFront.CliOnly;
     public bool HasCli => Front != FeatureFront.GuiOnly;
+    /// <summary>M1: the feature also works on another version opened read only; its command takes --version
+    /// (FeatureParityTests runs every such command on a synthetic modern client, and checks that every other command
+    /// refuses --version with exit code 4).</summary>
+    public bool VersionAware { get; init; }
 }
 
 /// <summary>
@@ -46,19 +50,19 @@ public static class FeatureRegistry
         new("index.status", "Setup", "Names from server database: connected", "index status"),
 
         // ---- find (the Browse tab)
-        new("find.search", "Find", "Search models, textures, creatures, items...", "find search"),
+        new("find.search", "Find", "Search models, textures, creatures, items...", "find search") { VersionAware = true },
         new("find.only-changes", "Find", "Show only my changes", "find search"),
-        new("find.list", "Find", "Show only this type", "find list"),
-        new("find.info", "Find", "WHERE IT COMES FROM", "find info"),
+        new("find.list", "Find", "Show only this type", "find list") { VersionAware = true },
+        new("find.info", "Find", "WHERE IT COMES FROM", "find info") { VersionAware = true },
         new("find.used", "Find", "Used in game", "find used"),
         new("find.where", "Find", "TEXTURES IT USES", "find where"),
-        new("find.files", "Find", "", "find files", FeatureFront.CliOnly, "a scripting helper: list archive paths by wildcard, with every archive that has them"),
-        new("find.extract", "Find", "", "find extract", FeatureFront.CliOnly, "a scripting helper: copy a game file out of the archives as it is (the app exports PNG and glTF instead)"),
+        new("find.files", "Find", "", "find files", FeatureFront.CliOnly, "a scripting helper: list archive paths by wildcard, with every archive that has them") { VersionAware = true },
+        new("find.extract", "Find", "", "find extract", FeatureFront.CliOnly, "a scripting helper: copy a game file out of the archives as it is (the app exports PNG and glTF instead)") { VersionAware = true },
 
         // ---- textures
-        new("textures.info", "Textures", "Mip level", "textures info"),
-        new("textures.export", "Textures", "1. Export texture as PNG...", "textures export"),
-        new("textures.export-all", "Textures", "TEXTURES IT USES", "textures export-all"),
+        new("textures.info", "Textures", "Mip level", "textures info") { VersionAware = true },
+        new("textures.export", "Textures", "1. Export texture as PNG...", "textures export") { VersionAware = true },
+        new("textures.export-all", "Textures", "TEXTURES IT USES", "textures export-all") { VersionAware = true },
         new("textures.import", "Textures", "2. Import edited PNG...", "textures import"),
         new("textures.edit-both", "Textures", "Edit both (recommended)", "textures import"),
         new("textures.keep-shine", "Textures", "Keep the original shine map (recommended)", "textures import"),
@@ -282,6 +286,13 @@ public static class FeatureRegistry
         new("versions.update-info", "Other versions", "About this update", "versions update-info"),
         new("versions.import-preview", "Other versions", "Preview import", "versions import-updates"),
         new("versions.import-updates", "Other versions", "Import picked updates", "versions import-updates"),
+        // M1: another version opened read only in a window of its own (Browse and textures)
+        new("versions.open", "Other versions", "Open read only", "versions open") { VersionAware = true },
+        new("versions.open-menu", "Other versions", "File > Open another version (read only)...", "versions open") { VersionAware = true },
+        new("versions.open-welcome", "Other versions", "Open another version (read only)...", "versions open") { VersionAware = true },
+        new("versions.window-browse", "Other versions", "Read only: nothing here changes the client", "find search") { VersionAware = true },
+        new("versions.window-locked", "Other versions", "Locked (encrypted, no key)", "versions open") { VersionAware = true },
+        new("versions.window-export", "Other versions", "Export texture as PNG...", "textures export") { VersionAware = true },
 
         // ---- help and the command line itself
         new("help.manual", "Help", "Help > User manual", "manual"),

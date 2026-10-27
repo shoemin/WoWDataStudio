@@ -47,9 +47,13 @@
                             <TextBlock Text="{Binding WelcomeHint}" TextWrapping="Wrap" />
                         </DockPanel>
                     </Border>
-                    <Button Content="Load game data" Style="{StaticResource PrimaryButton}" FontSize="15" Padding="22,9" Margin="0,22,0,0"
-                            HorizontalAlignment="Left" Command="{Binding UseFolderCommand}" IsDefault="True"
-                            ToolTip="Check the folder and organize its data (a few seconds the first time)." />
+                    <DockPanel Margin="0,22,0,0" LastChildFill="False">
+                        <Button DockPanel.Dock="Left" Content="Load game data" Style="{StaticResource PrimaryButton}" FontSize="15" Padding="22,9"
+                                Command="{Binding UseFolderCommand}" IsDefault="True"
+                                ToolTip="Check the folder and organize its data (a few seconds the first time)." />
+                        <Button DockPanel.Dock="Right" Content="Open another version (read only)..." Command="{Binding OpenOtherVersionCommand}" Padding="14,7" VerticalAlignment="Center"
+                                ToolTip="Look at another World of Warcraft version (such as the 1.60 Classic client) the way your game opens: Browse and textures, in a window of its own. Read only: nothing in its folder is changed." />
+                    </DockPanel>
                 </StackPanel>
             </Border>
         </Grid>

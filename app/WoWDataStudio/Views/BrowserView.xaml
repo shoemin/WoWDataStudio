@@ -36,6 +36,8 @@
                 <MenuItem Header="_File">
                     <MenuItem Header="Change World of Warcraft folder..." Command="{Binding DataContext.ChangeFolderCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
                     <MenuItem Header="Settings..." Command="{Binding DataContext.OpenSettingsCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                    <MenuItem Header="Open another version (read only)..." Command="{Binding DataContext.OpenOtherVersionCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                              ToolTip="Another World of Warcraft version (such as the 1.60 Classic client) in a window of its own, next to this one: Browse and textures. Read only." />
                     <Separator />
                     <MenuItem Header="Import edited model..." Command="{Binding ImportEditedModelCommand}"
                               ToolTip="Bring back a model you edited in Blender (or its PNG textures): you review every change before anything is saved." />

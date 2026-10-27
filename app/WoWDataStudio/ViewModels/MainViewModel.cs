@@ -273,4 +273,46 @@ public sealed partial class MainViewModel : ObservableObject
 
     [RelayCommand]
     private void OpenLooseFilesDoc() => Dialogs.OpenPath(LooseFilesDoc);
+
+    // ------------------------------------------------------------------ M1: another version, read only
+
+    /// <summary>"Open another version (read only)...": a modern client from the folder of other versions (asked for
+    /// when it is not set), opened read only in a window of its own next to this one.</summary>
+    [RelayCommand]
+    private async Task OpenOtherVersion()
+    {
+        var folder = Session.Settings.OtherClientsDir;
+        if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
+        {
+            folder = Dialogs.PickFolder("Pick the folder of your copies of other World of Warcraft versions (or one modern client's folder)");
+            if (folder == null) return;
+        }
+        var picked = folder;
+        var (single, found) = await RunBusyAsync("Looking for clients...", () => Task.Run(() =>
+        {
+            var one = WoWData.Core.Versions.ClientCopies.Inspect(picked);
+            return (one, one != null ? new List<WoWData.Core.Versions.ClientCopy> { one } : WoWData.Core.Versions.ClientCopies.Find(picked));
+        }));
+        if (single == null && Session.Settings.OtherClientsDir == null)
+        {
+            Session.Settings.OtherClientsDir = folder;
+            SaveSettings();
+        }
+        var modern = found.Where(c => c.Format == WoWData.Core.Versions.ClientFormat.Casc).ToList();
+        if (modern.Count == 0)
+        {
+            Dialogs.Info("Open another version (read only)",
+                $"No modern World of Warcraft client (one that stores its data in CASC, such as the 1.60 Classic client) was found in {folder}. " +
+                "Older clients (2.4.3, 3.3.5a...) open their files and tables in the Other versions tab; opening them like your game comes later.");
+            return;
+        }
+        var copy = modern[0];
+        if (modern.Count > 1)
+        {
+            var pick = new PickVersionWindow(modern) { Owner = Application.Current?.MainWindow };
+            if (pick.ShowDialog() != true || pick.Picked == null) return;
+            copy = pick.Picked;
+        }
+        OtherVersionWindow.Open(this, copy, found);
+    }
 }

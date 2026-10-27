@@ -15,6 +15,8 @@ public sealed partial class TextureViewerViewModel : ObservableObject
     private readonly AppSession _session;
     private BlpFile? _original, _edited;
     private string? _originalArchive;
+    /// <summary>M1: the texture comes from another version opened read only ("1.60.1.70450, FileDataID 135274").</summary>
+    private string? _otherSource;
     private int _loadToken;
 
     public ViewState View { get; } = new();
@@ -59,7 +61,12 @@ public sealed partial class TextureViewerViewModel : ObservableObject
         Error = "";
         var ts = _session.Textures;
         var ws = _session.Workspace;
-        if (ts == null || ws == null) return;
+        if (ts == null || ws == null)
+        {
+            if (_session.IsReadOnly) await LoadOtherAsync(path, token);
+            return;
+        }
+        _otherSource = null;
         try
         {
             var (orig, origArchive, edited) = await Task.Run(() =>
@@ -89,6 +96,37 @@ public sealed partial class TextureViewerViewModel : ObservableObject
         }
     }
 
+    /// <summary>M1: a texture of another version opened read only (by name or #FileDataID); never edited.</summary>
+    private async Task LoadOtherAsync(string path, int token)
+    {
+        try
+        {
+            var (blp, info) = await Task.Run(() => (WoWData.Core.Versions.OtherTextures.Read(_session, path), _session.Files?.Info(path)));
+            if (token != _loadToken) return;
+            if (blp == null) throw new WoWData.Core.Versions.ClientFileException($"{path} is not a file of this client.");
+            _original = blp;
+            _edited = null;
+            _originalArchive = null;
+            _otherSource = $"{_session.Profile?.VersionBuild}" + (info != null ? $", FileDataID {info.FileDataId}" : "");
+            IsModified = false;
+            ShowEdited = false;
+            View.FitPending = true;
+            MipLevel = 0;
+            IsLoaded = true;
+            OnPropertyChanged(nameof(HasOriginal));
+            Render();
+        }
+        catch (Exception e) when (e is BlpException or IOException or WoWData.Core.Versions.ClientFileException)
+        {
+            if (token != _loadToken) return;
+            IsLoaded = false;
+            Image = null;
+            FormatInfo = SizeInfo = ShowingLabel = "";
+            SourceInfo = "";
+            Error = $"This texture cannot be shown: {e.Message}";
+        }
+    }
+
     private void Render()
     {
         var blp = ShowEdited && _edited != null ? _edited : _original ?? _edited;
@@ -108,6 +146,12 @@ public sealed partial class TextureViewerViewModel : ObservableObject
         FormatInfo = blp.FormatName;
         SizeInfo = $"{blp.Width} x {blp.Height} pixels · {blp.LevelCount} mip level{(blp.LevelCount == 1 ? "" : "s")} · {blp.Data.Length / 1024.0:0.#} KB" + (lv > 0 ? $" · showing level {lv} ({img.Width} x {img.Height})" : "");
         bool showingEdit = blp == _edited;
+        if (_otherSource != null)
+        {
+            ShowingLabel = "Read only (another version)";
+            SourceInfo = $"From {_otherSource}";
+            return;
+        }
         ShowingLabel = showingEdit ? "Showing: your edit" : IsModified ? "Showing: original (from game)" : "Original (from game)";
         SourceInfo = showingEdit ? "From your workspace (edited)" : $"From {_originalArchive}";
     }

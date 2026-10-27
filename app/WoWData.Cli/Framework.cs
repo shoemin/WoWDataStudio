@@ -56,6 +56,8 @@ public sealed class CommandSpec
     public string Details { get; init; } = "";
     /// <summary>True: the command needs an open game folder (index, archives, workspace).</summary>
     public bool NeedsClient { get; init; } = true;
+    /// <summary>M1: the command works on another version opened read only (--version); see FeatureRegistry's VersionAware.</summary>
+    public bool VersionAware => WoWData.Core.Features.FeatureRegistry.ForCommand(Path).Any(f => f.VersionAware);
     public required Func<Invocation, Task<CliResult>> Run { get; init; }
 
     public string Group => Path.Contains(' ') ? Path[..Path.IndexOf(' ')] : Path;

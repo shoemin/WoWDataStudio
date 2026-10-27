@@ -1,0 +1,27 @@
+<Window x:Class="WoWDataStudio.Views.PickVersionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:s="clr-namespace:WoWDataStudio.Services"
+        s:Manual.Topic="other-versions"
+        Style="{StaticResource AppWindow}"
+        Title="Open another version (read only)" Width="640" Height="420" MinWidth="480" MinHeight="300" WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <DockPanel Margin="18">
+        <TextBlock DockPanel.Dock="Top" Text="Which version?" Style="{StaticResource H2}" />
+        <TextBlock DockPanel.Dock="Top" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,10"
+                   Text="The modern clients found in your folder of other versions. The one you pick opens read only in a window of its own, next to this one: nothing in its folder is changed." />
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button Content="Open read only" Style="{StaticResource PrimaryButton}" Padding="16,6" IsDefault="True" Click="Open_Click" Margin="0,0,8,0" />
+            <Button Content="Cancel" Padding="16,6" IsCancel="True" />
+        </StackPanel>
+        <ListView x:Name="List" SelectionMode="Single" MouseDoubleClick="Open_Click">
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn Header="Client" Width="200" DisplayMemberBinding="{Binding Name}" />
+                    <GridViewColumn Header="Version" Width="90" DisplayMemberBinding="{Binding Version}" />
+                    <GridViewColumn Header="Build" Width="70" DisplayMemberBinding="{Binding Build}" />
+                    <GridViewColumn Header="Release" Width="200" DisplayMemberBinding="{Binding Release}" />
+                </GridView>
+            </ListView.View>
+        </ListView>
+    </DockPanel>
+</Window>

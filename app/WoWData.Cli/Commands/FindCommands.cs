@@ -1,6 +1,7 @@
 using WoWData.Core.Index;
 using WoWData.Core.Mpq;
 using WoWData.Core.Usage;
+using WoWData.Core.Versions;
 
 namespace WoWData.Cli.Commands;
 
@@ -33,7 +34,9 @@ internal static class FindCommands
 
     private static (HashSet<string> Paths, HashSet<string> Owners) Modified(Core.Session.AppSession s)
     {
-        var paths = s.Workspace!.ModifiedPaths();
+        // another version opened read only has no workspace: nothing is modified
+        if (s.Workspace == null) return (new HashSet<string>(StringComparer.OrdinalIgnoreCase), new HashSet<string>());
+        var paths = s.Workspace.ModifiedPaths();
         var set = new HashSet<string>(paths, StringComparer.OrdinalIgnoreCase);
         var owners = paths.Count == 0 || s.Index == null ? new HashSet<string>() : s.Index.OwnersOfTextures(paths);
         return (set, owners);
@@ -100,15 +103,18 @@ internal static class FindCommands
             {
                 var s = await inv.Ctx.SessionAsync();
                 var e = Common.FindEntry(s, inv.Arg(0));
-                var d = s.Index!.Details(e, s.Catalog);
+                var d = s.Details(e);
                 var facts = d.Facts.ToList();
-                if (e.Kind == AssetKind.Texture && e.Path != null) facts.AddRange(s.TextureAdvice(e.Path));
-                var ws = s.Workspace!;
+                if (e.Kind == AssetKind.Texture && e.Path != null && !s.IsReadOnly) facts.AddRange(s.TextureAdvice(e.Path));
+                var ws = s.Workspace;   // null for another version opened read only
                 var r = new CliResult().With(new
                 {
                     entry = Common.EntryJson(e), title = d.Title, subtitle = d.Subtitle, chain = d.Chain, facts, models = d.Models,
-                    textures = d.Textures.Select(t => new { path = t.Path, role = t.Role, archive = t.Archive, note = t.Note, modified = ws.IsModified(t.Path) }),
+                    textures = d.Textures.Select(t => new { path = t.Path, role = t.Role, archive = t.Archive, note = t.Note, modified = ws?.IsModified(t.Path) == true }),
                     usedBy = d.UsedBy,
+                    version = s.Profile?.VersionBuild,
+                    readOnly = s.IsReadOnly,
+                    files = d.Files.Select(f => new { path = f.Path, role = f.Role, fileDataId = f.FileDataId, nameSource = NameSources.Code(f.Source), state = f.State }),
                 });
                 r.Line($"{d.Title}  ({e.KindLabel}, {e.Key})");
                 if (d.Subtitle.Length > 0) r.Line(d.Subtitle);
@@ -118,7 +124,15 @@ internal static class FindCommands
                 if (d.Textures.Count > 0)
                 {
                     r.Line("").Line("TEXTURES IT USES");
-                    foreach (var t in d.Textures) r.Line($"  {t.Role,-16} {t.Path}{(t.Archive == null ? "  (not in the game archives)" : "")}{(ws.IsModified(t.Path) ? "  [Modified]" : "")}{(t.Note.Length > 0 ? "  " + t.Note : "")}");
+                    foreach (var t in d.Textures)
+                        r.Line(s.IsReadOnly
+                            ? $"  {t.Role,-16} {t.Path}{(t.Note.Length > 0 ? "  (" + t.Note + ")" : "")}"
+                            : $"  {t.Role,-16} {t.Path}{(t.Archive == null ? "  (not in the game archives)" : "")}{(ws?.IsModified(t.Path) == true ? "  [Modified]" : "")}{(t.Note.Length > 0 ? "  " + t.Note : "")}");
+                }
+                if (d.Files.Count > 0)
+                {
+                    r.Line("").Line($"FILES OF {s.Profile?.VersionBuild} (FileDataID, where the name comes from, state)");
+                    foreach (var f in d.Files) r.Line($"  {f.Role,-16} {f.FileDataId,9}  {f.Path}  ({NameSources.Short(f.Source)}, {f.State})");
                 }
                 if (d.UsedBy.Count > 0) { r.Line("").Line("Used by"); foreach (var u in d.UsedBy.Take(40)) r.Line("  " + u); if (d.UsedBy.Count > 40) r.Line($"  ... and {d.UsedBy.Count - 40} more"); }
                 return r;
@@ -198,6 +212,21 @@ internal static class FindCommands
             Run = async inv =>
             {
                 var s = await inv.Ctx.SessionAsync();
+                if (s.IsReadOnly)
+                {
+                    var hits = s.Files!.Names!.Glob(inv.Arg(0));
+                    int lim = Common.LimitOf(inv);
+                    var show = hits.Take(lim).ToList();
+                    var rr = new CliResult().With(new
+                    {
+                        total = hits.Count, version = s.Profile!.VersionBuild,
+                        files = show.Select(f => new { path = f.Path, fileDataId = f.FileDataId, nameSource = NameSources.Code(f.Source), state = f.StateText }),
+                    });
+                    rr.Line($"{hits.Count:N0} files of {s.Profile.VersionBuild}" + (show.Count < hits.Count ? $" (showing {show.Count}; --limit 0 for all)" : ""));
+                    foreach (var f in show) rr.Line($"#{f.FileDataId,-9} {f.StateText,-14} {f.Path}");
+                    if (hits.Count == 0 && s.Files.Names.Count == 0) rr.Warnings.Add("No file of this client has a name: choose a listfile (wds settings set other-clients.listfile <file>) or give #FileDataIDs.");
+                    return rr;
+                }
                 var names = s.Data!.Names();
                 var files = s.Data.Glob(inv.Arg(0).Replace('/', '\\'));
                 int limit = Common.LimitOf(inv);
@@ -220,6 +249,25 @@ internal static class FindCommands
             {
                 var s = await inv.Ctx.SessionAsync();
                 var path = Common.GamePath(s, inv.Arg(0));
+                if (s.IsReadOnly)
+                {
+                    byte[] bytes;
+                    try { bytes = s.ReadOther(path) ?? throw new CliError(ExitCode.NotFound, $"{path} is not a file of {s.Profile!.VersionBuild}."); }
+                    catch (ClientFileException ex) { throw new CliError(ExitCode.NotFound, ex.Message); }
+                    var name = Path.GetFileName(path);
+                    if (name.StartsWith('#')) name = name.TrimStart('#').Split('.')[0] + ClientFileKinds.GuessExtension(bytes);
+                    var dest = inv.Opt("out") ?? name;
+                    if (Directory.Exists(dest) || dest.EndsWith('\\') || dest.EndsWith('/')) dest = Path.Combine(dest, name);
+                    dest = Path.GetFullPath(dest);
+                    var copy = s.Profile!.Copy!;
+                    if (IsInside(dest, copy.Folder) || IsInside(dest, copy.DataDir) || IsInside(dest, s.Files!.Storage.DataDirectory))
+                        throw new CliError(ExitCode.Refused, $"Refusing to write into the folder of {copy.Name}: other versions are only read. Extract somewhere else.");
+                    Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+                    await File.WriteAllBytesAsync(dest, bytes);
+                    var info = s.Files.Info(path);
+                    return new CliResult().With(new { path, file = dest, bytes = bytes.Length, source = s.Profile.VersionBuild, fileDataId = info?.FileDataId })
+                        .Line($"{path} ({s.Profile.VersionBuild}{(info != null ? $", FileDataID {info.FileDataId}" : "")}, {bytes.Length:N0} bytes) -> {dest}");
+                }
                 bool edited = !inv.Flag("original") && s.Workspace!.IsModified(path);
                 var data = (edited ? s.Workspace!.ReadEdited(path) : s.Data!.Read(path)) ?? throw new CliError(ExitCode.NotFound, $"{path} is not in the game archives.");
                 var outPath = inv.Opt("out") ?? Path.GetFileName(path);
