@@ -1,0 +1,290 @@
+using System.Buffers.Binary;
+using System.Text;
+
+namespace WoWData.Core.M2.Modern;
+
+/// <summary>
+/// M2 of docs\research\OPEN_OTHER_VERSIONS_DESIGN.md (3.3): reads a chunked model of a modern client (MD21, header
+/// versions 272 / 274) into the SAME <see cref="M2Model"/> the 1.12 viewer uses, so the renderer, the animation
+/// evaluation (<see cref="M2Anim"/>) and the texture code stay as they are. Our own code, written from the format
+/// (FORMAT KNOWLEDGE, each part checked on the real 1.60 copy, see the real-copy tests):
+/// <list type="bullet">
+/// <item>the chunks: MD21 (the MD20 header and its arrays, offsets relative to the chunk's data), SFID (the .skin files
+///   by FileDataID: the views first, then LOD skins), TXID (one texture FileDataID per texture record); every other
+///   chunk is listed in <see cref="M2ModernInfo"/> and not used (AFID / SKID come in M3);</item>
+/// <item>the header of version 264 and later: no playable-animation table, no texture flip-books, the views replaced by
+///   a skin profile count; bones of 0x58 bytes (a name hash before the tracks), sequences of 0x40 bytes (a duration
+///   instead of start / end, blend in / out), attachments 0x28, events 0x24;</item>
+/// <item>tracks with one key array per sequence (<c>M2Array&lt;M2Array&lt;T&gt;&gt;</c>, no ranges): put onto one
+///   synthetic timeline (sequence i plays from its Start to its End), each track's keys concatenated with ranges per
+///   sequence: exactly the 1.12 shape <see cref="M2Anim"/> evaluates. A sequence's last key is repeated at its end so
+///   the value holds there (1.12 would lean towards the next sequence's first key). Sequences without keys for a
+///   track get no range (the track's default applies); aliases (flag 0x40) share their target's part of the timeline;
+///   external sequences (flag 0x20 clear: their keys are in .anim files, M3) keep their place without keys;</item>
+/// <item>bone rotations as compressed quaternions (four int16): a negative value v is (v + 32768) / 32767, a positive
+///   one (v - 32767) / 32767, so 0x7FFF is 0 and -1 is 1;</item>
+/// <item>the .skin file (SKIN): vertex list, triangles, bone palettes, submeshes of 0x30 bytes and texture units (the
+///   1.12 record). A submesh's <c>level</c> is the high part of its index start (MEASURED on the 1.60 copy: 61 of
+///   998 creature models have more than 65,535 triangle indices in view 0; their triangles stay in the vertex range
+///   of the plain 16-bit vertex start).</item>
+/// </list>
+/// Particles, ribbons, lights and cameras changed their records (M3): they are counted in
+/// <see cref="M2ModernInfo.NotShown"/>, not converted.
+/// </summary>
+public static class M2ModernReader
+{
+    public const uint Md21 = 0x3132444d;   // 'MD21'
+    public const uint Md20 = 0x3032444d;   // 'MD20'
+    public const uint Skin = 0x4e494b53;   // 'SKIN'
+
+    /// <summary>True when the bytes start like a chunked model (MD21).</summary>
+    public static bool IsChunked(ReadOnlySpan<byte> data) => data.Length >= 8 && BinaryPrimitives.ReadUInt32LittleEndian(data) == Md21;
+
+    /// <summary>The chunks of a chunked model: (magic, offset of the data, size).</summary>
+    public static List<(string Magic, int Offset, int Size)> Chunks(ReadOnlySpan<byte> data)
+    {
+        var res = new List<(string, int, int)>();
+        int o = 0;
+        while (o + 8 <= data.Length)
+        {
+            var magic = Encoding.ASCII.GetString(data.Slice(o, 4));
+            int size = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(o + 4, 4));
+            if (size < 0 || o + 8L + size > data.Length) throw new M2Exception($"chunk {magic} at 0x{o:x}: {size} bytes run past the end of the file (0x{data.Length:x})");
+            res.Add((magic, o + 8, size));
+            o += 8 + size;
+        }
+        return res;
+    }
+
+    /// <summary>
+    /// Reads a chunked model. <paramref name="readFile"/> returns a file by FileDataID (the .skin files; it may throw
+    /// for an encrypted or missing file, which is reported); <paramref name="nameOf"/> names a texture FileDataID (its
+    /// known name, else "#id.blp"). Throws <see cref="M2Exception"/> when the model or its first view cannot be read.
+    /// </summary>
+    public static M2Model Load(byte[] data, Func<uint, byte[]?> readFile, Func<uint, string>? nameOf = null)
+    {
+        if (!IsChunked(data)) throw new M2Exception(data.Length >= 4 && BinaryPrimitives.ReadUInt32LittleEndian(data) == Md20
+            ? "an MD20 model without chunks: the modern reader reads chunked (MD21) models; 1.12 models open in your game's window"
+            : "not a chunked M2 (MD21) file");
+        nameOf ??= id => $"#{id}.blp";
+        var chunks = Chunks(data);
+        var md = chunks.FirstOrDefault(c => c.Magic == "MD21");
+        if (md.Magic == null) throw new M2Exception("no MD21 chunk");
+        uint[] sfid = U32s(data, chunks, "SFID");
+        uint[] txid = U32s(data, chunks, "TXID");
+        var body = data.AsSpan(md.Offset, md.Size).ToArray();
+        var b = new Buf(body);
+        if (b.U32(0) != Md20) throw new M2Exception("the MD21 chunk does not hold an MD20 header");
+        uint version = b.U32(4);
+        if (version < 264) throw new M2Exception($"M2 version {version}: the modern reader reads versions 264 and later");
+        int profiles = (int)b.U32(0x44);
+        var info = new M2ModernInfo { Version = version, SkinProfiles = profiles, SkinFiles = sfid, TextureFiles = txid };
+        foreach (var c in chunks)
+        {
+            var (used, meaning) = M2ModernInfo.Describe(c.Magic);
+            info.Chunks.Add(new M2ChunkInfo(c.Magic, c.Size, used, meaning));
+        }
+        var afid = chunks.FirstOrDefault(c => c.Magic == "AFID");
+        if (afid.Magic != null)
+            for (int i = 0; i + 8 <= afid.Size; i += 8)
+            {
+                var s = data.AsSpan(afid.Offset + i);
+                uint f = BinaryPrimitives.ReadUInt32LittleEndian(s[4..]);
+                if (f != 0) info.AnimFiles.Add(new M2AnimFile(BinaryPrimitives.ReadUInt16LittleEndian(s), BinaryPrimitives.ReadUInt16LittleEndian(s[2..]), f));
+            }
+        var skid = chunks.FirstOrDefault(c => c.Magic == "SKID");
+        if (skid.Magic != null && skid.Size >= 4) info.SkeletonFile = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(skid.Offset));
+        foreach (var c in chunks.Where(c => !M2ModernInfo.Describe(c.Magic).Used).GroupBy(c => c.Magic))
+        {
+            var meaning = M2ModernInfo.Describe(c.Key).Meaning;
+            info.Ignored.Add(c.Key switch
+            {
+                "AFID" => $"AFID: {info.AnimFiles.Count} external animation file{(info.AnimFiles.Count == 1 ? "" : "s")} (.anim): later (M3)",
+                "SKID" => $"SKID: skeleton file #{info.SkeletonFile} (.skel): later (M3)",
+                _ => $"{c.Key}: {meaning}",
+            });
+        }
+
+        var views = new List<M2View>();
+        int want = Math.Min(profiles, sfid.Length);
+        for (int v = 0; v < want; v++)
+        {
+            byte[]? skin;
+            string why;
+            try
+            {
+                skin = readFile(sfid[v]);
+                why = skin == null ? "not in this client" : "";
+            }
+            catch (Exception e) when (e is not OutOfMemoryException)
+            {
+                skin = null;
+                why = e.Message;
+            }
+            if (skin == null)
+            {
+                if (v == 0) throw new M2Exception($"its first view (skin file #{sfid[v]}) cannot be read: {why}");
+                info.Notes.Add($"view {v + 1} (skin file #{sfid[v]}) cannot be read: {why}");
+                break;
+            }
+            var view = ReadSkin(skin, $"skin file #{sfid[v]}");
+            views.Add(view);
+            info.ViewTriangles.Add(view.Triangles.Length / 3);
+        }
+        if (want == 0) info.Notes.Add(profiles == 0 ? "the model has no views (skin profiles)" : "the model names no skin files (SFID)");
+        info.ViewsRead = views.Count;
+        var unitLookup = TextureLayers(views, info);
+        var file = new Converter(b, info).Build(nameOf, txid, unitLookup);
+        return M2Model.FromModern(file, views.ToArray(), info);
+    }
+
+    /// <summary>
+    /// The texture layers of the texture units, in the 1.12 form the renderer draws (MEASURED on the 1.60 copy: the
+    /// texture-coordinate lookup of modern models is empty; a unit's layers are described by its shader id instead).
+    /// FORMAT KNOWLEDGE of the shader id: 0x8000 and up name a combiner effect of several layers (a base texture with a
+    /// reflection or glow); below it, bits 0x70 / 0x07 are the operations of the first / second layer and 0x80 / 0x08
+    /// mark a layer mapped by the reflection (sphere) instead of its UV set. The 1.12 renderer multiplies two layers:
+    /// a unit whose second layer is a plain multiply (operation 1, no reflection) keeps both layers; every other unit
+    /// with several layers is drawn with its first layer only (counted in <see cref="M2ModernInfo.Approximated"/>; the
+    /// full combiners come with the effects, M3). Returns the synthetic texture-coordinate lookup (0 = first UV set,
+    /// 1 = second, 0xFFFF = sphere map) and points every unit at its pair.
+    /// </summary>
+    private static byte[] TextureLayers(List<M2View> views, M2ModernInfo info)
+    {
+        var pairs = new List<(ushort, ushort)>();
+        int firstOnly = 0, sphere = 0;
+        foreach (var v in views)
+            foreach (var tu in v.TexUnits)
+            {
+                int sid = tu.ShaderId;
+                bool combiner = (sid & 0x8000) != 0;
+                if (tu.TextureCount >= 2 && (combiner || (sid & 0x7) != 1 || (sid & 0x8) != 0))
+                {
+                    tu.TextureCount = 1;
+                    firstOnly++;
+                }
+                bool env0 = !combiner && (sid & 0x80) != 0;
+                if (env0) sphere++;
+                var pair = (env0 ? (ushort)0xFFFF : (ushort)0, (ushort)1);
+                int at = pairs.IndexOf(pair);
+                if (at < 0)
+                {
+                    at = pairs.Count;
+                    pairs.Add(pair);
+                }
+                tu.TexUnitLookup = at * 2;
+            }
+        if (firstOnly > 0) info.Approximated.Add($"{firstOnly} texture unit{(firstOnly == 1 ? "" : "s")} with a reflection or glow layer drawn with {(firstOnly == 1 ? "its" : "their")} first texture only");
+        if (sphere > 0) info.Approximated.Add($"{sphere} texture unit{(sphere == 1 ? "" : "s")} drawn as a reflection (sphere map), from the shader id");
+        var bytes = new byte[pairs.Count * 4];
+        for (int i = 0; i < pairs.Count; i++)
+        {
+            BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(i * 4), pairs[i].Item1);
+            BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(i * 4 + 2), pairs[i].Item2);
+        }
+        return bytes;
+    }
+
+    private static uint[] U32s(byte[] data, List<(string Magic, int Offset, int Size)> chunks, string magic)
+    {
+        var c = chunks.FirstOrDefault(x => x.Magic == magic);
+        if (c.Magic == null) return System.Array.Empty<uint>();
+        var a = new uint[c.Size / 4];
+        for (int i = 0; i < a.Length; i++) a[i] = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(c.Offset + i * 4));
+        return a;
+    }
+
+    /// <summary>A compressed quaternion component (int16) as a float: negative v -> (v + 32768) / 32767, else
+    /// (v - 32767) / 32767.</summary>
+    public static float DecompressQuat(short v) => (v < 0 ? v + 32768 : v - 32767) / 32767f;
+
+    /// <summary>The inverse of <see cref="DecompressQuat"/> (tests and fixtures).</summary>
+    public static short CompressQuat(float f)
+    {
+        f = Math.Clamp(f, -1f, 1f);
+        int v = f >= 0 ? (int)MathF.Round(f * 32767f) - 32768 : (int)MathF.Round(f * 32767f) + 32767;
+        return (short)Math.Clamp(v, short.MinValue, short.MaxValue);
+    }
+
+    // ------------------------------------------------------------------ the .skin file
+
+    /// <summary>Reads a .skin file (SKIN, version 264 and later) into a view.</summary>
+    public static M2View ReadSkin(byte[] s, string what = "skin file")
+    {
+        var b = new Buf(s);
+        if (s.Length < 0x30 || b.U32(0) != Skin) throw new M2Exception($"{what} is not a SKIN file");
+        var vertices = b.Block(4, 2, what + " vertices");
+        var indices = b.Block(0x0C, 2, what + " triangles");
+        var bones = b.Block(0x14, 4, what + " bone palettes");
+        var subs = b.Block(0x1C, 0x30, what + " submeshes");
+        var units = b.Block(0x24, 0x18, what + " texture units");
+        var v = new M2View
+        {
+            Indices = ToU16(vertices), Triangles = ToU16(indices), Properties = bones.ToArray(), BoneLimit = b.U32(0x2C),
+            Submeshes = new M2Submesh[subs.Length / 0x30], TexUnits = new M2TexUnit[units.Length / 0x18],
+        };
+        for (int k = 0; k < v.Submeshes.Length; k++)
+        {
+            var x = subs.Slice(k * 0x30, 0x30);
+            int level = U16(x, 2);
+            v.Submeshes[k] = new M2Submesh
+            {
+                GeosetId = U16(x, 0), Level = level, VertexStart = U16(x, 4), VertexCount = U16(x, 6), IndexStart = U16(x, 8) + (level << 16),
+                IndexCount = U16(x, 10), BoneCount = U16(x, 12), BoneStart = U16(x, 14), BoneInfluences = U16(x, 16), CenterBone = U16(x, 18),
+                Center = new System.Numerics.Vector3(F32(x, 20), F32(x, 24), F32(x, 28)),
+            };
+        }
+        for (int k = 0; k < v.TexUnits.Length; k++)
+        {
+            var x = units.Slice(k * 0x18, 0x18);
+            v.TexUnits[k] = new M2TexUnit
+            {
+                Flags = x[0], Priority = unchecked((sbyte)x[1]), ShaderId = U16(x, 2), Submesh = U16(x, 4), GeosetIndex = U16(x, 6), Color = unchecked((short)U16(x, 8)),
+                RenderFlags = U16(x, 10), MaterialLayer = U16(x, 12), TextureCount = U16(x, 14), TextureLookup = U16(x, 16), TexUnitLookup = U16(x, 18),
+                TransparencyLookup = U16(x, 20), TextureTransformLookup = U16(x, 22),
+            };
+        }
+        return v;
+    }
+
+    private static ushort U16(ReadOnlySpan<byte> s, int o) => BinaryPrimitives.ReadUInt16LittleEndian(s[o..]);
+    private static float F32(ReadOnlySpan<byte> s, int o) => BinaryPrimitives.ReadSingleLittleEndian(s[o..]);
+
+    private static ushort[] ToU16(ReadOnlySpan<byte> s)
+    {
+        var a = new ushort[s.Length / 2];
+        for (int i = 0; i < a.Length; i++) a[i] = BinaryPrimitives.ReadUInt16LittleEndian(s[(i * 2)..]);
+        return a;
+    }
+
+    // ------------------------------------------------------------------ bounds-checked reads
+
+    internal sealed class Buf
+    {
+        public readonly byte[] B;
+        public Buf(byte[] b) { B = b; }
+        public int Length => B.Length;
+
+        public uint U32(int o) => o + 4 <= B.Length ? BinaryPrimitives.ReadUInt32LittleEndian(B.AsSpan(o)) : throw new M2Exception($"read past the end at 0x{o:x}");
+        public ushort U16(int o) => o + 2 <= B.Length ? BinaryPrimitives.ReadUInt16LittleEndian(B.AsSpan(o)) : throw new M2Exception($"read past the end at 0x{o:x}");
+        public short I16(int o) => unchecked((short)U16(o));
+
+        /// <summary>The elements of the M2Array {count, offset} at <paramref name="at"/>.</summary>
+        public ReadOnlySpan<byte> Block(int at, int elemSize, string what)
+        {
+            uint n = U32(at), o = U32(at + 4);
+            return Range(n, o, elemSize, what);
+        }
+
+        public ReadOnlySpan<byte> Range(uint n, uint o, int elemSize, string what)
+        {
+            if (n == 0) return ReadOnlySpan<byte>.Empty;
+            long bytes = (long)n * elemSize;
+            if (o > B.Length || o + bytes > B.Length)
+                throw new M2Exception($"{what}: {n} x {elemSize} bytes at 0x{o:x} run past the end (0x{B.Length:x})");
+            return B.AsSpan((int)o, (int)bytes);
+        }
+
+        public bool Fits(uint n, uint o, int elemSize) => n == 0 || (o <= B.Length && o + (long)n * elemSize <= B.Length);
+    }
+}

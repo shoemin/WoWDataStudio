@@ -30,6 +30,10 @@ public sealed class M2File
         Blocks = blocks;
     }
 
+    /// <summary>M2: a structure built in memory (the modern reader's 1.12-shaped copy of a chunked model): no file
+    /// bytes behind it. <paramref name="header"/> is a one-element array of <see cref="M2Schema.Header256"/>.</summary>
+    public static M2File FromHeader(M2Data header) => new(header, null, new List<(int, int)>());
+
     public uint Version => BinaryPrimitives.ReadUInt32LittleEndian(Header.Bytes.AsSpan(4));
     public M2Rec HeaderRec => Header.Rec;
 

@@ -342,3 +342,39 @@ public sealed partial class AssetIndex
         else ModernEmbedded(d, model, cat, names);
     }
 }
+
+/// <summary>M2: the 3D viewer's queries of an index of another version (named creatures, a display's model).</summary>
+public sealed partial class AssetIndex
+{
+    /// <summary>The displays of a creature the client names itself (named_creature), in table order.</summary>
+    public List<long> NamedCreatureDisplayIds(long entry)
+    {
+        try
+        {
+            return Rows("SELECT display1, display2, display3, display4 FROM named_creature WHERE entry=$0", r => new[] { L(r, 0), L(r, 1), L(r, 2), L(r, 3) }, entry)
+                .SelectMany(x => x).Where(x => x > 0).Distinct().ToList();
+        }
+        catch (SqliteException) { return new List<long>(); }
+    }
+
+    /// <summary>The model of a creature display and its NPC look (CreatureDisplayInfoExtra id, 0 for none).</summary>
+    public (string? Model, long ExtraId) CreatureDisplayModel(long id) =>
+        Rows("SELECT model, extra_id FROM creature_display WHERE id=$0", r => (S(r, 0), L(r, 1)), id).FirstOrDefault();
+
+    /// <summary>The name of the first creature the client names for each display (named_creature).</summary>
+    public Dictionary<long, string> NamedCreaturesForDisplays(IEnumerable<long> displays)
+    {
+        var want = displays.ToHashSet();
+        var res = new Dictionary<long, string>();
+        if (want.Count == 0) return res;
+        try
+        {
+            foreach (var (name, ds) in Rows("SELECT name, display1, display2, display3, display4 FROM named_creature ORDER BY entry",
+                         r => (r.GetString(0), new[] { L(r, 1), L(r, 2), L(r, 3), L(r, 4) })))
+                foreach (var d in ds)
+                    if (d > 0 && want.Contains(d)) res.TryAdd(d, name);
+        }
+        catch (SqliteException) { }
+        return res;
+    }
+}

@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Numerics;
 using System.Security.Cryptography;
 using System.Text;
 using WoWData.Core.Blp;
@@ -341,6 +342,159 @@ public static class SyntheticClients
         return ms.ToArray();
     }
 
+    // ------------------------------------------------------------------ M2: a cube model v274 and its .skin
+
+    public const uint CubeSkin = 1000008, CubeAnim = 1000009;
+
+    /// <summary>The cube's vertices: the 8 corners of [-1, 1]^3 (corner k: x = bit 0, y = bit 1, z = bit 2).</summary>
+    public static Vector3 CubeCorner(int k) => new((k & 1) != 0 ? 1 : -1, (k & 2) != 0 ? 1 : -1, (k & 4) != 0 ? 1 : -1);
+
+    /// <summary>12 triangles (36 indices into the 8 corners), two per face.</summary>
+    public static readonly ushort[] CubeTriangles =
+    {
+        0, 2, 1, 1, 2, 3,   4, 5, 6, 5, 7, 6,   0, 1, 4, 1, 5, 4,   2, 6, 3, 3, 6, 7,   0, 4, 2, 2, 4, 6,   1, 3, 5, 3, 7, 5,
+    };
+
+    /// <summary>The cube's bone rotation at its second key: 90 degrees about Z.</summary>
+    public static readonly Quaternion CubeTurn = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, MathF.PI / 2);
+
+    private static byte[] U16s(params int[] v) => v.SelectMany(x => BitConverter.GetBytes((ushort)x)).ToArray();
+    private static byte[] U32s(params uint[] v) => v.SelectMany(BitConverter.GetBytes).ToArray();
+    private static byte[] F32s(params float[] v) => v.SelectMany(BitConverter.GetBytes).ToArray();
+
+    /// <summary>A little-endian buffer with M2Array {count, offset} fields that point at data appended later.</summary>
+    private sealed class Blob
+    {
+        public readonly List<byte> B;
+        private readonly int _align;
+        public Blob(int headerSize, int align) { B = new List<byte>(new byte[headerSize]); _align = align; }
+        public void Set(int o, byte[] v) { for (int i = 0; i < v.Length; i++) B[o + i] = v[i]; }
+        public void Set(int o, uint v) => Set(o, BitConverter.GetBytes(v));
+        public int Put(byte[] data)
+        {
+            while (B.Count % _align != 0) B.Add(0);
+            int o = B.Count;
+            B.AddRange(data);
+            return o;
+        }
+        public void Arr(int at, int count, byte[] data)
+        {
+            Set(at, (uint)count);
+            Set(at + 4, count == 0 ? 0u : (uint)Put(data));
+        }
+    }
+
+    /// <summary>
+    /// A cube model in the chunked form of a modern client, made from our own bytes (the layout as our reader reads it,
+    /// FORMAT KNOWLEDGE; no client file was copied): MD21 with an MD20 header of version 274 (8 vertices, one bone,
+    /// two sequences: Stand inline (flag 0x20, 1000 ms) and Walk external (flag 0, 500 ms, its keys in an .anim file
+    /// named by AFID), one material, three textures), SFID (its .skin file), TXID (one FileDataID per texture record,
+    /// 0 for the run-time skin slot 11), AFID. Bone 0: rotation keys (compressed quaternions) identity at 0 ms and
+    /// <see cref="CubeTurn"/> at 1000 ms; translation keys (0, 0, 0) at 0 ms and (0, 0, 2) at 500 ms (its last key
+    /// comes before the sequence ends).
+    /// </summary>
+    public static byte[] CubeM2v274(uint modelTexture = ModelTexture, uint skinTexture = SkinTexture, uint skinFile = CubeSkin)
+    {
+        var h = new Blob(0x130, 16);
+        h.Set(0, Encoding.ASCII.GetBytes("MD20"));
+        h.Set(4, 274u);
+        h.Arr(0x08, 9, Encoding.ASCII.GetBytes("TestCube\0"));
+        var seq = new byte[2 * 0x40];
+        void Seq(int i, int animId, uint duration, uint flags)
+        {
+            int o = i * 0x40;
+            BitConverter.GetBytes((ushort)animId).CopyTo(seq, o);
+            BitConverter.GetBytes(duration).CopyTo(seq, o + 4);
+            BitConverter.GetBytes(flags).CopyTo(seq, o + 0x0C);
+            BitConverter.GetBytes((short)0x7fff).CopyTo(seq, o + 0x10);
+            BitConverter.GetBytes((ushort)150).CopyTo(seq, o + 0x1C);
+            F32s(-1, -1, -1, 1, 1, 1, 1.7320508f).CopyTo(seq, o + 0x20);
+            BitConverter.GetBytes((short)-1).CopyTo(seq, o + 0x3C);
+            BitConverter.GetBytes((ushort)i).CopyTo(seq, o + 0x3E);
+        }
+        Seq(0, 0, 1000, 0x20);   // Stand: its keys in the model
+        Seq(1, 4, 500, 0);       // Walk: its keys in an .anim file
+        h.Arr(0x1C, 2, seq);
+        h.Arr(0x24, 2, U16s(0, 1));
+        // bone 0: one key array per sequence; the external sequence's arrays point into its .anim file (never read)
+        uint tTimes = (uint)h.Put(U32s(0, 500)), tVals = (uint)h.Put(F32s(0, 0, 0, 0, 0, 2));
+        uint rTimes = (uint)h.Put(U32s(0, 1000));
+        var rv = new List<byte>();
+        foreach (var q in new[] { Quaternion.Identity, CubeTurn })
+            foreach (var c in new[] { q.X, q.Y, q.Z, q.W }) rv.AddRange(BitConverter.GetBytes(WoWData.Core.M2.Modern.M2ModernReader.CompressQuat(c)));
+        uint rVals = (uint)h.Put(rv.ToArray());
+        const uint far = 0x7FFFFF00;
+        uint tOuterT = (uint)h.Put(U32s(2, tTimes, 1, far)), tOuterV = (uint)h.Put(U32s(2, tVals, 1, far));
+        uint rOuterT = (uint)h.Put(U32s(2, rTimes, 1, far)), rOuterV = (uint)h.Put(U32s(2, rVals, 1, far));
+        var bone = new byte[0x58];
+        BitConverter.GetBytes(-1).CopyTo(bone, 0);
+        BitConverter.GetBytes((short)-1).CopyTo(bone, 8);
+        void Track(int o, int interp, uint outerT, uint outerV, int n)
+        {
+            BitConverter.GetBytes((ushort)interp).CopyTo(bone, o);
+            BitConverter.GetBytes((short)-1).CopyTo(bone, o + 2);
+            U32s((uint)n, outerT, (uint)n, outerV).CopyTo(bone, o + 4);
+        }
+        Track(0x10, 1, tOuterT, tOuterV, 2);
+        Track(0x24, 1, rOuterT, rOuterV, 2);
+        Track(0x38, 0, 0, 0, 0);
+        h.Arr(0x2C, 1, bone);
+        // vertices (0x30 each): position, weights (255 on bone 0), bone indices, normal, two UV sets
+        var verts = new List<byte>();
+        for (int k = 0; k < 8; k++)
+        {
+            var p = CubeCorner(k);
+            var n = Vector3.Normalize(p);
+            verts.AddRange(F32s(p.X, p.Y, p.Z));
+            verts.AddRange(new byte[] { 255, 0, 0, 0, 0, 0, 0, 0 });
+            verts.AddRange(F32s(n.X, n.Y, n.Z, k & 1, (k >> 1) & 1, 0, 0));
+        }
+        h.Arr(0x3C, 8, verts.ToArray());
+        h.Set(0x44, 1u);                                                  // one skin profile
+        h.Arr(0x50, 3, U32s(0, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 0));        // a file, the creature skin slot 11, a file
+        h.Arr(0x70, 1, U16s(0, 0));                                       // one material: opaque
+        h.Arr(0x78, 1, U16s(0));                                          // bone lookup
+        h.Arr(0x80, 3, U16s(0, 1, 2));                                    // texture lookup
+        h.Arr(0x90, 1, U16s(0));                                          // transparency lookup
+        h.Set(0xA0, F32s(-1, -1, -1, 1, 1, 1, 1.7320508f));               // bounds and radius
+        h.Put(Array.Empty<byte>());
+
+        var ms = new MemoryStream();
+        void Chunk(string magic, byte[] payload)
+        {
+            ms.Write(Encoding.ASCII.GetBytes(magic));
+            ms.Write(BitConverter.GetBytes(payload.Length));
+            ms.Write(payload);
+        }
+        Chunk("MD21", h.B.ToArray());
+        Chunk("SFID", U32s(skinFile));
+        Chunk("TXID", U32s(modelTexture, 0, skinTexture));
+        Chunk("AFID", U16s(4, 0).Concat(U32s(CubeAnim)).ToArray());
+        return ms.ToArray();
+    }
+
+    /// <summary>The cube's .skin file (SKIN): the 8 corners, the 12 triangles, one submesh and one texture unit.</summary>
+    public static byte[] CubeSkinFile()
+    {
+        var b = new Blob(0x38, 4);
+        b.Set(0, Encoding.ASCII.GetBytes("SKIN"));
+        b.Arr(0x04, 8, U16s(0, 1, 2, 3, 4, 5, 6, 7));
+        b.Arr(0x0C, CubeTriangles.Length, CubeTriangles.SelectMany(BitConverter.GetBytes).ToArray());
+        b.Arr(0x14, 8, new byte[8 * 4]);
+        var sub = new byte[0x30];
+        BitConverter.GetBytes((ushort)8).CopyTo(sub, 6);                            // vertex count
+        BitConverter.GetBytes((ushort)CubeTriangles.Length).CopyTo(sub, 10);        // index count
+        BitConverter.GetBytes((ushort)1).CopyTo(sub, 12);                           // bones
+        BitConverter.GetBytes((ushort)1).CopyTo(sub, 16);                           // influences
+        b.Arr(0x1C, 1, sub);
+        var unit = new byte[0x18];
+        BitConverter.GetBytes((short)-1).CopyTo(unit, 8);                           // no colour
+        BitConverter.GetBytes((ushort)1).CopyTo(unit, 14);                          // one texture
+        BitConverter.GetBytes((ushort)0xFFFF).CopyTo(unit, 22);                     // no texture transform
+        b.Arr(0x24, 1, unit);
+        return b.B.ToArray();
+    }
+
     /// <summary>The tables of the test client (rows by column name of our layout file).</summary>
     public static Dictionary<string, (IReadOnlyList<Row> Rows, IReadOnlyList<int>? Locked)> Tables() => new()
     {
@@ -392,7 +546,8 @@ public static class SyntheticClients
             paths.Add(path);
             files.Add(new StoreFile(next++, path, bytes, true, encFrom > 0 ? encFrom : null));
         }
-        files.Add(new StoreFile(CubeModel, CubeName, Md21(ModelTexture, 0, SkinTexture)));
+        files.Add(new StoreFile(CubeModel, CubeName, CubeM2v274()));
+        files.Add(new StoreFile(CubeSkin, null, CubeSkinFile()));                 // the cube's .skin, known by its FileDataID only
         files.Add(new StoreFile(SkinTexture, null, Blp(200, 40, 40)));          // named only by the listfile
         files.Add(new StoreFile(IconTexture, IconName, Blp(40, 200, 40)));       // named by the root and the interface list
         files.Add(new StoreFile(ModelTexture, null, Blp(40, 40, 200)));          // no name at all

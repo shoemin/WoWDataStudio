@@ -216,6 +216,19 @@ public sealed class M2Model
     public static M2Model Load(byte[] data) => new(M2File.Parse(data));
     public static M2Model FromFile(M2File f) => new(f);
 
+    /// <summary>M2 (other versions): set when the model was read by <see cref="Modern.M2ModernReader"/> from a chunked
+    /// (MD21) file: its chunks, its skin and texture files, what was left out or drawn approximately. Null for 1.12.</summary>
+    public WoWData.Core.M2.Modern.M2ModernInfo? Modern { get; }
+
+    private M2Model(M2File f, M2View[] views, WoWData.Core.M2.Modern.M2ModernInfo modern) : this(f)
+    {
+        Views = views;
+        Modern = modern;
+    }
+
+    /// <summary>A model read by the modern reader: its 1.12-shaped structure and the views of its .skin files.</summary>
+    public static M2Model FromModern(M2File f, M2View[] views, WoWData.Core.M2.Modern.M2ModernInfo info) => new(f, views, info);
+
     public string TextureName(int i) => Textures[i].FileName;
 
     /// <summary>The render flags of a texture unit (opaque when the index is out of range).</summary>

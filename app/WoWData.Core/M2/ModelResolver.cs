@@ -63,7 +63,7 @@ public sealed class ModelLook
 /// CharacterFacialHairStyles (SetFacialHair: +100 / +300 / +200).
 /// Textures are read through <see cref="ReadFile"/> (the app passes "your edit if you have one, else the game's").
 /// </summary>
-public sealed class ModelResolver
+public sealed class ModelResolver : IModelLooks
 {
     // CharComponent_InitRegionRects @00475c50: x, y, width, height of the 10 regions of the 256x256 body texture
     public static readonly IReadOnlyDictionary<string, (int X, int Y, int W, int H)> Regions = new Dictionary<string, (int, int, int, int)>
@@ -96,6 +96,9 @@ public sealed class ModelResolver
         Catalog = catalog;
         ReadFile = readFile ?? catalog.Client.Read;
     }
+
+    /// <summary>M2 (IModelLooks): the archive's spelling of a path, as before.</summary>
+    string IModelLooks.Canonical(string path) => Catalog.Canonical(path);
 
     /// <summary>Forget decoded textures (after a texture was edited or reverted).</summary>
     public void ClearTextureCache() => _blp.Clear();

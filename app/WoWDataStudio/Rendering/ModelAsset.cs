@@ -143,7 +143,16 @@ public sealed class ModelAsset
     public static ModelAsset Build(string path, byte[] data, Func<string, RgbaImage?> loadTexture)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        var m = M2Model.Load(data);
+        var a = Build(path, M2Model.Load(data), loadTexture);
+        a.LoadTime = sw.Elapsed;
+        return a;
+    }
+
+    /// <summary>M2 (design 2.2): build the buffers of a model already read (by any <see cref="IModelSource"/>, e.g. the
+    /// modern reader) and decode its own texture files.</summary>
+    public static ModelAsset Build(string path, M2Model m, Func<string, RgbaImage?> loadTexture)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         var a = new ModelAsset(path, m);
         for (int i = 0; i < m.Textures.Length; i++)
             if (m.Textures[i].Type == 0) a.FileTextures[i] = m.Textures[i].FileName.Length > 0 ? loadTexture(m.Textures[i].FileName) : null;

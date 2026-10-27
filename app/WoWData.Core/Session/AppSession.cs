@@ -39,6 +39,16 @@ public sealed class AppSession : IDisposable
     public Catalog160? Displays { get; private set; }
     /// <summary>The other version's app folder (only its index lives there; never a workspace).</summary>
     public ClientPaths? OtherPaths { get; private set; }
+    /// <summary>M2: the looks of the other version's models (skins, baked NPC textures, item textures).</summary>
+    public WoWData.Core.M2.Modern.ModernModelResolver? ModernLooks { get; private set; }
+
+    /// <summary>M2 (design 2.2): the looks of the open game's models, for the viewing code: <see cref="Models"/> for
+    /// your 1.12 game (the same object), <see cref="ModernLooks"/> for another version.</summary>
+    public IModelLooks? Looks => (IModelLooks?)Models ?? ModernLooks;
+
+    /// <summary>M2 (design 2.2): reads the open game's models: your workspace version, else the game's file (1.12), or
+    /// the modern reader with the .skin files by FileDataID (another version).</summary>
+    public IModelSource? ModelSource { get; private set; }
 
     /// <summary>The details panel of an entry, for either kind of index.</summary>
     public EntryDetails Details(IndexEntry e)
@@ -354,6 +364,7 @@ public sealed class AppSession : IDisposable
             var ws = Workspace;
             Models = new ModelResolver(Catalog, p => (ws.IsModified(p) ? ws.ReadEdited(p) : null) ?? data.Read(p));
             ModelPackages = new WoWData.Core.ModelIO.ModelPackageService(data, Catalog, index, ws, Models, Textures);
+            ModelSource = new ModelSource112(p => (ws.IsModified(p) ? ws.ReadEdited(p) : null) ?? data.Read(p));
             Profile = WoWData.Core.Versions.GameProfile.Own112(clientDir);
             ReadMeta();
         }
@@ -413,9 +424,12 @@ public sealed class AppSession : IDisposable
             }
             var index = new AssetIndex(cp.IndexFile);
             var entries = await Task.Run(index.LoadEntries, ct);
+            var anims = WoWData.Core.M2.Modern.ModernModelResolver.Animations112(opts.Client112);
             Other = oc;
             Displays = cat;
             Files = new WoWData.Core.Versions.ModernClientFiles(storage, index.ModernNames(storage));
+            ModernLooks = new WoWData.Core.M2.Modern.ModernModelResolver(cat, Files, anims);
+            ModelSource = new WoWData.Core.M2.Modern.ModernModelSource(Files);
             OtherPaths = cp;
             Index = index;
             Entries = entries;
@@ -481,6 +495,8 @@ public sealed class AppSession : IDisposable
         Files = null;
         Displays = null;
         OtherPaths = null;
+        ModernLooks = null;
+        ModelSource = null;
         Profile = null;
         lock (_mapsGate)
         {
