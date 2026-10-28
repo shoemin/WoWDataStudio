@@ -219,7 +219,7 @@ public class M4ModernTests : IDisposable
         var bld = TerrainAsset.BuildBuilding($"#{WmoRoot}.wmo", p => _s.ReadCurrent(p), looks.LoadBlp, (id, ext) => WoWData.Core.M2.Modern.ModernModelSource.NameOf(_s.Files!, id, ext));
         Assert.Equal(12, bld.Wmos.Single().Mesh.Indices.Length / 3);
         Assert.NotNull(bld.Textures.Single());
-        Assert.Contains("1 of 1 groups, 12 triangles, 1 of 1 textures; 1 doodad models listed", OtherVersionWindowViewModel.BuildingText(bld, WmoGeometry.Load($"#{WmoRoot}.wmo", p => _s.ReadCurrent(p))));
+        Assert.Contains("1 of 1 groups, 12 triangles, 1 of 1 textures; 1 doodad models listed", BrowserViewModel.BuildingText(bld, WmoGeometry.Load($"#{WmoRoot}.wmo", p => _s.ReadCurrent(p))));
     }
 
     [Fact]

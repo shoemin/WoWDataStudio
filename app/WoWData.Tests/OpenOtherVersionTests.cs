@@ -69,10 +69,12 @@ public class OpenOtherVersionTests : IDisposable
             Assert.True(s.IsReadOnly);
             Assert.NotNull(s.Profile);
             Assert.False(s.Profile!.IsOwnClient);
-            Assert.Equal(GameCaps.None, s.Profile.Caps);
+            Assert.Equal(GameCaps.UsedInGame | GameCaps.ModelExport, s.Profile.Caps);
+            Assert.False(s.Profile.Has(GameCaps.Install) || s.Profile.Has(GameCaps.Server) || s.Profile.Has(GameCaps.HotReload) || s.Profile.Has(GameCaps.Designers) || s.Profile.Has(GameCaps.Noggit));
             Assert.False(s.Profile.Has(GameCaps.Edit));
             Assert.Equal((70450, "1.60.1"), (s.Profile.Build, s.Profile.Version));
-            Assert.Equal("1.60.1.70450 is open read only: wds dbc set changes files.", s.Profile.RefusedText("dbc set"));
+            Assert.Equal("1.60.1.70450 is open read only: wds dbc set changes files. " + GameProfile.WriteReason, s.Profile.RefusedText("dbc set"));
+            Assert.Equal("1.60.1.70450 is open read only. " + GameProfile.WriteReason, s.WriteRefusal);
             // none of the 1.12 parts
             Assert.Null(s.Data);
             Assert.Null(s.Workspace);

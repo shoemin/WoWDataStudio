@@ -65,6 +65,16 @@ public class VersionOpenCliTests : IDisposable
             ["maps minimap"] = new[] { "maps", "minimap", SyntheticMaps.MapDir, "--out", Path.Combine(outDir, "map.png") },
             ["maps tile"] = new[] { "maps", "tile", SyntheticMaps.MapDir, "32", "32" },
             ["maps render"] = new[] { "maps", "render", SyntheticMaps.MapDir, "32", "32", "--out", Path.Combine(outDir, "relief.png") },
+            // the main window's other tabs and exports for another version: Used in game (no server), Export for Blender,
+            // the read-only Data tables tab (rows, CSV / JSON), Rebuild the index
+            ["find used"] = new[] { "find", "used", "cdisplay:1" },
+            ["models export"] = new[] { "models", "export", "cdisplay:1", "--out", Path.Combine(outDir, "models") },
+            ["dbc tables"] = new[] { "dbc", "tables" },
+            ["dbc info"] = new[] { "dbc", "info", "CreatureDisplayInfo" },
+            ["dbc rows"] = new[] { "dbc", "rows", "CreatureDisplayInfo" },
+            ["dbc get"] = new[] { "dbc", "get", "CreatureDisplayInfo", "1" },
+            ["dbc export"] = new[] { "dbc", "export", "CreatureDisplayInfo", "--out", Path.Combine(outDir, "cdi.csv") },
+            ["index build"] = new[] { "index", "build" },
         };
     }
 
@@ -86,9 +96,73 @@ public class VersionOpenCliTests : IDisposable
             var r = Run(c.Path.Split(' ').Concat(new[] { "--version", _flavor }).ToArray());
             Assert.True(r.Code == ExitCode.Refused, $"wds {c.Path} --version: {r}");
             Assert.Contains("1.60.1.70450 is open read only: wds " + c.Path, r.Err);
+            // the same reason the app shows on its greyed-out controls
+            if (c.Group is "server" or "serverdb" or "server-maps" or "spells" or "classes" or "talents" or "quests")
+                Assert.Contains(WoWData.Core.Servers.NoServerProvider.NoServerText("1.60.1.70450"), r.Err);
+            else if (r.Err.Contains("changes files", StringComparison.Ordinal))
+                Assert.Contains(WoWData.Core.Versions.GameProfile.WriteReason, r.Err);
+        }
+        // the write commands of the main window's greyed-out controls all say why, the same way
+        foreach (var w in new[] { "textures import", "changes build-patch", "changes install", "dbc set", "models import", "maps import-noggit", "changes revert" })
+        {
+            var r = Run(w.Split(' ').Concat(new[] { "--version", _flavor }).ToArray());
+            Assert.Equal(ExitCode.Refused, r.Code);
+            Assert.Contains(WoWData.Core.Versions.GameProfile.RefusedTextFor("1.60.1.70450", w), r.Err);
         }
         // the client's folder is never written: only the index in the app's folder
         Assert.DoesNotContain(Directory.EnumerateFiles(Path.GetDirectoryName(_flavor)!, "*", SearchOption.AllDirectories), f => f.EndsWith(".sqlite", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".png", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void DataTablesUsedInGameAndExportForBlenderWorkOnAnotherVersion()
+    {
+        // the Data tables tab: tables, a row, rows found by a filter, CSV and JSON exports (never into the client)
+        var tables = Run("dbc", "tables", "--filter", "display", "--version", _flavor, "--json");
+        Assert.True(tables.Code == 0, tables.ToString());
+        Assert.Contains(tables.Data.GetProperty("tables").EnumerateArray(), t => t.GetProperty("name").GetString() == "CreatureDisplayInfo" && t.GetProperty("columns").GetString() == "named");
+        Assert.True(tables.Data.GetProperty("readOnly").GetBoolean());
+        var get = Run("dbc", "get", "ItemSparse", "25", "Display", "--version", _flavor);
+        Assert.True(get.Code == 0, get.ToString());
+        Assert.Equal("Test Sword", get.Out.Trim());
+        Assert.Equal(ExitCode.NotFound, Run("dbc", "get", "ItemSparse", "26", "--version", _flavor).Code);   // locked: never guessed
+        var rows = Run("dbc", "rows", "ItemSparse", "--where", "Display=sword", "--version", _flavor, "--json");
+        Assert.True(rows.Code == 0, rows.ToString());
+        Assert.Equal(1, rows.Data.GetProperty("matched").GetInt32());
+        var csv = Path.Combine(_root, "out", "items.csv");
+        Assert.Equal(0, Run("dbc", "export", "ItemSparse", "--out", csv, "--version", _flavor).Code);
+        var lines = File.ReadAllLines(csv);
+        Assert.Equal(2, lines.Length);
+        Assert.Contains("Test Sword", lines[1]);
+        var json = Path.Combine(_root, "out", "items.json");
+        Assert.Equal(0, Run("dbc", "export", "ItemSparse", "--out", json, "--version", _flavor).Code);
+        Assert.Equal("Test Sword", JsonDocument.Parse(File.ReadAllText(json)).RootElement[0].GetProperty("Display").GetString());
+        Assert.Equal(ExitCode.Refused, Run("dbc", "export", "ItemSparse", "--out", Path.Combine(_flavor, "x.csv"), "--version", _flavor).Code);
+
+        // "Used in game": what the client says, and that no server is connected (nothing made up)
+        var used = Run("find", "used", "cdisplay:1", "--version", _flavor, "--json");
+        Assert.True(used.Code == 0, used.ToString());
+        var notes = used.Data.GetProperty("notes").EnumerateArray().Select(n => n.GetString()!).ToList();
+        Assert.Contains(WoWData.Core.Servers.NoServerProvider.NoServerText("1.60.1.70450"), notes);
+        Assert.Contains(used.Data.GetProperty("sections").EnumerateArray(), x => x.GetProperty("id").GetString() == "users");
+        Assert.False(used.Data.GetProperty("serverConnected").GetBoolean());
+
+        // "Export for Blender": the cube's package with every look, outside the client
+        var dir = Path.Combine(_root, "out", "blender");
+        var ex = Run("models", "export", CubeName, "--mode", "all", "--out", dir, "--version", _flavor, "--json");
+        Assert.True(ex.Code == 0, ex.ToString());
+        var folder = ex.Data.GetProperty("folder").GetString()!;
+        Assert.StartsWith(dir, folder);
+        Assert.True(File.Exists(Path.Combine(folder, "wowdata_manifest.json")));
+        Assert.True(ex.Data.GetProperty("readOnly").GetBoolean());
+        Assert.Contains(ex.Data.GetProperty("notes").EnumerateArray(), n => n.GetString()!.Contains("cannot be imported back", StringComparison.Ordinal));
+        Assert.Equal(ExitCode.Refused, Run("models", "export", CubeName, "--out", Path.Combine(_flavor, "pkg"), "--version", _flavor).Code);
+        // "Open in Blender" of another version is "models export --open"; "models open" says so
+        var open = Run("models", "open", CubeName, "--version", _flavor);
+        Assert.Equal(ExitCode.Refused, open.Code);
+        Assert.Contains("--open", open.Err);
+        // nothing was written into the client's folder
+        Assert.DoesNotContain(Directory.EnumerateFiles(Path.GetDirectoryName(_flavor)!, "*", SearchOption.AllDirectories),
+            f => f.EndsWith(".gltf", StringComparison.OrdinalIgnoreCase) || Path.GetFileName(f) is "x.csv" or "items.csv" or "items.json" or "wowdata_manifest.json");
     }
 
     [Fact]
