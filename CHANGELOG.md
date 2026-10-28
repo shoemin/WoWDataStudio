@@ -204,7 +204,8 @@ recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
     view also shows the Fire Elemental and the Fireball missile and lets their particles run for ten frames: 80 cycles
     flat (managed heap 213.5 to 213.3 MB, handles -0.33 per cycle, GL contexts and objects back to 4 / 40);
     `model_popout` keeps the two handles each closed GL window leaves (+1.88 per cycle), and its private bytes rose
-    from 548 to 638 MB over the first 60 cycles, then stayed.
+    from 548 to 638 MB over the first 60 cycles, then stayed: the same as the code before (6a96f3e with the same
+    models: 545 to 622 MB, +2.08 handles per cycle), the existing behaviour of closed 3D windows (known issues).
 
 ### Fixed
 

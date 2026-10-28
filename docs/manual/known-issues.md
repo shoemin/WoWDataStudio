@@ -959,7 +959,11 @@ leaves two Windows handles (a named shared-memory section and a mutex, both name
 110 to 220 KB of memory behind. The app's own resources come back (the GL contexts, textures and buffers it counts, the
 windows and their view models), so the rest happens below the app, in the OpenGL to Direct3D bridge of the 3D control
 (OpenTK GLWpfControl 4.3.6) or in the graphics driver. Measured with the developers' leak test: 200 pop-outs opened and
-closed add about 390 handles and 20 to 30 MB.
+closed add about 390 handles and 20 to 30 MB. With heavier models in the rotation (the Fire Elemental with its 34
+particle emitters and the Fireball missile), 80 pop-outs raise the private memory by about 60 to 90 MB over the first
+60 and then level off (or fall back a little): the same on the code before your game's particles were drawn
+(545 to 622 MB, then 610 MB) as with them (548 to 638 MB, then flat), so it is this existing behaviour, not the
+particles.
 
 *Who is affected:* only someone who opens and closes 3D windows hundreds of times in one session; a few dozen make no
 difference.
