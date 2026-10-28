@@ -151,7 +151,7 @@ internal static class ModelCommands
             Run = async inv =>
             {
                 var s = await inv.Ctx.SessionAsync();
-                if (s.IsReadOnly) return ModelCommandsOther.Info(inv.Ctx, s, ModelCommandsOther.ModelPath(s, inv.Arg(0)));
+                if (s.IsReadOnly) return ModelCommandsOther.Export(inv, s, inv.Flag("open"));
                 var model = ModelPath(s, inv.Arg(0));
                 var svc = s.ModelPackages!;
                 var mode = (inv.Opt("mode") ?? "current").ToLowerInvariant() switch
@@ -606,7 +606,7 @@ internal static class ModelCommands
         return new CliResult().With(new { model, png, output, readOnly = true }).Line(output.FirstOrDefault() ?? png);
     }
 
-    private static void OpenBlender(CliResult r, string gltf)
+    internal static void OpenBlender(CliResult r, string gltf)
     {
         var blender = BlenderTools.FindBlender();
         var root = BlenderTools.AddonRoot();

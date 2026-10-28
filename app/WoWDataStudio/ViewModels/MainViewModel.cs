@@ -48,7 +48,8 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] private string _toastText = "";
     [ObservableProperty] private bool _toastVisible;
 
-    public string WindowTitle => Session.Client == null ? "WoW Data Studio" : $"WoW Data Studio - {Session.Client.ClientDir}";
+    public string WindowTitle => Session.Profile is { IsOwnClient: false } p ? $"WoW Data Studio - {p.Copy?.Name} {p.VersionBuild} (read only)"
+        : Session.Client == null ? "WoW Data Studio" : $"WoW Data Studio - {Session.Client.ClientDir}";
 
     public MainViewModel(AppSession session)
     {
@@ -155,6 +156,8 @@ public sealed partial class MainViewModel : ObservableObject
 
     public async Task OpenClientAsync(string clientDir, bool forceRebuild)
     {
+        if (Session.IsReadOnly) ReleaseBrowser();   // back from another version: its pop-outs and tabs go
+        SetStages(AppSession.StageNames);
         foreach (var s in Stages) s.State = StageState.Waiting;
         ProgressPercent = 0;
         ProgressDetail = "Opening the game archives...";
@@ -190,6 +193,12 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task RebuildIndex()
     {
+        if (Session.IsReadOnly && Session.Profile?.Copy is { } copy)
+        {
+            if (!Dialogs.Confirm("Rebuild the index", $"Read {copy.Name} again and rebuild its index (after you chose another listfile, for example)? The client is only read.", "Rebuild")) return;
+            await OpenOtherClientAsync(copy, _otherFound, true);
+            return;
+        }
         if (Session.Client == null) return;
         if (!Dialogs.Confirm("Rebuild the index", "Read the game data again and rebuild the search index? This takes a few seconds. Your changes are kept.", "Rebuild")) return;
         await OpenClientAsync(Session.Client.ClientDir, true);
@@ -274,10 +283,117 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void OpenLooseFilesDoc() => Dialogs.OpenPath(LooseFilesDoc);
 
-    // ------------------------------------------------------------------ M1: another version, read only
+    // ------------------------------------------------------------------ another version, read only, in this window
+
+    /// <summary>The stages of the organizing screen (your game's, or another version's).</summary>
+    private void SetStages(IReadOnlyList<string> names)
+    {
+        if (Stages.Select(x => x.Name).SequenceEqual(names)) return;
+        Stages.Clear();
+        foreach (var n in names) Stages.Add(new StageItem { Name = n });
+    }
+
+    /// <summary>The clients found with the version that is open (to find a Classic Era copy again on a rebuild).</summary>
+    private IReadOnlyList<WoWData.Core.Versions.ClientCopy>? _otherFound;
+
+    /// <summary>Closes what belongs to the tabs of the version that is open now (pop-out windows, the Other versions
+    /// tab's client) before another one opens in this window.</summary>
+    private void ReleaseBrowser()
+    {
+        var b = Browser;
+        if (b == null) return;
+        b.CloseAllPopouts();
+        b.Versions.Dispose();
+        Browser = null;
+    }
+
+    /// <summary>
+    /// Opens another version (a modern CASC client) read only IN THIS WINDOW, in place of your 1.12 game: the same
+    /// organizing screen (its own index, built once into the app's folder of that client), then the same tabs. Every
+    /// write is greyed out with the reason; File > Back to your 1.12 game opens your game again. The game folder of
+    /// the settings is not changed, so the app still starts with your game.
+    /// </summary>
+    public async Task<bool> OpenOtherClientAsync(WoWData.Core.Versions.ClientCopy copy, IReadOnlyList<WoWData.Core.Versions.ClientCopy>? found, bool rebuild = false)
+    {
+        if (Browser?.Tables is { } tables && !Session.IsReadOnly && !tables.ConfirmLeave()) return false;
+        if (Session.Workspace?.HasLooseInstalls() == true &&
+            !Dialogs.Confirm("Open another version", "You have loose files installed in your game folder. They stay installed; open your game again later (File > Back to your 1.12 game) to remove them.", "Continue")) return false;
+        ReleaseBrowser();
+        _otherFound = found;
+        SetStages(AppSession.OtherStageNames);
+        foreach (var s in Stages) s.State = StageState.Waiting;
+        ProgressPercent = 0;
+        ProgressDetail = "Opening the client...";
+        OrganizingTitle = rebuild ? "Rebuilding the index..." : "Organizing game data...";
+        OrganizingSubtitle = $"Reading {copy.Name} ({copy.Version}{(copy.Build > 0 ? "." + copy.Build : "")}). Its tables and file names are read once into the app's folder of that client; " +
+                             "next time it opens at once. The client is only read, never changed.";
+        Screen = Screen.Organizing;
+        var progress = new Progress<BuildProgress>(p =>
+        {
+            ProgressPercent = p.Fraction * 100;
+            ProgressDetail = p.Detail.Length > 0 ? $"{p.Stage}: {p.Detail}" : p.Stage;
+            for (int i = 0; i < Stages.Count; i++)
+                Stages[i].State = i + 1 < p.StageNumber ? StageState.Done : i + 1 == p.StageNumber ? StageState.Running : StageState.Waiting;
+        });
+        var settings = Session.Settings;
+        var lf = !string.IsNullOrWhiteSpace(settings.OtherClientsListfile) && File.Exists(settings.OtherClientsListfile) ? settings.OtherClientsListfile : null;
+        // your 1.12 game's file names name the other version's files: the game folder of the settings, read only
+        WoWData.Core.Mpq.ClientData? own = null;
+        try
+        {
+            if (settings.ClientDir is { } dir && ClientValidator.Check(dir) is { Ok: true } check)
+            {
+                try { own = await Task.Run(() => new WoWData.Core.Mpq.ClientData(Path.Combine(check.ClientDir, "Data"))); }
+                catch (Exception e) when (e is IOException or WoWData.Core.Mpq.MpqException) { own = null; }
+            }
+            await Session.OpenOtherAsync(copy, new OtherOpenOptions { Listfile = lf, Client112 = own, Found = found, ForceRebuild = rebuild }, progress);
+            foreach (var s in Stages) s.State = StageState.Done;
+            ProgressPercent = 100;
+            Browser = new BrowserViewModel(Session, this);
+            OnPropertyChanged(nameof(WindowTitle));
+            OnPropertyChanged(nameof(IsReadOnly));
+            Screen = Screen.Browser;
+            await Browser.ApplyFilterNow();
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException or InvalidDataException or ArgumentException
+                                       or WoWData.Core.Casc.CascMissingException or WoWData.Core.Db2.Db2FormatException or Microsoft.Data.Sqlite.SqliteException)
+        {
+            WelcomeError = $"{copy.Name} could not be opened: {e.Message}";
+            WelcomeHint = "";
+            OnPropertyChanged(nameof(WindowTitle));
+            OnPropertyChanged(nameof(IsReadOnly));
+            Screen = Screen.Welcome;
+            return false;
+        }
+        finally
+        {
+            own?.Dispose();
+        }
+    }
+
+    /// <summary>True while another version is open in this window (read only).</summary>
+    public bool IsReadOnly => Session.IsReadOnly;
+
+    /// <summary>"Back to your 1.12 game": opens the game folder of the settings again (the welcome screen when there is none).</summary>
+    [RelayCommand]
+    private async Task OpenOwnGame()
+    {
+        var dir = Session.Settings.ClientDir ?? FolderText;
+        if (!string.IsNullOrWhiteSpace(dir) && ClientValidator.Check(dir) is { Ok: true } check)
+        {
+            await OpenClientAsync(check.ClientDir, false);
+            OnPropertyChanged(nameof(IsReadOnly));
+            return;
+        }
+        ReleaseBrowser();
+        WelcomeError = "";
+        WelcomeHint = "";
+        Screen = Screen.Welcome;
+    }
 
     /// <summary>"Open another version (read only)...": a modern client from the folder of other versions (asked for
-    /// when it is not set), opened read only in a window of its own next to this one.</summary>
+    /// when it is not set), opened read only in this window, in place of your 1.12 game.</summary>
     [RelayCommand]
     private async Task OpenOtherVersion()
     {
@@ -313,6 +429,6 @@ public sealed partial class MainViewModel : ObservableObject
             if (pick.ShowDialog() != true || pick.Picked == null) return;
             copy = pick.Picked;
         }
-        OtherVersionWindow.Open(this, copy, found);
+        await OpenOtherClientAsync(copy, found);
     }
 }

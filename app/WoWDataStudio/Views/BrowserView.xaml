@@ -20,6 +20,17 @@
             </DockPanel>
         </DataTemplate>
 
+        <!-- a tab that another version opened read only cannot have (no server, the designers): what and why -->
+        <ControlTemplate x:Key="NotForThisVersion" TargetType="ContentControl">
+            <Border Style="{StaticResource Card}" Margin="0,8,0,0">
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="680" Margin="30">
+                    <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" FontSize="40" Foreground="#FFB0B8C4" HorizontalAlignment="Center" />
+                    <TextBlock Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}" Style="{StaticResource H2}" HorizontalAlignment="Center" Margin="0,10,0,6" />
+                    <TextBlock Text="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" TextWrapping="Wrap" TextAlignment="Center" Foreground="{StaticResource TextMuted}" />
+                </StackPanel>
+            </Border>
+        </ControlTemplate>
+
         <Style x:Key="HeaderButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
@@ -37,15 +48,18 @@
                     <MenuItem Header="Change World of Warcraft folder..." Command="{Binding DataContext.ChangeFolderCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
                     <MenuItem Header="Settings..." Command="{Binding DataContext.OpenSettingsCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
                     <MenuItem Header="Open another version (read only)..." Command="{Binding DataContext.OpenOtherVersionCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                              ToolTip="Another World of Warcraft version (such as the 1.60 Classic client) in a window of its own, next to this one: Browse and textures. Read only." />
+                              ToolTip="Another World of Warcraft version (such as the 1.60 Classic client) in this window, with the same tabs as your game. Read only: every write is greyed out with the reason." />
+                    <MenuItem Header="Back to your 1.12 game" Command="{Binding DataContext.OpenOwnGameCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                              Visibility="{Binding IsReadOnly, Converter={StaticResource BoolVis}}"
+                              ToolTip="Close the other version and open your 1.12 game folder again (the one of the settings)." />
                     <Separator />
-                    <MenuItem Header="Import edited model..." Command="{Binding ImportEditedModelCommand}"
+                    <MenuItem h:WriteGuard.Reason="{Binding WriteRefusal}" Header="Import edited model..." Command="{Binding ImportEditedModelCommand}"
                               ToolTip="Bring back a model you edited in Blender (or its PNG textures): you review every change before anything is saved." />
                     <Separator />
-                    <MenuItem Header="Build release patch (patch-3.MPQ)..." Command="{Binding BuildPatchCommand}" />
-                    <MenuItem Header="Open my workspace folder" Command="{Binding OpenWorkspaceFolderCommand}" />
+                    <MenuItem h:WriteGuard.Reason="{Binding WriteRefusal}" Header="Build release patch (patch-3.MPQ)..." Command="{Binding BuildPatchCommand}" />
+                    <MenuItem h:WriteGuard.Reason="{Binding WriteRefusal}" Header="Open my workspace folder" Command="{Binding OpenWorkspaceFolderCommand}" />
                     <Separator />
-                    <MenuItem Header="Reload names from the server database" Command="{Binding DataContext.RefreshServerNamesCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                    <MenuItem h:WriteGuard.Reason="{Binding ServerRefusal}" Header="Reload names from the server database" Command="{Binding DataContext.RefreshServerNamesCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
                     <MenuItem Header="Rebuild the index" Command="{Binding DataContext.RebuildIndexCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
                     <Separator />
                     <MenuItem Header="E_xit" Click="Exit_Click" />
@@ -57,25 +71,25 @@
                               ToolTip="Two synchronized 3D views side by side: the selected skin and another one (or, for a character, your look and the default one)." />
                     <Separator />
                     <MenuItem Header="Export for Blender..." Command="{Binding ExportModelCommand}" ToolTip="Export the model shown in the 3D view to Blender (glTF + PNG textures)." />
-                    <MenuItem Header="Import edited model..." Command="{Binding ImportEditedModelCommand}" />
+                    <MenuItem h:WriteGuard.Reason="{Binding WriteRefusal}" Header="Import edited model..." Command="{Binding ImportEditedModelCommand}" />
                     <MenuItem Header="Install the Blender add-on..." Command="{Binding InstallBlenderAddonCommand}"
                               ToolTip="Builds the add-on zip and installs it into Blender 4.5 (after asking), or shows you where it is to install it yourself." />
                     <Separator />
                     <MenuItem Header="Maps and terrain" Command="{Binding ShowMapsCommand}" ToolTip="The Maps tab: maps, zones, tiles in 3D, editing in Noggit." />
-                    <MenuItem Header="Edit in Noggit..." Command="{Binding Maps.EditInNoggitCommand}" ToolTip="Prepare a Noggit project for the map selected in the Maps tab." />
-                    <MenuItem Header="Import map changes..." Command="{Binding Maps.ImportMapChangesCommand}" ToolTip="Review the files Noggit saved for the map selected in the Maps tab." />
-                    <MenuItem Header="Break down this tile..." Command="{Binding Maps.BreakDownTileCommand}" ToolTip="Every piece of the tile selected in the Maps tab, by kind, each viewable on its own." />
-                    <MenuItem Header="Open terrain in Blender..." Command="{Binding Maps.OpenTerrainInBlenderCommand}" ToolTip="Edit the ground heights of the selected tile and its neighbours in Blender." />
-                    <MenuItem Header="Import edited terrain..." Command="{Binding Maps.ImportEditedTerrainCommand}" ToolTip="Bring the heights edited in Blender back (seam check, review, one change set)." />
-                    <MenuItem Header="Update server maps..." Command="{Binding Maps.UpdateServerCommand}" ToolTip="Re-extract the server's terrain, collision and pathing and install them (guided)." />
+                    <MenuItem h:WriteGuard.Reason="{Binding WriteRefusal}" Header="Edit in Noggit..." Command="{Binding Maps.EditInNoggitCommand}" ToolTip="Prepare a Noggit project for the map selected in the Maps tab." />
+                    <MenuItem h:WriteGuard.Reason="{Binding WriteRefusal}" Header="Import map changes..." Command="{Binding Maps.ImportMapChangesCommand}" ToolTip="Review the files Noggit saved for the map selected in the Maps tab." />
+                    <MenuItem h:WriteGuard.Reason="{Binding NotYetRefusal}" Header="Break down this tile..." Command="{Binding Maps.BreakDownTileCommand}" ToolTip="Every piece of the tile selected in the Maps tab, by kind, each viewable on its own." />
+                    <MenuItem h:WriteGuard.Reason="{Binding WriteRefusal}" Header="Open terrain in Blender..." Command="{Binding Maps.OpenTerrainInBlenderCommand}" ToolTip="Edit the ground heights of the selected tile and its neighbours in Blender." />
+                    <MenuItem h:WriteGuard.Reason="{Binding WriteRefusal}" Header="Import edited terrain..." Command="{Binding Maps.ImportEditedTerrainCommand}" ToolTip="Bring the heights edited in Blender back (seam check, review, one change set)." />
+                    <MenuItem h:WriteGuard.Reason="{Binding WriteRefusal}" Header="Update server maps..." Command="{Binding Maps.UpdateServerCommand}" ToolTip="Re-extract the server's terrain, collision and pathing and install them (guided)." />
                     <Separator />
                     <MenuItem Header="Data tables (DBC editor)" Command="{Binding ShowTablesCommand}" ToolTip="The Data tables tab: every DBC table of the game (spells, items, creatures, maps...) to view and edit." />
-                    <MenuItem Header="Copy tables to the server..." Command="{Binding Tables.CopyToServerCommand}" ToolTip="Copy your edited tables that the server reads into its dbc folder (guided, with a backup)." />
+                    <MenuItem h:WriteGuard.Reason="{Binding WriteRefusal}" Header="Copy tables to the server..." Command="{Binding Tables.CopyToServerCommand}" ToolTip="Copy your edited tables that the server reads into its dbc folder (guided, with a backup)." />
                     <Separator />
                     <MenuItem Header="Server data (world database)" Command="{Binding ShowServerCommand}" ToolTip="The Server data tab: the server's items, creatures, quests, spells, loot, vendors, trainers... to view and edit." />
-                    <MenuItem Header="Check client and server..." Command="{Binding Server.CheckClientServerCommand}" ToolTip="The game's tables next to the server's: every difference, fixed in either direction." />
-                    <MenuItem Header="Apply to server..." Command="{Binding Server.ApplyToServerCommand}" ToolTip="Write your saved server edits into the world database (backed up, logged, undoable)." />
-                    <MenuItem Header="Clear the game's cache (WDB)..." Command="{Binding Server.ClearWdbCommand}" ToolTip="Make the game ask the server again for items, creatures and quests." />
+                    <MenuItem h:WriteGuard.Reason="{Binding ServerRefusal}" Header="Check client and server..." Command="{Binding Server.CheckClientServerCommand}" ToolTip="The game's tables next to the server's: every difference, fixed in either direction." />
+                    <MenuItem h:WriteGuard.Reason="{Binding WriteRefusal}" Header="Apply to server..." Command="{Binding Server.ApplyToServerCommand}" ToolTip="Write your saved server edits into the world database (backed up, logged, undoable)." />
+                    <MenuItem h:WriteGuard.Reason="{Binding WriteRefusal}" Header="Clear the game's cache (WDB)..." Command="{Binding Server.ClearWdbCommand}" ToolTip="Make the game ask the server again for items, creatures and quests." />
                     <Separator />
                     <MenuItem Header="Spell designer" Command="{Binding ShowSpellDesignerCommand}" ToolTip="Make or clone spells with a guided form: tooltip preview, checks, visuals, trainers; the game's and the server's spell rows in step." />
                     <MenuItem Header="Classes and talents" Command="{Binding ShowClassesCommand}" ToolTip="A class's talent trees on the grid, its spells by level, class masks, and a new class (experimental)." />
@@ -102,7 +116,7 @@
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Left" Orientation="Vertical" VerticalAlignment="Center" Margin="0,0,20,0">
                         <TextBlock Text="WoW Data Studio" Foreground="White" FontSize="18" FontWeight="SemiBold" />
-                        <TextBlock Text="World of Warcraft 1.12 game data" Foreground="#CCFFFFFF" FontSize="11" />
+                        <TextBlock Text="{Binding GameTitle}" Foreground="#CCFFFFFF" FontSize="11" />
                     </StackPanel>
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                         <Button Command="{Binding OpenSettingsCommand}" ToolTip="{Binding ServerTip}" Margin="12,0,8,0" Padding="10,5" Background="#22FFFFFF" BorderBrush="#55FFFFFF">
@@ -139,12 +153,37 @@
                 </DockPanel>
             </Border>
 
+            <!-- ============================== ANOTHER VERSION: READ ONLY ============================== -->
+            <Border x:Name="ReadOnlyBanner" DockPanel.Dock="Top" Background="{StaticResource WarnSoft}" BorderBrush="#FFF59E0B" BorderThickness="0,0,0,1" Padding="16,7"
+                    Visibility="{Binding IsReadOnly, Converter={StaticResource BoolVis}}" s:Manual.Topic="other-versions">
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Back to your 1.12 game" Command="{Binding DataContext.OpenOwnGameCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                            Padding="10,3" Margin="12,0,0,0" VerticalAlignment="Center" ToolTip="Close the other version and open your 1.12 game folder again." />
+                    <TextBlock DockPanel.Dock="Left" Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource Warn}" FontSize="15" Margin="0,1,10,0" VerticalAlignment="Center" />
+                    <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" ToolTip="{Binding WriteRefusal}">
+                        <Run Text="Read only:" FontWeight="SemiBold" Foreground="{StaticResource Warn}" /> <Run Text="{Binding ReadOnlyBanner, Mode=OneWay}" Foreground="{StaticResource Warn}" />
+                    </TextBlock>
+                </DockPanel>
+            </Border>
+
+            <!-- ============================== ANOTHER VERSION: LOCKED RECORDS, NAMES ============================== -->
+            <Border x:Name="VersionStatus" DockPanel.Dock="Bottom" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0" Padding="14,5"
+                    Visibility="{Binding IsReadOnly, Converter={StaticResource BoolVis}}" s:Manual.Topic="other-versions">
+                <StackPanel>
+                    <TextBlock TextTrimming="CharacterEllipsis" ToolTip="{Binding StatusLine}">
+                        <Run Text="Locked (encrypted, no key)" FontWeight="SemiBold" Foreground="{StaticResource TextMuted}" /><Run Text=": " /><Run Text="{Binding StatusLine, Mode=OneWay}" />
+                    </TextBlock>
+                    <TextBlock Text="{Binding NamesLine}" Foreground="{StaticResource TextMuted}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip="{Binding NamesLine}" />
+                </StackPanel>
+            </Border>
+
             <!-- ============================== FILTERS ============================== -->
             <Border DockPanel.Dock="Top" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1" Padding="16,10,16,4" s:Manual.Topic="finding-things">
                 <DockPanel>
                     <TextBlock DockPanel.Dock="Left" Text="Show:" VerticalAlignment="Top" Margin="0,5,10,0" Foreground="{StaticResource TextMuted}" />
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
-                        <ToggleButton Style="{StaticResource Chip}" IsChecked="{Binding OnlyMyChanges}" ToolTip="Only list textures you changed, and the creatures/items/characters that use them.">
+                        <ToggleButton Style="{StaticResource Chip}" IsChecked="{Binding OnlyMyChanges}" ToolTip="Only list textures you changed, and the creatures/items/characters that use them."
+                                      Visibility="{Binding IsReadOnly, Converter={StaticResource BoolVisInv}}">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE70F;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource Modified}" Margin="0,1,6,0" />
                                 <TextBlock Text="Show only my changes" />
@@ -271,28 +310,33 @@
                                             <Run Text="{Binding SelectedTexture.FileName, Mode=OneWay}" FontWeight="SemiBold" />
                                             <Run Text="?" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMuted}" />
                                         </TextBlock>
+                                        <DockPanel Margin="0,0,0,6" Visibility="{Binding IsReadOnly, Converter={StaticResource BoolVis}}">
+                                            <TextBlock DockPanel.Dock="Left" Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource Warn}" Margin="0,2,6,0" />
+                                            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource Warn}" ToolTip="{Binding WriteRefusal}"
+                                                       Text="Only Export works here (a PNG, no .blp.json). Import, test in game, remove, revert and the release patch are greyed out: this version is open read only (hover over one for the reason)." />
+                                        </DockPanel>
                                         <Grid>
                                             <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition /><ColumnDefinition /></Grid.ColumnDefinitions>
                                             <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                                             <Button Grid.Row="0" Grid.Column="0" Style="{StaticResource ActionButton}" Margin="0,0,6,6" Command="{Binding ExportTextureCommand}" IsEnabled="{Binding CanExport}"
                                                     ToolTip="Saves the texture as a PNG image plus a small .blp.json file that remembers where it came from (keep them together). The folder opens afterwards. Edit the PNG in any image editor."
                                                     ContentTemplate="{StaticResource ActionTitle}" Content="{x:Static h:Glyphs.Export}" />
-                                            <Button Grid.Row="0" Grid.Column="1" Style="{StaticResource ActionButton}" Margin="0,0,6,6" Command="{Binding ImportTextureCommand}" IsEnabled="{Binding CanImport}"
+                                            <Button h:WriteGuard.Reason="{Binding WriteRefusal}" Grid.Row="0" Grid.Column="1" Style="{StaticResource ActionButton}" Margin="0,0,6,6" Command="{Binding ImportTextureCommand}" IsEnabled="{Binding CanImport}"
                                                     ToolTip="Pick your edited PNG. It is checked (size, transparency) and converted to the game's format; you see a before/after comparison and decide whether to keep it. Nothing is saved before that."
                                                     ContentTemplate="{StaticResource ActionTitle}" Content="{x:Static h:Glyphs.Import}" />
-                                            <Button Grid.Row="0" Grid.Column="2" Style="{StaticResource ActionButton}" Margin="0,0,0,6" Command="{Binding CompareCommand}" IsEnabled="{Binding CanCompare}"
+                                            <Button h:WriteGuard.Reason="{Binding WriteRefusal}" Grid.Row="0" Grid.Column="2" Style="{StaticResource ActionButton}" Margin="0,0,0,6" Command="{Binding CompareCommand}" IsEnabled="{Binding CanCompare}"
                                                     ToolTip="Original (from game) vs. your edit: side by side, slider, toggle, or a difference heat map. Available after you imported an edit of this texture."
                                                     ContentTemplate="{StaticResource ActionTitle}" Content="{x:Static h:Glyphs.Compare}" />
-                                            <Button Grid.Row="1" Grid.Column="0" Style="{StaticResource ActionButton}" Margin="0,0,6,6" Command="{Binding TestInGameCommand}" IsEnabled="{Binding CanTestInGame}"
+                                            <Button h:WriteGuard.Reason="{Binding WriteRefusal}" Grid.Row="1" Grid.Column="0" Style="{StaticResource ActionButton}" Margin="0,0,6,6" Command="{Binding TestInGameCommand}" IsEnabled="{Binding CanTestInGame}"
                                                     ToolTip="Copies your edited texture into the game's Data folder as a loose file. Needs the client's loose-file mode (see How it works). Restart the game to see it."
                                                     ContentTemplate="{StaticResource ActionTitle}" Content="{x:Static h:Glyphs.TestInGame}" />
-                                            <Button Grid.Row="1" Grid.Column="1" Style="{StaticResource ActionButton}" Margin="0,0,6,6" Command="{Binding RemoveFromGameCommand}" IsEnabled="{Binding CanRemoveFromGame}"
+                                            <Button h:WriteGuard.Reason="{Binding WriteRefusal}" Grid.Row="1" Grid.Column="1" Style="{StaticResource ActionButton}" Margin="0,0,6,6" Command="{Binding RemoveFromGameCommand}" IsEnabled="{Binding CanRemoveFromGame}"
                                                     ToolTip="Deletes the loose copy that 'Test in game' installed. Your edit stays in your workspace."
                                                     ContentTemplate="{StaticResource ActionTitle}" Content="{x:Static h:Glyphs.Remove}" />
-                                            <Button Grid.Row="1" Grid.Column="2" Style="{StaticResource ActionButton}" Margin="0,0,0,6" Command="{Binding RevertCommand}" IsEnabled="{Binding CanRevert}"
+                                            <Button h:WriteGuard.Reason="{Binding WriteRefusal}" Grid.Row="1" Grid.Column="2" Style="{StaticResource ActionButton}" Margin="0,0,0,6" Command="{Binding RevertCommand}" IsEnabled="{Binding CanRevert}"
                                                     ToolTip="Deletes your edited copy so the game's original is used again (also removes it from the game folder if it was installed)."
                                                     ContentTemplate="{StaticResource ActionTitle}" Content="{x:Static h:Glyphs.Revert}" />
-                                            <Button Grid.ColumnSpan="3" Grid.Row="2" Grid.Column="0" Style="{StaticResource ActionButton}" Margin="0" Command="{Binding BuildPatchCommand}" IsEnabled="{Binding HasChanges}"
+                                            <Button h:WriteGuard.Reason="{Binding WriteRefusal}" Grid.ColumnSpan="3" Grid.Row="2" Grid.Column="0" Style="{StaticResource ActionButton}" Margin="0" Command="{Binding BuildPatchCommand}" IsEnabled="{Binding HasChanges}"
                                                     ToolTip="Packs ALL your changes into Data\patch-3.MPQ, the file to keep or share for a release. An existing patch-3.MPQ is backed up first. You see the list of files before anything is written."
                                                     ContentTemplate="{StaticResource ActionTitle}" Content="{x:Static h:Glyphs.BuildPatch}" />
                                         </Grid>
@@ -305,7 +349,7 @@
                                     <TextBlock Style="{StaticResource Muted}" TextAlignment="Center" MaxWidth="360"
                                                Text="Search above (for example: mottled boar, orc male, worn battleaxe, durotar palm), then click a result. Its details, textures and the actions appear here." />
                                 </StackPanel>
-                                <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding HasSelection, Converter={StaticResource BoolVis}}">
+                                <ScrollViewer x:Name="DetailsScroll" VerticalScrollBarVisibility="Auto" Visibility="{Binding HasSelection, Converter={StaticResource BoolVis}}">
                                     <StackPanel Margin="16,14">
                                         <TextBlock Text="{Binding DetailTitle}" Style="{StaticResource H2}" FontSize="20" TextWrapping="Wrap" />
                                         <TextBlock Text="{Binding DetailSubtitle}" Style="{StaticResource Muted}" />
@@ -342,6 +386,41 @@
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
 
+                                        <!-- another version: the files with FileDataID, name source, state (ViewModels\BrowserViewModel.Versions.cs) -->
+                                        <StackPanel x:Name="FilesBox" Visibility="{Binding HasFiles, Converter={StaticResource BoolVis}}" s:Manual.Topic="other-versions">
+                                            <TextBlock Style="{StaticResource H3}" FontSize="11">
+                                                <Run Text="FILES" /> <Run Text="{Binding Files.Count, Mode=OneWay, StringFormat=({0})}" />
+                                            </TextBlock>
+                                            <ItemsControl ItemsSource="{Binding Files}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Grid Margin="0,1" ToolTip="{Binding Tip}">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto" MinWidth="70" />
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Text="{Binding FileDataId}" Foreground="{StaticResource TextMuted}" FontFamily="Consolas" Margin="0,0,8,0" />
+                                                            <TextBlock Grid.Column="1" TextTrimming="CharacterEllipsis"><Run Text="{Binding FileName, Mode=OneWay}" /><Run Text="  " /><Run Text="{Binding Role, Mode=OneWay}" Foreground="{StaticResource TextMuted}" FontSize="11" /></TextBlock>
+                                                            <TextBlock Grid.Column="2" Text="{Binding NameSource}" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="8,0" VerticalAlignment="Center" />
+                                                            <Border Grid.Column="3" VerticalAlignment="Center">
+                                                                <Border.Style>
+                                                                    <Style TargetType="Border" BasedOn="{StaticResource Badge}">
+                                                                        <Setter Property="Background" Value="{StaticResource GoodSoft}" />
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding IsLocked}" Value="True"><Setter Property="Background" Value="{StaticResource WarnSoft}" /></DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Border.Style>
+                                                                <TextBlock Text="{Binding State}" FontSize="11" FontWeight="SemiBold" />
+                                                            </Border>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+
                                         <!-- used in game (Views\UsedInGameView, ViewModels\BrowserViewModel.UsedInGame.cs) -->
                                         <Expander x:Name="UsedInGameBox" Margin="0,10,0,0" IsExpanded="{Binding UsedInGameExpanded}" s:Manual.Topic="used-in-game">
                                             <Expander.Header>
@@ -355,6 +434,20 @@
                                             <v:ModelViewerView x:Name="ModelViewer" DataContext="{Binding ModelViewer}" />
                                         </Border>
 
+                                        <!-- another version: the building preview of a WMO (groups and textures by FileDataID) -->
+                                        <Border x:Name="BuildingBox" Visibility="{Binding IsBuildingEntry, Converter={StaticResource BoolVis}}" Margin="0,12,0,0" s:Manual.Topic="other-versions">
+                                            <StackPanel>
+                                                <DockPanel Margin="0,0,0,6">
+                                                    <Button DockPanel.Dock="Right" Command="{Binding ResetBuildingViewCommand}" Padding="10,4" VerticalAlignment="Bottom" Content="Reset view"
+                                                            ToolTip="Back to the start view (or double-click the view)." />
+                                                    <TextBlock Text="BUILDING (3D)" Style="{StaticResource H3}" FontSize="11" VerticalAlignment="Bottom" Margin="0" />
+                                                </DockPanel>
+                                                <!-- the 3D view is made the first time a building is shown (code-behind): a GL view costs a context -->
+                                                <Border x:Name="BuildingHost" CornerRadius="6" Background="#FF2B3038" Height="380" ClipToBounds="True" />
+                                                <TextBlock Text="{Binding BuildingStatus}" Foreground="{StaticResource TextMuted}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                            </StackPanel>
+                                        </Border>
+
                                         <!-- model actions (Phase 3c: Blender round trip) -->
                                         <Border x:Name="ModelActions" Margin="0,8,0,0" Padding="10,8" CornerRadius="6" Background="#FFF7F9FC" BorderBrush="{StaticResource Border}" BorderThickness="1"
                                                 Visibility="{Binding ModelViewer.HasModel, Converter={StaticResource BoolVis}}" s:Manual.Topic="model-export-import">
@@ -366,16 +459,18 @@
                                                     </Border>
                                                     <TextBlock Text="EDIT THE MODEL IN BLENDER" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" />
                                                 </DockPanel>
+                                                <TextBlock Margin="0,0,0,6" TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource Warn}" Visibility="{Binding IsReadOnly, Converter={StaticResource BoolVis}}"
+                                                           Text="Export for Blender and Open in Blender work (the package goes to a folder you choose). Importing, comparing and reverting are greyed out: they change files of the game that is open, and this version is open read only." />
                                                 <WrapPanel>
                                                     <Button Content="Export for Blender..." Command="{Binding ExportModelCommand}" Margin="0,0,6,6" Padding="10,4"
                                                             ToolTip="Saves the model (mesh, skeleton, animations) as glTF with its textures as PNG and a manifest, in one package folder. Choose the current skin, all skins, or one file per skin." />
                                                     <Button Content="Open in Blender" Command="{Binding OpenModelInBlenderCommand}" Margin="0,0,6,6" Padding="10,4"
                                                             ToolTip="Exports the look shown now and starts Blender 4.5 with it imported by the WoW add-on." />
-                                                    <Button Content="Import edited model..." Command="{Binding ImportEditedModelCommand}" Margin="0,0,6,6" Padding="10,4" Style="{StaticResource PrimaryButton}"
+                                                    <Button h:WriteGuard.Reason="{Binding WriteRefusal}" Content="Import edited model..." Command="{Binding ImportEditedModelCommand}" Margin="0,0,6,6" Padding="10,4" Style="{StaticResource PrimaryButton}"
                                                             ToolTip="Pick the package folder or the file Blender exported. You see every change (mesh, each texture) with checks and a Compare button, and choose what to keep." />
-                                                    <Button Content="Compare original vs. edited model" Command="{Binding CompareModelCommand}" Margin="0,0,6,6" Padding="10,4"
+                                                    <Button h:WriteGuard.Reason="{Binding WriteRefusal}" Content="Compare original vs. edited model" Command="{Binding CompareModelCommand}" Margin="0,0,6,6" Padding="10,4"
                                                             IsEnabled="{Binding ModelViewer.IsModelModified}" ToolTip="Two synchronized 3D views: the game's model and your edited one, with the same animation." />
-                                                    <Button Content="Revert the model" Command="{Binding RevertModelCommand}" Margin="0,0,6,6" Padding="10,4"
+                                                    <Button h:WriteGuard.Reason="{Binding WriteRefusal}" Content="Revert the model" Command="{Binding RevertModelCommand}" Margin="0,0,6,6" Padding="10,4"
                                                             IsEnabled="{Binding ModelViewer.IsModelModified}" ToolTip="Deletes your edited mesh: the game's model is used again." />
                                                 </WrapPanel>
                                             </StackPanel>
@@ -475,17 +570,22 @@
                                 <TextBlock Text="My changes" Style="{StaticResource H2}" />
                                 <TextBlock Style="{StaticResource Muted}" Margin="0,4,0,10"
                                            Text="Every file you changed. Your edits live in your workspace until you install them: 'Test in game' copies them into the game folder as loose files, 'Build release patch' packs them into patch-3.MPQ. The game's own archives are never changed." />
+                                <Border Background="{StaticResource WarnSoft}" CornerRadius="4" Padding="8,5" Margin="0,0,0,10" Visibility="{Binding IsReadOnly, Converter={StaticResource BoolVis}}">
+                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource Warn}" FontSize="12">
+                                        <Run Text="Another version has no workspace and no changes. " /><Run Text="{Binding WriteRefusal, Mode=OneWay}" /><Run Text=" Your 1.12 changes are kept: File &gt; Back to your 1.12 game shows them." />
+                                    </TextBlock>
+                                </Border>
                                 <WrapPanel Margin="0,0,0,10">
-                                    <Button Content="Test all in game (install as loose files)" Command="{Binding InstallAllLooseCommand}" IsEnabled="{Binding HasChanges}" Margin="0,0,8,4"
+                                    <Button h:WriteGuard.Reason="{Binding WriteRefusal}" Content="Test all in game (install as loose files)" Command="{Binding InstallAllLooseCommand}" IsEnabled="{Binding HasChanges}" Margin="0,0,8,4"
                                             ToolTip="Copy every edited file into the game folder as loose files." />
-                                    <Button Content="Remove all from game" Command="{Binding RemoveAllFromGameCommand}" Margin="0,0,8,4"
+                                    <Button h:WriteGuard.Reason="{Binding WriteRefusal}" Content="Remove all from game" Command="{Binding RemoveAllFromGameCommand}" Margin="0,0,8,4"
                                             ToolTip="Delete every loose file this app installed in the game folder." />
-                                    <Button Content="Reload in running game" Command="{Binding ReloadInGameCommand}" Margin="0,0,8,4"
+                                    <Button h:WriteGuard.Reason="{Binding WriteRefusal}" Content="Reload in running game" Command="{Binding ReloadInGameCommand}" Margin="0,0,8,4"
                                             ToolTip="Hot reload: the running game reads your installed changes again, without a restart. Needs the game started from this folder with hot reload switched on (Settings) and the project's own client. You see what is live now and what needs a relog or a restart." />
-                                    <Button Content="Build release patch (patch-3.MPQ)..." Command="{Binding BuildPatchCommand}" IsEnabled="{Binding HasChanges}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,4" />
-                                    <Button Content="Uninstall release patch (patch-3.MPQ)" Command="{Binding UninstallPatchCommand}" IsEnabled="{Binding HasInstalledPatch}" Margin="0,0,8,4"
+                                    <Button h:WriteGuard.Reason="{Binding WriteRefusal}" Content="Build release patch (patch-3.MPQ)..." Command="{Binding BuildPatchCommand}" IsEnabled="{Binding HasChanges}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,4" />
+                                    <Button h:WriteGuard.Reason="{Binding WriteRefusal}" Content="Uninstall release patch (patch-3.MPQ)" Command="{Binding UninstallPatchCommand}" IsEnabled="{Binding HasInstalledPatch}" Margin="0,0,8,4"
                                             ToolTip="Take the release patch-3.MPQ out of the game folder and put back the patch-3.MPQ that was there before (if there was one). A patch-3.MPQ that WoW Data Studio did not create is only moved out after asking you." />
-                                    <Button Content="Open my workspace folder" Command="{Binding OpenWorkspaceFolderCommand}" Margin="0,0,8,4" />
+                                    <Button h:WriteGuard.Reason="{Binding WriteRefusal}" Content="Open my workspace folder" Command="{Binding OpenWorkspaceFolderCommand}" Margin="0,0,8,4" />
                                 </WrapPanel>
                                 <Border Background="{StaticResource AccentSoft}" CornerRadius="4" Padding="8,5" Margin="0,0,0,10" Visibility="{Binding HasInstalledPatch, Converter={StaticResource BoolVis}}">
                                     <TextBlock Text="{Binding PatchStateText}" TextWrapping="Wrap" />
@@ -574,7 +674,13 @@
                             <TextBlock Text="Data tables" FontWeight="SemiBold" />
                         </StackPanel>
                     </TabItem.Header>
-                    <v:DbcEditorView x:Name="TablesScreen" DataContext="{Binding Tables}" />
+                    <Grid>
+                        <v:DbcEditorView x:Name="TablesScreen" DataContext="{Binding Tables}"
+                                         Visibility="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolVisInv}}" />
+                        <!-- another version: its DB2 tables, read only (ViewModels\VersionTablesViewModel) -->
+                        <v:VersionTablesView x:Name="VersionTablesScreen" DataContext="{Binding VersionTables}" s:Manual.Topic="other-versions"
+                                             Visibility="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolVis}}" />
+                    </Grid>
                 </TabItem>
 
                 <!-- ============================== SERVER DATA (0.9.0) ============================== -->
@@ -585,7 +691,12 @@
                             <TextBlock Text="Server data" FontWeight="SemiBold" />
                         </StackPanel>
                     </TabItem.Header>
-                    <v:ServerDataView x:Name="ServerScreen" DataContext="{Binding Server}" />
+                    <Grid>
+                        <v:ServerDataView x:Name="ServerScreen" DataContext="{Binding Server}"
+                                          Visibility="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolVisInv}}" />
+                        <ContentControl x:Name="NoServerPanel" Template="{StaticResource NotForThisVersion}" Content="No server connected" Tag="{Binding ServerMissingText}" s:Manual.Topic="other-versions"
+                                        Visibility="{Binding IsReadOnly, Converter={StaticResource BoolVis}}" />
+                    </Grid>
                 </TabItem>
 
                 <!-- ============================== SPELL DESIGNER (0.12.0) ============================== -->
@@ -596,7 +707,12 @@
                             <TextBlock Text="Spell designer" FontWeight="SemiBold" />
                         </StackPanel>
                     </TabItem.Header>
-                    <v:SpellDesignerView x:Name="SpellsScreen" DataContext="{Binding Spells}" />
+                    <Grid>
+                        <v:SpellDesignerView x:Name="SpellsScreen" DataContext="{Binding Spells}"
+                                  Visibility="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolVisInv}}" />
+                        <ContentControl Template="{StaticResource NotForThisVersion}" Content="Read only" Tag="{Binding DesignerMissingText}" s:Manual.Topic="other-versions"
+                                        Visibility="{Binding IsReadOnly, Converter={StaticResource BoolVis}}" />
+                    </Grid>
                 </TabItem>
 
                 <!-- ============================== CLASSES AND TALENTS (0.12.0) ============================== -->
@@ -607,7 +723,12 @@
                             <TextBlock Text="Classes and talents" FontWeight="SemiBold" />
                         </StackPanel>
                     </TabItem.Header>
-                    <v:ClassTalentView x:Name="ClassesScreen" DataContext="{Binding Classes}" />
+                    <Grid>
+                        <v:ClassTalentView x:Name="ClassesScreen" DataContext="{Binding Classes}"
+                                  Visibility="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolVisInv}}" />
+                        <ContentControl Template="{StaticResource NotForThisVersion}" Content="Read only" Tag="{Binding DesignerMissingText}" s:Manual.Topic="other-versions"
+                                        Visibility="{Binding IsReadOnly, Converter={StaticResource BoolVis}}" />
+                    </Grid>
                 </TabItem>
 
                 <!-- ============================== QUEST CHAINS (0.13.0) ============================== -->
@@ -618,7 +739,12 @@
                             <TextBlock Text="Quest chains" FontWeight="SemiBold" />
                         </StackPanel>
                     </TabItem.Header>
-                    <v:QuestDesignerView x:Name="QuestsScreen" DataContext="{Binding Quests}" />
+                    <Grid>
+                        <v:QuestDesignerView x:Name="QuestsScreen" DataContext="{Binding Quests}"
+                                  Visibility="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolVisInv}}" />
+                        <ContentControl Template="{StaticResource NotForThisVersion}" Content="Read only" Tag="{Binding DesignerMissingText}" s:Manual.Topic="other-versions"
+                                        Visibility="{Binding IsReadOnly, Converter={StaticResource BoolVis}}" />
+                    </Grid>
                 </TabItem>
 
                 <!-- ============================== OTHER VERSIONS (0.14.0, experimental) ============================== -->

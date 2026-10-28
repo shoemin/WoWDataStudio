@@ -52,7 +52,7 @@
                                 Command="{Binding UseFolderCommand}" IsDefault="True"
                                 ToolTip="Check the folder and organize its data (a few seconds the first time)." />
                         <Button DockPanel.Dock="Right" Content="Open another version (read only)..." Command="{Binding OpenOtherVersionCommand}" Padding="14,7" VerticalAlignment="Center"
-                                ToolTip="Look at another World of Warcraft version (such as the 1.60 Classic client) the way your game opens: Browse and textures, in a window of its own. Read only: nothing in its folder is changed." />
+                                ToolTip="Look at another World of Warcraft version (such as the 1.60 Classic client) in this window, the way your game opens, with the same tabs. Read only: nothing in its folder is changed, and every write is greyed out with the reason." />
                     </DockPanel>
                 </StackPanel>
             </Border>

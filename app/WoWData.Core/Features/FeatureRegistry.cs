@@ -46,7 +46,7 @@ public static class FeatureRegistry
         new("serverdb.test", "Setup", "Test connection", "serverdb test"),
         new("serverdb.defaults", "Setup", "Use the defaults (127.0.0.1:3306, root/root, mangos)", "serverdb defaults"),
         new("serverdb.reload", "Setup", "File > Reload names from the server database", "serverdb reload"),
-        new("index.build", "Setup", "File > Rebuild the index", "index build"),
+        new("index.build", "Setup", "File > Rebuild the index", "index build") { VersionAware = true },
         new("index.status", "Setup", "Names from server database: connected", "index status"),
 
         // ---- find (the Browse tab)
@@ -54,7 +54,7 @@ public static class FeatureRegistry
         new("find.only-changes", "Find", "Show only my changes", "find search"),
         new("find.list", "Find", "Show only this type", "find list") { VersionAware = true },
         new("find.info", "Find", "WHERE IT COMES FROM", "find info") { VersionAware = true },
-        new("find.used", "Find", "Used in game", "find used"),
+        new("find.used", "Find", "Used in game", "find used") { VersionAware = true },
         new("find.where", "Find", "TEXTURES IT USES", "find where"),
         new("find.files", "Find", "", "find files", FeatureFront.CliOnly, "a scripting helper: list archive paths by wildcard, with every archive that has them") { VersionAware = true },
         new("find.extract", "Find", "", "find extract", FeatureFront.CliOnly, "a scripting helper: copy a game file out of the archives as it is (the app exports PNG and glTF instead)") { VersionAware = true },
@@ -71,7 +71,7 @@ public static class FeatureRegistry
 
         // ---- models and Blender
         new("models.info", "Models", "Model statistics", "models info") { VersionAware = true },
-        new("models.export", "Models", "Tools > Export for Blender...", "models export"),
+        new("models.export", "Models", "Tools > Export for Blender...", "models export") { VersionAware = true },
         new("models.open", "Models", "Open in Blender", "models open"),
         new("models.import", "Models", "File > Import edited model...", "models import"),
         new("models.validate", "Models", "Import edited model...", "models validate"),
@@ -120,17 +120,17 @@ public static class FeatureRegistry
         new("server.undo", "Server maps", "Undo server update", "server-maps undo"),
 
         // ---- data tables (DBC)
-        new("dbc.tables", "Data tables", "Tools > Data tables (DBC editor)", "dbc tables"),
+        new("dbc.tables", "Data tables", "Tools > Data tables (DBC editor)", "dbc tables") { VersionAware = true },
         new("dbc.changed", "Data tables", "Only tables I changed", "dbc tables"),
-        new("dbc.info", "Data tables", "Server also needs this file", "dbc info"),
-        new("dbc.rows", "Data tables", "Search all text...", "dbc rows"),
-        new("dbc.get", "Data tables", "Go to ID", "dbc get"),
+        new("dbc.info", "Data tables", "Server also needs this file", "dbc info") { VersionAware = true },
+        new("dbc.rows", "Data tables", "Search all text...", "dbc rows") { VersionAware = true },
+        new("dbc.get", "Data tables", "Go to ID", "dbc get") { VersionAware = true },
         new("dbc.set", "Data tables", "Values", "dbc set"),
         new("dbc.add", "Data tables", "Add row", "dbc add"),
         new("dbc.duplicate", "Data tables", "Duplicate as new", "dbc duplicate"),
         new("dbc.delete", "Data tables", "Delete rows", "dbc delete"),
         new("dbc.bulk", "Data tables", "Bulk edit...", "dbc bulk"),
-        new("dbc.export", "Data tables", "Export all rows...", "dbc export"),
+        new("dbc.export", "Data tables", "Export all rows...", "dbc export") { VersionAware = true },
         new("dbc.import", "Data tables", "Apply import", "dbc import"),
         new("dbc.used-by", "Data tables", "Used by", "dbc used-by"),
         new("dbc.diff", "Data tables", "Compare with game", "dbc diff"),
@@ -288,21 +288,27 @@ public static class FeatureRegistry
         new("versions.update-info", "Other versions", "About this update", "versions update-info"),
         new("versions.import-preview", "Other versions", "Preview import", "versions import-updates"),
         new("versions.import-updates", "Other versions", "Import picked updates", "versions import-updates"),
-        // M1: another version opened read only in a window of its own (Browse and textures)
+        // another version opened read only in the main window, with the same tabs as your game (every write greyed out
+        // with the reason; the commands take --version and the write commands refuse it with the same reason)
         new("versions.open", "Other versions", "Open read only", "versions open") { VersionAware = true },
         new("versions.open-menu", "Other versions", "File > Open another version (read only)...", "versions open") { VersionAware = true },
         new("versions.open-welcome", "Other versions", "Open another version (read only)...", "versions open") { VersionAware = true },
-        new("versions.window-browse", "Other versions", "Read only: nothing here changes the client", "find search") { VersionAware = true },
-        new("versions.window-locked", "Other versions", "Locked (encrypted, no key)", "versions open") { VersionAware = true },
-        new("versions.window-export", "Other versions", "Export texture as PNG...", "textures export") { VersionAware = true },
-        // M2: models of another version in the read-only window (the modern reader; models info / anims / skeleton / render --version)
-        new("versions.window-3d", "Other versions", "3D VIEW", "models render") { VersionAware = true },
-        new("versions.window-model-info", "Other versions", "Model statistics", "models info") { VersionAware = true },
-        // M3: animations kept in .anim files (read when chosen), skeleton files, particles and ribbons
-        new("versions.window-anim-files", "Other versions", "In .anim files", "models anims") { VersionAware = true },
-        new("versions.window-effects", "Other versions", "Particles / ribbons", "models info") { VersionAware = true },
-        new("versions.window-popout", "Other versions", "Open in new window", "", FeatureFront.GuiOnly, "viewing: the 3D view of another version in a window of its own (\"wds models render --version\" draws a picture)"),
-        new("versions.window-compare", "Other versions", "Compare two skins (3D)", "", FeatureFront.GuiOnly, "viewing: two live 3D views side by side (render each skin with \"wds models render --display --version\")"),
+        new("versions.open-back", "Other versions", "File > Back to your 1.12 game", "", FeatureFront.GuiOnly, "navigation: on the command line every command opens your 1.12 game unless --version is given"),
+        new("versions.open-read-only", "Other versions", "Read only:", "versions open") { VersionAware = true },
+        new("versions.open-locked", "Other versions", "Locked (encrypted, no key)", "versions open") { VersionAware = true },
+        new("versions.open-files", "Other versions", "FILES", "find info") { VersionAware = true },
+        new("versions.open-export-texture", "Other versions", "Export texture as PNG", "textures export") { VersionAware = true },
+        new("versions.open-3d", "Other versions", "Save image...", "models render") { VersionAware = true },
+        new("versions.open-model-info", "Other versions", "Model statistics", "models info") { VersionAware = true },
+        new("versions.open-anim-files", "Other versions", "In .anim files", "models anims") { VersionAware = true },
+        new("versions.open-effects", "Other versions", "Particles / ribbons", "models info") { VersionAware = true },
+        new("versions.open-export-model", "Other versions", "Export for Blender...", "models export") { VersionAware = true },
+        new("versions.open-blender", "Other versions", "Open in Blender", "models export") { VersionAware = true },
+        new("versions.open-tables", "Other versions", "Export rows...", "dbc export") { VersionAware = true },
+        new("versions.open-table-rows", "Other versions", "Data tables of", "dbc rows") { VersionAware = true },
+        new("versions.open-no-server", "Other versions", "No server connected", "index build") { VersionAware = true },
+        new("versions.open-popout", "Other versions", "Open in new window", "", FeatureFront.GuiOnly, "viewing: the 3D view of another version in a window of its own (\"wds models render --version\" draws a picture)"),
+        new("versions.open-compare-skins", "Other versions", "Tools > Compare two skins of this model (3D)", "", FeatureFront.GuiOnly, "viewing: two live 3D views side by side (render each skin with \"wds models render --display --version\")"),
 
         // ---- help and the command line itself
         new("help.manual", "Help", "Help > User manual", "manual"),

@@ -19,9 +19,9 @@ namespace WoWDataStudio.ViewModels;
 /// zones of the selected map (AreaTable), its minimap overview (click a tile), the tile's details with a "Used in game"
 /// style list of what is placed on it, the 3D terrain preview, and the map workflow: Edit in Noggit, Import map
 /// changes (review + compare), Test in game, Build release patch and Update server maps.
-/// M4 (docs\research\OPEN_OTHER_VERSIONS_DESIGN.md): the same tab in the read-only window of another version
-/// (<see cref="MapsViewModel(AppSession, Func{string, bool}, Action{string})"/>): maps, zones, minimap, tile details and
-/// the 3D view through <see cref="IMapView"/>; the editing parts are hidden (<see cref="CanEdit"/>) and never run.
+/// M4 (docs\research\OPEN_OTHER_VERSIONS_DESIGN.md): the same tab for another version opened read only in the main
+/// window: maps, zones, minimap, tile details and the 3D view through <see cref="IMapView"/>; the editing parts are
+/// greyed out with the read-only reason (<see cref="CanEdit"/>, <see cref="WriteRefusal"/>) and never run.
 /// </summary>
 public sealed partial class MapsViewModel : ObservableObject
 {
@@ -40,7 +40,7 @@ public sealed partial class MapsViewModel : ObservableObject
         _session = session;
         _main = main;
         _browser = browser;
-        TileUsage = new UsedInGameViewModel(session) { CanNavigate = k => browser.FindEntryByKey(k) != null };
+        TileUsage = new UsedInGameViewModel(session) { CanNavigate = k => browser.FindEntryByKey(k) != null, ServerParts = !session.IsReadOnly };
         TileUsage.NavigateRequested += k => _ = browser.NavigateToKeyAsync(k, false);
         TileUsage.SettingsRequested += () => main.OpenSettingsCommand.Execute(null);
         TileUsage.RefreshServerRequested += async () =>
@@ -52,21 +52,17 @@ public sealed partial class MapsViewModel : ObservableObject
         if (session.Workspace != null) session.Workspace.Changed += (_, _) => Application.Current?.Dispatcher.BeginInvoke(RefreshChangedTiles);
     }
 
-    /// <summary>M4: the Maps tab of another version opened read only: "On this tile" links go to the read-only
-    /// window's Browse list (<paramref name="canNavigate"/>, <paramref name="navigate"/>); nothing can be edited.</summary>
-    public MapsViewModel(AppSession session, Func<string, bool> canNavigate, Action<string> navigate)
-    {
-        _session = session;
-        _readOnly = true;
-        TileUsage = new UsedInGameViewModel(session) { CanNavigate = canNavigate, ServerParts = false };
-        TileUsage.NavigateRequested += navigate;
-        Scene.Background = new System.Numerics.Vector3(0.55f, 0.68f, 0.82f);
-    }
-
     /// <summary>M4: the open game can be edited (your 1.12 game): the edit buttons, Noggit, the breakdown, the
-    /// specular-ground choice and the workspace legend show; false in the read-only window of another version.</summary>
-    public bool CanEdit => !_readOnly && (_session.Profile?.Has(WoWData.Core.Versions.GameCaps.Edit) ?? true);
-    private readonly bool _readOnly;
+    /// specular-ground choice and the workspace legend work; false for another version opened read only.</summary>
+    public bool CanEdit => _session.Profile?.Has(WoWData.Core.Versions.GameCaps.Edit) ?? true;
+
+    /// <summary>Why the map's edit buttons are greyed out (another version opened read only), null for your 1.12 game.</summary>
+    public string? WriteRefusal => _session.WriteRefusal;
+
+    /// <summary>Why the tile breakdown is greyed out for another version (it reads 1.12 tiles), null for your 1.12 game.</summary>
+    public string? NotYetRefusal => _session.IsReadOnly
+        ? $"Not for {_session.Profile?.VersionBuild} yet: the tile breakdown reads the tiles of your 1.12 game. The 3D view and \"On this tile\" show this tile."
+        : null;
 
     /// <summary>The text of the tile panel before a tile is picked.</summary>
     public string EmptyTileText => CanEdit

@@ -77,8 +77,8 @@ public abstract partial class PopoutViewModelBase : ObservableObject
     public IRelayCommand? FullScreenCommand { get; set; }
 }
 
-/// <summary>M2: what a model pop-out window follows: the main window's Browse tab (<see cref="BrowserViewModel"/>) or a
-/// read-only window of another version (<see cref="OtherVersionWindowViewModel"/>).</summary>
+/// <summary>M2: what a model pop-out window follows: the main window's Browse tab (<see cref="BrowserViewModel"/>), for your
+/// 1.12 game or another version opened read only.</summary>
 public interface IModelViewerHost
 {
     WoWData.Core.Session.AppSession Session { get; }

@@ -81,6 +81,45 @@ internal static partial class ModelCommandsOther
         };
     }
 
+    /// <summary>
+    /// "wds models export --version" (with --open: the app's "Open in Blender"): the app's "Export for Blender" of another version's model (the same package:
+    /// glTF, PNG textures, manifest; looks from the version's displays; animations in .anim files read for it), into a
+    /// folder outside the client. It cannot be imported back into that version.
+    /// </summary>
+    public static CliResult Export(Invocation inv, AppSession s, bool open)
+    {
+        var model = ModelPath(s, inv.Arg(0));
+        var mode = (inv.Opt("mode") ?? "current").ToLowerInvariant() switch
+        {
+            "current" => ModelExportMode.CurrentLook, "all" => ModelExportMode.AllVariants, "per-skin" => ModelExportMode.OnePerVariant,
+            var x => throw new CliError(ExitCode.Usage, $"--mode is current, all or per-skin (not {x})."),
+        };
+        bool skel = inv.Flag("with-skeleton");
+        if (skel && inv.Flag("no-animations")) throw new CliError(ExitCode.Usage, "--with-skeleton needs the animations: leave out --no-animations.");
+        var dir = inv.Opt("out") is { } o ? Path.GetFullPath(o) : Path.Combine(s.Settings.DefaultExportDir, "Models", s.Profile!.Id);
+        long? display = inv.IntOpt("display") ?? DisplayOf(s, inv.Arg(0));
+        long? item = display == null ? ItemDisplayOf(s, inv.Arg(0)) : null;
+        ModelExportResult res;
+        try
+        {
+            WoWData.Core.M2.Modern.ModernModelExport.CheckOutsideClient(s, dir);
+            Directory.CreateDirectory(dir);
+            inv.Ctx.Progress($"Exporting {model} ({s.Profile!.VersionBuild}, read only) for Blender...");
+            res = WoWData.Core.M2.Modern.ModernModelExport.Export(s, model, mode, dir, display ?? item, item != null, includeAnimations: !inv.Flag("no-animations"),
+                packageFolder: ModelPackageService.NewPackageFolder(dir, model), includeSkeleton: skel);
+        }
+        catch (IOException e) { throw new CliError(e.Message.Contains("only read", StringComparison.Ordinal) ? ExitCode.Refused : ExitCode.NotFound, e.Message); }
+        catch (M2Exception e) { throw new CliError(ExitCode.NotFound, $"{model} cannot be read: {e.Message}"); }
+        var r = new CliResult().With(new
+        {
+            model, readOnly = true, version = s.Profile!.VersionBuild, folder = res.Folder, gltf = res.GltfFiles, manifest = res.ManifestPath, textures = res.TextureCount, notes = res.Notes,
+        });
+        r.Line($"Exported {model} ({s.Profile.VersionBuild}, read only) -> {res.Folder}: {Common.Plural(res.GltfFiles.Count, "glTF file")}, {Common.Plural(res.TextureCount, "texture")} and wowdata_manifest.json.");
+        foreach (var n in res.Notes) r.Line("  note: " + n);
+        if (open) ModelCommands.OpenBlender(r, res.GltfFiles[0]);
+        return r;
+    }
+
     public static CliResult Info(CliContext ctx, AppSession s, string model)
     {
         var m = Load(s, model);

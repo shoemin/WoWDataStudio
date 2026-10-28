@@ -146,6 +146,13 @@ public sealed partial class BrowserViewModel : ObservableObject, IModelViewerHos
         try { _session.Workspace?.Refresh(); }
         catch (IOException) { }
         if (value == MapsTab) _ = Maps.EnsureLoadedAsync();
+        // another version: its Data tables tab reads its DB2 tables; the server and designer tabs say why they are empty
+        if (_session.IsReadOnly)
+        {
+            if (value == TablesTab) _ = VersionTables.EnsureLoadedAsync();
+            if (value == VersionsTab) _ = Versions.EnsureLoadedAsync();
+            return;
+        }
         if (value == TablesTab) _ = Tables.EnsureLoadedAsync();
         if (value == ServerTab) _ = Server.EnsureLoadedAsync();
         // 0.12.0: the designers read the tables again when nothing is unsaved (another tab or wds may have changed them)
@@ -184,8 +191,10 @@ public sealed partial class BrowserViewModel : ObservableObject, IModelViewerHos
     [ObservableProperty] private bool _detailsLoading;
 
     public bool ServerConnected => _session.ServerConnected;
-    public string ServerStatusText => ServerConnected ? "Names from server database: connected" : "Names from server database: not connected";
-    public string ServerTip => ServerConnected
+    public string ServerStatusText => _session.IsReadOnly && _session.Server != null ? _session.Server.StatusText
+        : ServerConnected ? "Names from server database: connected" : "Names from server database: not connected";
+    public string ServerTip => _session.IsReadOnly && _session.Server != null ? _session.Server.Detail
+        : ServerConnected
         ? $"Creature, item and game object names come from the server database ({_session.Settings.Server.Describe()}): {_session.ServerMessage}. Index built {_session.IndexBuilt}. Click to change the settings."
         : $"Without the server database, creatures, items and game objects are listed by their model and display id instead of their names. Reason: {_session.ServerMessage}. Click to open the settings.";
     public int ChangeCount => Changes.Count;
@@ -215,7 +224,7 @@ public sealed partial class BrowserViewModel : ObservableObject, IModelViewerHos
 
     // texture actions (enabled state)
     public bool CanExport => SelectedTexture is { Exists: true } || SelectedTexture?.IsModified == true;
-    public bool CanImport => SelectedTexture != null;
+    public bool CanImport => SelectedTexture != null && !_session.IsReadOnly;
     public bool CanCompare => SelectedTexture?.IsModified == true;
     public bool CanTestInGame => SelectedTexture?.IsModified == true;
     public bool CanRemoveFromGame => SelectedTexture != null && _session.Workspace?.Get(SelectedTexture.Path)?.Installed != null;
@@ -249,7 +258,7 @@ public sealed partial class BrowserViewModel : ObservableObject, IModelViewerHos
         };
         foreach (var d in defs)
         {
-            var chip = new FilterChip { Kind = d.Kind, Label = d.Label, Tip = d.Tip };
+            var chip = new FilterChip { Kind = d.Kind, Label = d.Label, Tip = _session.IsReadOnly && OtherChipTips.TryGetValue(d.Kind, out var ot) ? ot : d.Tip };
             chip.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(FilterChip.IsChecked)) _ = ApplyFilterAsync(); };
             Chips.Add(chip);
         }
@@ -259,6 +268,7 @@ public sealed partial class BrowserViewModel : ObservableObject, IModelViewerHos
         UpdateCounts();
         InitPopouts();
         InitHotReload();
+        InitReadOnly();
     }
 
     // ------------------------------------------------------------------ search and filters
@@ -358,6 +368,11 @@ public sealed partial class BrowserViewModel : ObservableObject, IModelViewerHos
             Viewer.Clear();
             IsModelEntry = false;
             ModelViewer.Clear();
+            if (_session.IsReadOnly)
+            {
+                Files = new();
+                ClearBuilding();
+            }
             return;
         }
         DetailsLoading = true;
@@ -365,7 +380,8 @@ public sealed partial class BrowserViewModel : ObservableObject, IModelViewerHos
         {
             var index = _session.Index;
             var catalog = _session.Catalog;
-            var d = await Task.Run(() => index.Details(row.Entry, catalog));
+            bool other = _session.IsReadOnly;
+            var d = await Task.Run(() => other ? _session.Details(row.Entry) : index.Details(row.Entry, catalog));
             if (token != _detailsToken) return;
             DetailTitle = d.Title;
             DetailSubtitle = d.Subtitle;
@@ -373,15 +389,16 @@ public sealed partial class BrowserViewModel : ObservableObject, IModelViewerHos
             Facts = d.Facts;
             UsedBy = d.UsedBy;
             Models = d.Models;
-            IsModelEntry = row.Entry.Kind != AssetKind.Texture && d.Models.Count > 0;
+            bool building = other && ShowOtherDetails(row.Entry, d);
+            IsModelEntry = row.Entry.Kind != AssetKind.Texture && d.Models.Count > 0 && !building;
             if (IsModelEntry)
             {
                 _ = ModelViewer.LoadAsync(row.Entry, d);
                 ModelEntryShown?.Invoke(row.Entry, d);
             }
             else ModelViewer.Clear();
-            var ws = _session.Workspace!;
-            if (row.Entry.Kind == AssetKind.Texture && row.Entry.Path != null)
+            var ws = _session.Workspace;
+            if (row.Entry.Kind == AssetKind.Texture && row.Entry.Path != null && !other)
             {
                 preferTexture ??= row.Entry.Path;
                 var path = row.Entry.Path;
@@ -389,7 +406,7 @@ public sealed partial class BrowserViewModel : ObservableObject, IModelViewerHos
                 if (token != _detailsToken) return;
                 if (extra.Count > 0) Facts = d.Facts.Concat(extra).ToList();
             }
-            Textures = new ObservableCollection<TextureItem>(d.Textures.Select(t => new TextureItem(t, ws.IsModified(t.Path))));
+            Textures = new ObservableCollection<TextureItem>(d.Textures.Select(t => new TextureItem(t, ws?.IsModified(t.Path) == true)));
             SelectedTexture = Textures.FirstOrDefault(t => preferTexture != null && string.Equals(t.Path, preferTexture, StringComparison.OrdinalIgnoreCase))
                               ?? Textures.FirstOrDefault(t => t.Exists) ?? Textures.FirstOrDefault();
             if (SelectedTexture == null) Viewer.Clear();
@@ -558,6 +575,11 @@ public sealed partial class BrowserViewModel : ObservableObject, IModelViewerHos
     private async Task ExportTexture()
     {
         var path = CurrentTexturePath;
+        if (path != null && _session.IsReadOnly)
+        {
+            ExportOtherTexture(path);
+            return;
+        }
         var ts = _session.Textures;
         if (path == null || ts == null) return;
         bool edited = Viewer.IsModified && Viewer.ShowEdited;
@@ -587,7 +609,7 @@ public sealed partial class BrowserViewModel : ObservableObject, IModelViewerHos
     private async Task ImportTexture()
     {
         var target = CurrentTexturePath;
-        if (target == null) return;
+        if (target == null || _session.IsReadOnly) return;
         var png = Dialogs.PickOpenFile($"Import edited PNG for {System.IO.Path.GetFileName(target)}", "PNG image (*.png)|*.png",
             _session.Settings.LastImportDir ?? System.IO.Path.Combine(_session.Settings.DefaultExportDir, System.IO.Path.GetDirectoryName(target) ?? ""));
         if (png == null) return;
@@ -600,6 +622,7 @@ public sealed partial class BrowserViewModel : ObservableObject, IModelViewerHos
     /// glow / shine / ground questions as dialogs, the before/after check window, then save into the workspace.</summary>
     public async Task<bool> ImportPngAsync(string png, string target, bool interactive = true, ImportChoices? choices = null)
     {
+        if (_session.IsReadOnly) return false;   // never into another version (the button is greyed out with the reason)
         choices ??= new ImportChoices();
         ITextureImportDecider decider = interactive ? new DialogImportDecider(png)
             : new FixedImportAnswers { EditBothFiles = choices.EditBoth, KeepShineMap = choices.KeepShineMap, KeepBlackBlack = choices.KeepBlackBlack };

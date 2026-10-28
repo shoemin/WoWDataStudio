@@ -32,7 +32,7 @@ public static class LeakTestRunner
     public static readonly string[] Views =
     {
         "model_viewer", "model_popout", "model_compare", "model_browse", "texture_viewer", "maps_tab", "terrain_popout",
-        "data_tables", "server_data", "spell_designer", "class_designer", "quest_designer", "other_versions", "versions_window",
+        "data_tables", "server_data", "spell_designer", "class_designer", "quest_designer", "other_versions", "versions_open",
         "versions_maps",
     };
 
@@ -458,12 +458,12 @@ public static class LeakTestRunner
                 "class_designer" => i => ClassCycle(ctx, i),
                 "quest_designer" => i => QuestCycle(ctx, i),
                 "other_versions" => i => VersionsCycle(ctx, i),
-                "versions_window" => i => VersionsWindowCycle(ctx, i),
+                "versions_open" => i => VersionsOpenCycle(ctx, i),
                 "versions_maps" => i => VersionsMapsCycle(ctx, i),
                 _ => throw new ArgumentException("unknown view " + view),
             };
             if (view == "other_versions" && !await PrepareVersions(ctx)) return new Result { View = view, Error = "no folder of other clients (WDS_SCREENSHOT_OTHER_CLIENTS)" };
-            if (view is "versions_window" or "versions_maps" && !await PrepareVersionsWindow()) return new Result { View = view, Error = "no 1.60 client (_classic_beta_) in WDS_SCREENSHOT_OTHER_CLIENTS" };
+            if (view is "versions_open" or "versions_maps" && !await PrepareVersionsWindow()) return new Result { View = view, Error = "no 1.60 client (_classic_beta_) in WDS_SCREENSHOT_OTHER_CLIENTS" };
             for (int i = 0; i < n; i++)
             {
                 _cycle = i;
@@ -885,7 +885,7 @@ public static class LeakTestRunner
         return $"{c.Name} ({c.Build}): {v.Files.Count} files";
     }
 
-    // ------------------------------------------------------------------ M1: another version opened read only
+    // ------------------------------------------------------------------ another version opened read only in this window
 
     private static WoWData.Core.Versions.ClientCopy? _betaCopy;
 
@@ -895,7 +895,7 @@ public static class LeakTestRunner
         if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder)) return false;
         var found = await Task.Run(() => WoWData.Core.Versions.ClientCopies.Find(folder));
         _betaCopy = found.Where(c => c.Format == WoWData.Core.Versions.ClientFormat.Casc && c.Version.StartsWith("1.60", StringComparison.Ordinal)).OrderByDescending(c => c.Build).FirstOrDefault();
-        Log($"versions window: {(_betaCopy == null ? "no 1.60 client" : $"{_betaCopy.Name} ({_betaCopy.Build})")} in {folder}");
+        Log($"versions: {(_betaCopy == null ? "no 1.60 client" : $"{_betaCopy.Name} ({_betaCopy.Build})")} in {folder}");
         return _betaCopy != null;
     }
 
@@ -907,30 +907,43 @@ public static class LeakTestRunner
     /// <summary>The most keys a model kept in one cycle (the budget plus its largest single animation at most).</summary>
     public static long MaxAnimBytes { get; private set; }
 
-    /// <summary>The 1.60 client opened read only in its own window (its index exists after the first cycle), a search,
-    /// an entry with its details and texture (and, M2, its 3D view), then the window closed.</summary>
-    private static async Task<string> VersionsWindowCycle(Ctx ctx, int i)
+    /// <summary>Opens the 1.60 client in the main window (its index exists after the first cycle).</summary>
+    private static async Task<BrowserViewModel> OpenOtherAsync(Ctx ctx)
     {
-        var w = OtherVersionWindow.Open(ctx.Main, _betaCopy!, null, show: false);
-        ScreenshotRunner.Place(w, 1440, 900);
-        w.Show();
-        var vm = w.Vm;
-        await ScreenshotRunner.Until(() => vm.IsReady || vm.Error.Length > 0, 600000);
-        if (!vm.IsReady) throw new InvalidOperationException("the read-only window did not open: " + vm.Error);
+        if (!await ctx.Main.OpenOtherClientAsync(_betaCopy!, null) || ctx.Main.Browser is not { IsReadOnly: true } b)
+            throw new InvalidOperationException("the 1.60 client did not open: " + ctx.Main.WelcomeError);
+        return b;
+    }
+
+    /// <summary>Your 1.12 game again in the main window (the next view and the next cycle start from it).</summary>
+    private static async Task BackToOwnAsync(Ctx ctx, string own)
+    {
+        await ctx.Main.OpenClientAsync(own, false);
+        ctx.B = ctx.Main.Browser ?? throw new InvalidOperationException("your 1.12 game did not open again: " + ctx.Main.WelcomeError);
+        await ScreenshotRunner.Settle(150);
+    }
+
+    /// <summary>The 1.60 client opened read only in the main window, a search, an entry with its details and texture
+    /// (its 3D view, a building's preview, animations from .anim files), then your 1.12 game opened again.</summary>
+    private static async Task<string> VersionsOpenCycle(Ctx ctx, int i)
+    {
+        var own = ctx.Session.Client?.ClientDir ?? throw new InvalidOperationException("your 1.12 game is not open");
+        var vm = await OpenOtherAsync(ctx);
         var q = OtherSearches[i % OtherSearches.Length];
         vm.SearchText = q;
-        await vm.ApplyFilterAsync();
+        await vm.ApplyFilterNow();
         vm.SelectedRow = vm.Results.FirstOrDefault();
         await ScreenshotRunner.Until(() => vm.SelectedRow == null || vm.DetailTitle.Length > 0, 30000);
         if (vm.SelectedTexture is { Exists: true }) await ScreenshotRunner.Until(() => vm.Viewer.IsLoaded || vm.Viewer.Error.Length > 0, 30000);
-        // M2: a model entry opens its 3D view (a GL view: closing it leaks 2 handles, see known-issues.md)
+        // M2: a model entry opens its 3D view
         if (vm.IsModelEntry) await ScreenshotRunner.Until(() => !vm.ModelViewer.IsLoading && (vm.ModelViewer.HasModel || vm.ModelViewer.Message.Length > 0), 60000);
-        // M4: a building entry opens the building preview
+        // M4: a building entry opens the building preview (its GL view is made once and kept by the main window)
+        var screen = ctx.Win.BrowserScreen;
         if (vm.IsBuildingEntry)
         {
             await ScreenshotRunner.Until(() => vm.BuildingScene.Asset != null || vm.BuildingStatus.StartsWith("The building could not", StringComparison.Ordinal), 60000);
-            await ScreenshotRunner.Until(() => w.BuildingView != null, 10000);
-            if (w.BuildingView != null) await WaitFrames(w.BuildingView, 0);
+            await ScreenshotRunner.Until(() => screen.BuildingView != null, 10000);
+            if (screen.BuildingView != null) await WaitFrames(screen.BuildingView, 0);
         }
         await ScreenshotRunner.Settle(150);
         string item = $"{q}: {vm.Results.Count} results, {vm.DetailTitle}{(vm.ModelViewer.HasModel ? $", 3D {System.IO.Path.GetFileName(vm.ModelViewer.ModelPath)}" : "")}" +
@@ -950,12 +963,9 @@ public static class LeakTestRunner
             }
             item += $"; {external.Count} in .anim files, {ext.LoadedSequences.Count} loaded ({ext.LoadedBytes / 1024} KB, {ext.FilesRead} files read)";
         }
-        Watch(w, nameof(OtherVersionWindow));
-        Watch(vm, nameof(OtherVersionWindowViewModel));
-        Watch(vm.ModelViewer, "read-only window's ModelViewerViewModel");
-        Watch(vm.Session, "read-only AppSession");
-        w.Close();
-        await ScreenshotRunner.Settle(150);
+        Watch(vm, "the other version's BrowserViewModel");
+        Watch(vm.ModelViewer, "the other version's ModelViewerViewModel");
+        await BackToOwnAsync(ctx, own);
         return item;
     }
 
@@ -963,17 +973,13 @@ public static class LeakTestRunner
     /// with 8-layer chunks (2997), the Deadmines (4-bit alpha).</summary>
     private static readonly string[] OtherMaps = { "Azeroth", "Kalimdor", "2997", "DeadminesInstance" };
 
-    /// <summary>M4: the read-only window's Maps tab: a map, one of its tiles with its 3D view (turned around a few times),
-    /// "On this tile", every other cycle a terrain pop-out window too; then the window closed.</summary>
+    /// <summary>M4: the 1.60 client in the main window, its Maps tab: a map, one of its tiles with its 3D view (turned
+    /// around a few times), "On this tile", every other cycle a terrain pop-out window too; then your 1.12 game again.</summary>
     private static async Task<string> VersionsMapsCycle(Ctx ctx, int i)
     {
-        var w = OtherVersionWindow.Open(ctx.Main, _betaCopy!, null, show: false);
-        ScreenshotRunner.Place(w, 1440, 900);
-        w.Show();
-        var vm = w.Vm;
-        await ScreenshotRunner.Until(() => vm.IsReady || vm.Error.Length > 0, 600000);
-        if (!vm.IsReady) throw new InvalidOperationException("the read-only window did not open: " + vm.Error);
-        vm.SelectedTab = OtherVersionWindowViewModel.MapsTab;
+        var own = ctx.Session.Client?.ClientDir ?? throw new InvalidOperationException("your 1.12 game is not open");
+        var vm = await OpenOtherAsync(ctx);
+        vm.SelectedTab = BrowserViewModel.MapsTab;
         var m = vm.Maps;
         await m.EnsureLoadedAsync();
         await ScreenshotRunner.Until(() => m.Maps.Count > 0, 120000);
@@ -984,7 +990,7 @@ public static class LeakTestRunner
         var tiles = Enumerable.Range(0, 4096).Where(k => map.Tiles[k]).ToList();
         int t = tiles[(i / OtherMaps.Length * 37 + tiles.Count / 2) % tiles.Count];
         await SelectTile(m, t % 64, t / 64);
-        var view = w.MapsScreen.TerrainView;
+        var view = ctx.Win.BrowserScreen.MapsScreen.TerrainView;
         for (int k = 0; k < 4; k++)
         {
             m.Camera.Yaw += 90f;
@@ -997,17 +1003,14 @@ public static class LeakTestRunner
             var pw = vm.OpenTerrainPopoutWindow(v => ScreenshotRunner.Place(v, 1300, 860)) ?? throw new InvalidOperationException("the terrain pop-out did not open");
             await ScreenshotRunner.Until(() => !pw.Vm.Loading && pw.Vm.Scene.Asset != null, 120000);
             await WaitFrames(pw.Viewport, 0);
-            Watch(pw, "read-only window's TerrainPopoutWindow");
-            Watch(pw.Vm, "read-only window's TerrainPopoutViewModel");
+            Watch(pw, "the other version's TerrainPopoutWindow");
+            Watch(pw.Vm, "the other version's TerrainPopoutViewModel");
             item += "; pop-out";
         }
-        Watch(w, nameof(OtherVersionWindow));
-        Watch(vm, nameof(OtherVersionWindowViewModel));
-        Watch(m, "read-only window's MapsViewModel");
-        Watch(asset, "read-only window's TerrainAsset");
-        Watch(vm.Session, "read-only AppSession");
-        w.Close();
-        await ScreenshotRunner.Settle(150);
+        Watch(vm, "the other version's BrowserViewModel");
+        Watch(m, "the other version's MapsViewModel");
+        Watch(asset, "the other version's TerrainAsset");
+        await BackToOwnAsync(ctx, own);
         return item;
     }
 }

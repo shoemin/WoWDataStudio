@@ -1,0 +1,81 @@
+<UserControl x:Class="WoWDataStudio.Views.VersionTablesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:h="clr-namespace:WoWDataStudio.Helpers"
+             xmlns:s="clr-namespace:WoWDataStudio.Services"
+             s:Manual.Topic="other-versions">
+    <!-- The Data tables tab while another version is open read only (ViewModels\VersionTablesViewModel) -->
+    <UserControl.Resources>
+        <h:BoolToCollapsedConverter x:Key="BoolVis" />
+        <h:NullToCollapsedConverter x:Key="NullVis" />
+        <h:NullToCollapsedConverter x:Key="NullVisInv" Invert="True" />
+    </UserControl.Resources>
+    <Grid Margin="0,8,0,0">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="270" MinWidth="200" />
+            <ColumnDefinition Width="8" />
+            <ColumnDefinition Width="*" MinWidth="420" />
+        </Grid.ColumnDefinitions>
+
+        <!-- the tables -->
+        <Border Style="{StaticResource Card}" Padding="0">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Margin="12,10,12,6">
+                    <TextBlock Text="{Binding Header}" Style="{StaticResource H2}" TextWrapping="Wrap" />
+                    <TextBlock Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,8"
+                               Text="The version's database files (DB2): their names from its executable, columns named where our layout file for this build knows them (else col_N). Pick a table to read its rows." />
+                    <Grid>
+                        <TextBox x:Name="VersionTableFilterBox" Text="{Binding TableFilter, UpdateSourceTrigger=PropertyChanged}" Padding="24,4,4,4"
+                                 ToolTip="Type part of a table's name (Map, CreatureDisplayInfo, Spell...)." />
+                        <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource TextMuted}" Margin="7,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" />
+                    </Grid>
+                </StackPanel>
+                <ListBox ItemsSource="{Binding Tables}" SelectedItem="{Binding SelectedTable}" BorderThickness="0,1,0,0" BorderBrush="{StaticResource Border}"
+                         VirtualizingPanel.IsVirtualizing="True" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel ToolTip="{Binding Tip}" Margin="0,1">
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding Columns}" Foreground="{StaticResource TextMuted}" FontSize="11" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+        </Border>
+
+        <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" Background="Transparent" />
+
+        <!-- the rows -->
+        <Border Grid.Column="2" Style="{StaticResource Card}">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top">
+                    <DockPanel Margin="0,0,0,6">
+                        <Button DockPanel.Dock="Right" h:WriteGuard.Reason="{Binding WriteRefusal}" Content="Copy to server..." Command="{Binding CopyToServerCommand}" Padding="9,4" Margin="6,0,0,0" VerticalAlignment="Center" />
+                        <Button DockPanel.Dock="Right" h:WriteGuard.Reason="{Binding WriteRefusal}" Content="Save to my workspace" Command="{Binding SaveCommand}" Style="{StaticResource PrimaryButton}" Padding="10,4" Margin="6,0,0,0" VerticalAlignment="Center" />
+                        <Button DockPanel.Dock="Right" Content="Export rows..." Command="{Binding ExportCommand}" IsEnabled="{Binding HasTable}" Padding="10,4" Margin="6,0,0,0" VerticalAlignment="Center"
+                                ToolTip="Save the rows the search shows as CSV (for spreadsheets) or JSON, to a folder you choose (never into the client). The same as &quot;wds dbc export --version&quot;." />
+                        <Grid>
+                            <TextBox x:Name="VersionRowSearchBox" Text="{Binding Search, UpdateSourceTrigger=PropertyChanged, Delay=250}" Padding="24,4,4,4"
+                                     ToolTip="Every word must be somewhere in the row (names, numbers...)." />
+                            <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource TextMuted}" Margin="7,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" />
+                        </Grid>
+                    </DockPanel>
+                    <DockPanel Margin="0,0,0,6" Visibility="{Binding WriteRefusal, Converter={StaticResource NullVis}}">
+                        <TextBlock DockPanel.Dock="Left" Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource Warn}" Margin="0,2,6,0" />
+                        <TextBlock Text="{Binding WriteRefusal}" TextWrapping="Wrap" Foreground="{StaticResource Warn}" FontSize="12" />
+                    </DockPanel>
+                    <TextBlock Text="{Binding TableNote}" TextWrapping="Wrap" Foreground="{StaticResource TextMuted}" Margin="0,0,0,4" />
+                    <TextBlock Text="{Binding Status}" FontWeight="SemiBold" Margin="0,0,0,6" />
+                </StackPanel>
+                <Grid>
+                    <TextBlock Text="Pick a table on the left." Style="{StaticResource Muted}" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Visibility="{Binding Rows, Converter={StaticResource NullVisInv}}" />
+                    <DataGrid x:Name="VersionRowsGrid" ItemsSource="{Binding Rows}" IsReadOnly="True" AutoGenerateColumns="True" CanUserAddRows="False" CanUserDeleteRows="False"
+                              EnableRowVirtualization="True" EnableColumnVirtualization="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                              Visibility="{Binding Rows, Converter={StaticResource NullVis}}" AutoGeneratingColumn="OnAutoColumn" />
+                </Grid>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

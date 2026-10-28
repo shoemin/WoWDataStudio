@@ -122,6 +122,7 @@ internal static class DbcCommands
             Run = async inv =>
             {
                 var s = await inv.Ctx.SessionAsync();
+                if (s.IsReadOnly) return DbcCommandsOther.Tables(inv, s);   // another version: its DB2 tables, read only
                 var words = (inv.Opt("filter") ?? "").ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
                 var list = s.Dbc!.List().OrderBy(i => i.Layout?.Category ?? "~", StringComparer.Ordinal).ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
                     .Where(i => !inv.Flag("changed") || i.InWorkspace)
@@ -147,6 +148,7 @@ internal static class DbcCommands
             Run = async inv =>
             {
                 var s = await inv.Ctx.SessionAsync();
+                if (s.IsReadOnly) return DbcCommandsOther.Info(inv, s);   // another version: its DB2 tables, read only
                 var e = Open(inv, s, inv.Arg(0));
                 var l = e.Table.Layout;
                 var info = s.Dbc!.Info(e.Name);
@@ -173,6 +175,7 @@ internal static class DbcCommands
             Run = async inv =>
             {
                 var s = await inv.Ctx.SessionAsync();
+                if (s.IsReadOnly) return DbcCommandsOther.Rows(inv, s);   // another version: its DB2 tables, read only
                 var e = Open(inv, s, inv.Arg(0));
                 var rows = Query(inv, e, inv.Opt("sort"), inv.Flag("desc"));
                 var cols = inv.Opt("columns") is { } cl ? cl.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(n => Col(e, n)).ToList() : e.Table.Layout.Columns.ToList();
@@ -194,6 +197,7 @@ internal static class DbcCommands
             Run = async inv =>
             {
                 var s = await inv.Ctx.SessionAsync();
+                if (s.IsReadOnly) return DbcCommandsOther.Get(inv, s);   // another version: its DB2 tables, read only
                 var e = Open(inv, s, inv.Arg(0));
                 var row = Row(e, inv.Long(1));
                 if (inv.ArgOrNull(2) is { } colName)
@@ -343,6 +347,7 @@ internal static class DbcCommands
             Run = async inv =>
             {
                 var s = await inv.Ctx.SessionAsync();
+                if (s.IsReadOnly) return DbcCommandsOther.Export(inv, s);   // another version: its DB2 tables, read only
                 var e = Open(inv, s, inv.Arg(0));
                 var file = Path.GetFullPath(inv.Opt("out") ?? throw new CliError(ExitCode.Usage, "give --out <file.csv|file.json>."));
                 var rows = Query(inv, e);

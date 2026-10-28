@@ -17,7 +17,7 @@ public static class CliApp
     {
         new("home", "folder", "keep settings, index and edits in this folder instead of %APPDATA%\\WoWDataStudio (scripts and tests run isolated)"),
         new("client", "folder", "use this World of Warcraft folder for this run instead of the one in the settings"),
-        new("version", "client", "open another World of Warcraft version read only for this run (its folder, its name in the folder of other versions, a version such as 1.60 or a build); only the commands that read work (find, textures info / export); alone, --version prints the version of wds"),
+        new("version", "client", "open another World of Warcraft version read only for this run (its folder, its name in the folder of other versions, a version such as 1.60 or a build); like the app opens it in its main window: the commands that read or export work (find, textures, models info / render / export, maps, dbc tables / rows / get / export...), the ones that write refuse with the same reason as the app; alone, --version prints the version of wds"),
         new("json", null, "print one JSON object (machine-readable) instead of text"),
         new("quiet", null, "no progress on stderr"),
         new("yes", null, "confirm a command that changes the game folder or the server, or deletes something (without it, wds says what it would do and exits with code 5)"),
@@ -198,18 +198,26 @@ public static class CliApp
     /// <summary>Read-only commands that do not open other versions yet (later milestones of the design).</summary>
     private static readonly HashSet<string> LaterForOtherVersions = new(StringComparer.OrdinalIgnoreCase)
     {
-        "find used", "find where", "models info", "models anims", "models skeleton", "models render", "models compare", "maps list", "maps zones",
-        "maps tiles", "maps minimap", "maps tile", "maps render", "maps breakdown", "maps compare", "index status", "setup status", "textures compare",
+        "find where", "models compare", "maps breakdown", "maps compare", "index status", "setup status", "textures compare", "dbc used-by", "dbc diff",
     };
 
-    /// <summary>Why a command does not run with --version (exit code 4).</summary>
+    /// <summary>The groups whose commands work on the world server (and your 1.12 game's tables): another version has no
+    /// server connected (its server provider), so they refuse with that reason.</summary>
+    private static readonly HashSet<string> ServerGroups = new(StringComparer.OrdinalIgnoreCase) { "server", "serverdb", "server-maps", "spells", "classes", "talents", "quests" };
+
+    /// <summary>Why a command does not run with --version (exit code 4): the same reasons the app shows on its greyed-out
+    /// controls (<see cref="Core.Versions.GameProfile.WriteReason"/>, the server provider's "no server connected").</summary>
     public static string ReadOnlyRefusal(CliContext ctx, CommandSpec spec)
     {
         var v = ctx.OtherVersionText(ctx.VersionOverride!);
         var works = string.Join(", ", Tree.Where(c => c.VersionAware).Select(c => c.Path));
-        return LaterForOtherVersions.Contains(spec.Path)
-            ? $"{v} is open read only: wds {spec.Path} does not work with other versions yet. With --version: {works}."
-            : $"{v} is open read only: wds {spec.Path} changes files. With --version: {works}.";
+        if (string.Equals(spec.Path, "models open", StringComparison.OrdinalIgnoreCase))
+            return $"{v} is open read only: wds models open exports a model of your 1.12 game; for another version \"Open in Blender\" is \"wds models export <model> --version <client> --open\". With --version: {works}.";
+        if (LaterForOtherVersions.Contains(spec.Path))
+            return $"{v} is open read only: wds {spec.Path} does not work with other versions yet. With --version: {works}.";
+        if (ServerGroups.Contains(spec.Group))
+            return $"{v} is open read only: wds {spec.Path} works on your 1.12 game and its world server. {Core.Servers.NoServerProvider.NoServerText(v)} {Core.Versions.GameProfile.WriteReason} With --version: {works}.";
+        return $"{Core.Versions.GameProfile.RefusedTextFor(v, spec.Path)} With --version: {works}.";
     }
 
     /// <summary>The exit code of an exception from Core.</summary>

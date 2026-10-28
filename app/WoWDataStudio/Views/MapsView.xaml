@@ -118,8 +118,8 @@
                             <TextBlock Text="{Binding TileTitle}" Style="{StaticResource H2}" FontSize="18" TextWrapping="Wrap" />
                         </DockPanel>
                         <TextBlock Text="{Binding TileSubtitle}" Style="{StaticResource Muted}" TextTrimming="CharacterEllipsis" />
-                        <WrapPanel Margin="0,6,0,0" Visibility="{Binding CanEdit, Converter={StaticResource BoolVis}}">
-                            <Button x:Name="BreakDownButton" Command="{Binding BreakDownTileCommand}" Padding="10,4" Margin="0,0,6,0" Style="{StaticResource PrimaryButton}"
+                        <WrapPanel Margin="0,6,0,0">
+                            <Button x:Name="BreakDownButton" Command="{Binding BreakDownTileCommand}" Padding="10,4" Margin="0,0,6,0" Style="{StaticResource PrimaryButton}" h:WriteGuard.Reason="{Binding NotYetRefusal}"
                                     ToolTip="Opens a window that lists every piece of this tile by kind (the ground and its 256 chunks, ground textures, trees and objects, buildings, water, sounds), shows each one in 3D or on its own, and opens it in the Browse tab or in Blender.">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE8FD;" FontFamily="Segoe MDL2 Assets" Margin="0,2,6,0" />
@@ -176,32 +176,36 @@
                         </ItemsControl>
 
                         <!-- actions -->
-                        <Border x:Name="MapActions" Margin="0,10,0,0" Padding="10,8" CornerRadius="6" Background="#FFF7F9FC" BorderBrush="{StaticResource Border}" BorderThickness="1"
-                                Visibility="{Binding CanEdit, Converter={StaticResource BoolVis}}">
+                        <Border x:Name="MapActions" Margin="0,10,0,0" Padding="10,8" CornerRadius="6" Background="#FFF7F9FC" BorderBrush="{StaticResource Border}" BorderThickness="1">
                             <StackPanel>
                                 <TextBlock Text="EDIT THE MAP" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMuted}" Margin="0,0,0,6" />
+                                <!-- another version opened read only: the buttons are greyed out, and this says why -->
+                                <DockPanel Margin="0,0,0,6" Visibility="{Binding WriteRefusal, Converter={StaticResource NullVis}}">
+                                    <TextBlock DockPanel.Dock="Left" Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource Warn}" Margin="0,2,6,0" />
+                                    <TextBlock Text="{Binding WriteRefusal}" TextWrapping="Wrap" Foreground="{StaticResource Warn}" FontSize="12" />
+                                </DockPanel>
                                 <WrapPanel>
-                                    <Button Content="Edit in Noggit..." Command="{Binding EditInNoggitCommand}" Margin="0,0,6,6" Padding="10,4" Style="{StaticResource PrimaryButton}"
+                                    <Button h:WriteGuard.Reason="{Binding WriteRefusal}" Content="Edit in Noggit..." Command="{Binding EditInNoggitCommand}" Margin="0,0,6,6" Padding="10,4" Style="{StaticResource PrimaryButton}"
                                             ToolTip="Prepares a Noggit project for this map (reading a safe view of the game, never writing into it) with a bookmark at this tile, and explains the steps. Noggit is a separate program." />
-                                    <Button Content="Import map changes..." Command="{Binding ImportMapChangesCommand}" Margin="0,0,6,6" Padding="10,4"
+                                    <Button h:WriteGuard.Reason="{Binding WriteRefusal}" Content="Import map changes..." Command="{Binding ImportMapChangesCommand}" Margin="0,0,6,6" Padding="10,4"
                                             ToolTip="Finds the files Noggit saved for this map, checks each with the 1.12 rules, and shows what changed (with a 3D before/after) before anything is saved." />
-                                    <Button Content="Open terrain in Blender..." Command="{Binding OpenTerrainInBlenderCommand}" Margin="0,0,6,6" Padding="10,4"
+                                    <Button h:WriteGuard.Reason="{Binding WriteRefusal}" Content="Open terrain in Blender..." Command="{Binding OpenTerrainInBlenderCommand}" Margin="0,0,6,6" Padding="10,4"
                                             ToolTip="Pick this tile and its neighbours, and edit their ground heights in Blender (each tile its own object, edges you can sync)." />
-                                    <Button x:Name="ImportTerrainButton" Content="Import edited terrain..." Command="{Binding ImportEditedTerrainCommand}" Margin="0,0,6,6" Padding="10,4"
+                                    <Button h:WriteGuard.Reason="{Binding WriteRefusal}" x:Name="ImportTerrainButton" Content="Import edited terrain..." Command="{Binding ImportEditedTerrainCommand}" Margin="0,0,6,6" Padding="10,4"
                                             ToolTip="Brings the heights you edited in Blender back: checks the shared edges with the neighbouring tiles, recomputes the lighting normals, validates, and shows the review with a 3D before/after." />
-                                    <Button Content="Compare original vs. edited" Command="{Binding CompareTileCommand}" IsEnabled="{Binding IsTileModified}" Margin="0,0,6,6" Padding="10,4"
+                                    <Button h:WriteGuard.Reason="{Binding WriteRefusal}" Content="Compare original vs. edited" Command="{Binding CompareTileCommand}" IsEnabled="{Binding IsTileModified}" Margin="0,0,6,6" Padding="10,4"
                                             ToolTip="Two synchronized 3D views of the game's tile and your edited one, the height difference and the list of changes." />
-                                    <Button Content="Revert the tile" Command="{Binding RevertTileCommand}" IsEnabled="{Binding IsTileModified}" Margin="0,0,6,6" Padding="10,4"
+                                    <Button h:WriteGuard.Reason="{Binding WriteRefusal}" Content="Revert the tile" Command="{Binding RevertTileCommand}" IsEnabled="{Binding IsTileModified}" Margin="0,0,6,6" Padding="10,4"
                                             ToolTip="Deletes your edited tile: the game's tile is used again." />
-                                    <Button Content="Open the Noggit project folder" Command="{Binding OpenNoggitFolderCommand}" Margin="0,0,6,6" Padding="10,4" />
+                                    <Button h:WriteGuard.Reason="{Binding WriteRefusal}" Content="Open the Noggit project folder" Command="{Binding OpenNoggitFolderCommand}" Margin="0,0,6,6" Padding="10,4" />
                                 </WrapPanel>
                                 <TextBlock Text="PUT IT INTO THE GAME AND THE SERVER" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMuted}" Margin="0,6,0,6" />
                                 <WrapPanel>
-                                    <Button Content="Test map in game (loose files)" Command="{Binding TestMapInGameCommand}" IsEnabled="{Binding HasMapChanges}" Margin="0,0,6,6" Padding="10,4"
+                                    <Button h:WriteGuard.Reason="{Binding WriteRefusal}" Content="Test map in game (loose files)" Command="{Binding TestMapInGameCommand}" IsEnabled="{Binding HasMapChanges}" Margin="0,0,6,6" Padding="10,4"
                                             ToolTip="Copies this map's changed files into the game's Data folder as loose files (needs the client's loose-file mode)." />
-                                    <Button Content="Build release patch (patch-3.MPQ)..." Command="{Binding BuildPatchCommand}" IsEnabled="{Binding HasMapChanges}" Margin="0,0,6,6" Padding="10,4"
+                                    <Button h:WriteGuard.Reason="{Binding WriteRefusal}" Content="Build release patch (patch-3.MPQ)..." Command="{Binding BuildPatchCommand}" IsEnabled="{Binding HasMapChanges}" Margin="0,0,6,6" Padding="10,4"
                                             ToolTip="Packs ALL your changes (textures, models and maps) into patch-3.MPQ." />
-                                    <Button Content="Update server maps..." Command="{Binding UpdateServerCommand}" Margin="0,0,6,6" Padding="10,4"
+                                    <Button h:WriteGuard.Reason="{Binding WriteRefusal}" Content="Update server maps..." Command="{Binding UpdateServerCommand}" Margin="0,0,6,6" Padding="10,4"
                                             ToolTip="Guided: re-extract the server's terrain, collision and pathing from your patched game into a staging folder, then install them into the server (with a backup and an undo)." />
                                 </WrapPanel>
                                 <Border Background="{StaticResource WarnSoft}" CornerRadius="4" Padding="8,5" Margin="0,2,0,0">

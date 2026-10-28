@@ -14,7 +14,5 @@ public partial class MainWindow : Window
         {
             if (vm.Browser?.Tables is { } tables && !tables.ConfirmLeave()) e.Cancel = true;
         };
-        // M1: the read-only windows of other versions close with the main window
-        Closed += (_, _) => WoWDataStudio.Views.OtherVersionWindow.CloseAll();
     }
 }

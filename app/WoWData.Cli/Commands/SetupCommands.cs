@@ -256,9 +256,10 @@ internal static class SetupCommands
                 var sw = System.Diagnostics.Stopwatch.StartNew();
                 var s = await inv.Ctx.SessionAsync(inv.Flag("rebuild"));
                 var counts = s.Entries.GroupBy(e => EntrySearch.CliName(e.Kind)).ToDictionary(g => g.Key, g => g.Count());
-                return new CliResult().With(new { index = s.Client!.IndexFile, entries = s.Entries.Count, kinds = counts, built = s.IndexBuilt, server = s.ServerConnected, serverMessage = s.ServerMessage, seconds = sw.Elapsed.TotalSeconds })
-                    .Line($"Index: {s.Client.IndexFile}").Line($"{s.Entries.Count:N0} entries ({string.Join(", ", counts.Select(kv => $"{kv.Value:N0} {kv.Key}"))}), built {s.IndexBuilt}.")
-                    .Line($"Names from the server database: {(s.ServerConnected ? "connected" : "not connected")} ({s.ServerMessage}).");
+                var cp = (s.Client ?? s.OtherPaths)!;   // another version (--version): its own index, read only
+                return new CliResult().With(new { index = cp.IndexFile, readOnly = s.IsReadOnly, entries = s.Entries.Count, kinds = counts, built = s.IndexBuilt, server = s.ServerConnected, serverMessage = s.ServerMessage, seconds = sw.Elapsed.TotalSeconds })
+                    .Line($"Index: {cp.IndexFile}").Line($"{s.Entries.Count:N0} entries ({string.Join(", ", counts.Select(kv => $"{kv.Value:N0} {kv.Key}"))}), built {s.IndexBuilt}.")
+                    .Line(s.IsReadOnly ? s.ServerMessage : $"Names from the server database: {(s.ServerConnected ? "connected" : "not connected")} ({s.ServerMessage}).");
             },
         };
         yield return new CommandSpec

@@ -47,9 +47,9 @@ public sealed partial class UsedInGameViewModel : ObservableObject
 
     /// <summary>"Refresh server data" (the browser runs the main window's reload of the server part).</summary>
     public event Func<Task>? RefreshServerRequested;
-    /// <summary>M4: the open game has a server part (your 1.12 game); false in the read-only window of another version.</summary>
+    /// <summary>M4: the open game has a server part (your 1.12 game); false for another version opened read only.</summary>
     public bool CanRefreshServer => ServerParts && (_session.Profile?.Has(WoWData.Core.Versions.GameCaps.Server) ?? true);
-    /// <summary>M4: false for a report of another version opened read only (no server).</summary>
+    /// <summary>M4: false for a report of another version opened read only (no server provider connected).</summary>
     public bool ServerParts { get; init; } = true;
 
     /// <summary>"Back" after following a link.</summary>
@@ -83,6 +83,7 @@ public sealed partial class UsedInGameViewModel : ObservableObject
     /// <summary>Loads the name tables ahead (so the first selection is as fast as the others).</summary>
     public void Warm()
     {
+        if (_session.IsReadOnly) return;   // another version has no u_ tables (its report is ModernUsage)
         var svc = Service;
         if (svc != null) _ = Task.Run(svc.Warm);
     }

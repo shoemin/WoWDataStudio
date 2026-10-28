@@ -44,6 +44,11 @@ public sealed partial class BrowserViewModel
     [RelayCommand]
     private async Task ExportModel()
     {
+        if (_session.IsReadOnly)
+        {
+            await ExportOtherModelInteractiveAsync(false);   // another version: an export to a folder still works
+            return;
+        }
         var svc = _session.ModelPackages;
         if (svc == null || !ModelViewer.HasModel) return;
         var model = ModelViewer.ModelPath;
@@ -171,6 +176,11 @@ public sealed partial class BrowserViewModel
     [RelayCommand]
     private async Task OpenModelInBlender()
     {
+        if (_session.IsReadOnly)
+        {
+            await ExportOtherModelInteractiveAsync(true);
+            return;
+        }
         if (!ModelViewer.HasModel || _session.ModelPackages == null) return;
         var blender = BlenderTools.FindBlender();
         if (blender == null)
