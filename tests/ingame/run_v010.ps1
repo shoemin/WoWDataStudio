@@ -16,7 +16,7 @@ param([Parameter(Mandatory)][string]$Run, [switch]$Plan,
       [string[]]$States = @('before', 'srvonly', 'loose', 'patch3', 'afterundo'), [string[]]$Only = @())
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
-$base = '<your WoW Custom Client folder>'
+$base = (Resolve-Path "$PSScriptRoot\..\..\..").Path   # the folder that holds WoWDataTool, WoWDecomp, Server and the clients
 $decomp = "$base\WoWDecomp"
 $client = "$base\Client_visual"
 $exe = "$here\IngameRunner\bin\Release\net8.0\IngameRunner.exe"

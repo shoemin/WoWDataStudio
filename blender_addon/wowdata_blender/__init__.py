@@ -478,7 +478,10 @@ class WOWDATA_OT_import_target(bpy.types.Operator):
 
     def execute(self, context):
         prefs = context.preferences.addons[__name__].preferences
-        tool = bpy.path.abspath(prefs.tool_dir)
+        tool = wowdatatool_dir(prefs)
+        if not tool:
+            self.report({'ERROR'}, 'Set the WoWDataTool folder (the folder with wowdata.cmd) in the add-on\'s preferences first.')
+            return {'CANCELLED'}
         out = os.path.join(tool, 'work', 'export', 'models')
         try:
             r = subprocess.run([prefs.python_exe, '-m', 'wowdata', 'model', 'export', self.target, '--out', out],
@@ -529,10 +532,25 @@ class WOWDATA_OT_export_studio(bpy.types.Operator):
         return {'FINISHED'}
 
 
+def _is_wowdatatool(folder):
+    return bool(folder) and os.path.isfile(os.path.join(folder, 'wowdata', '__main__.py'))
+
+
+def wowdatatool_dir(prefs):
+    """The WoWDataTool folder for 'from the game data': the one set in the preferences, else the checkout this add-on
+    runs from (blender_addon\\wowdata_blender inside WoWDataTool), else None."""
+    if prefs.tool_dir:
+        tool = bpy.path.abspath(prefs.tool_dir)
+        return tool if _is_wowdatatool(tool) else None
+    here = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    return here if _is_wowdatatool(here) else None
+
+
 class WOWDATA_Preferences(bpy.types.AddonPreferences):
     bl_idname = __name__
-    tool_dir: StringProperty(name='WoWDataTool folder', subtype='DIR_PATH',
-                             default=r'<your WoW Custom Client folder>\WoWDataTool')
+    tool_dir: StringProperty(name='WoWDataTool folder', subtype='DIR_PATH', default='',
+                             description='The WoWDataTool folder (the one with wowdata.cmd); needed only for '
+                                         '"WoW 1.12 model from the game data"')
     python_exe: StringProperty(name='Python (with numpy + Pillow)', default='python')
     orientation: EnumProperty(name='Orientation', default='FRONT', items=[('FRONT', 'Front view (-Y)', ''), ('WOW', 'As in the game (+X)', '')])
     scale: FloatProperty(name='Scale', default=1.0, min=0.0001)
@@ -541,6 +559,8 @@ class WOWDATA_Preferences(bpy.types.AddonPreferences):
         col = self.layout.column()
         col.label(text='WoW Data Studio: File > Import > WoW 1.12 model, edit, then File > Export > WoW 1.12 model for WoW Data Studio.')
         col.prop(self, 'tool_dir')
+        if not wowdatatool_dir(self):
+            col.label(text='Set the WoWDataTool folder (the one with wowdata.cmd) to import models from the game data.', icon='INFO')
         col.prop(self, 'python_exe')
         col.prop(self, 'orientation')
         col.prop(self, 'scale')

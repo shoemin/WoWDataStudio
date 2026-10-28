@@ -3,7 +3,7 @@
 # Every step's Data folder listing goes to <run>\delivery_log.txt (IngameRunner deliver).
 param([Parameter(Mandatory)][string]$Run, [string[]]$Variants = @('before', 'loose', 'patch3'), [string[]]$Only = @())
 $here = $PSScriptRoot
-$client = '<your WoW Custom Client folder>\Client_visual'
+$client = Join-Path (Resolve-Path "$PSScriptRoot\..\..\..").Path 'Client_visual'
 $exe = "$here\IngameRunner\bin\Release\net8.0\IngameRunner.exe"
 $home_ = "$Run\studio_home"
 function Step($s) { "[{0:HH:mm:ss}] ==== {1}" -f (Get-Date), $s }

@@ -3,7 +3,7 @@
 # Files above 64 MB (the stock MPQs) get size + mtime only (hashing 5 GB per run adds nothing: they are never opened for writing).
 #   .\snapshot.ps1 -Out before.tsv          then  .\snapshot.ps1 -Out after.tsv -Compare before.tsv
 param([Parameter(Mandatory)][string]$Out, [string]$Compare = '')
-$base = '<your WoW Custom Client folder>'
+$base = (Resolve-Path "$PSScriptRoot\..\..\..").Path   # the folder that holds WoWDataTool, WoWDecomp, Server and the clients
 $roots = @('Client') + (1..6 | ForEach-Object { "Client$_" })
 $lines = New-Object System.Collections.Generic.List[string]
 function Walk([string]$dir, [string]$rel) {

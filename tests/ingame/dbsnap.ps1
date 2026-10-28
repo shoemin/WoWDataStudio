@@ -7,7 +7,7 @@
 # for a throwaway server.
 param([Parameter(Mandatory)][string]$Out, [string]$Compare = '', [int]$Port = 3306, [switch]$NoPassword, [string]$Database = 'mangos', [switch]$ForLoading)
 $ErrorActionPreference = 'Stop'
-$base = '<your WoW Custom Client folder>'
+$base = (Resolve-Path "$PSScriptRoot\..\..\..").Path   # the folder that holds WoWDataTool, WoWDecomp, Server and the clients
 $bin = "$base\Server\mysql5\bin"
 if ($Database -ne 'mangos') { throw 'dbsnap.ps1 is for the world database (mangos) only' }
 New-Item -ItemType Directory -Force (Split-Path -Parent $Out) | Out-Null

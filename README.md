@@ -656,7 +656,7 @@ Materials: the M2 render flags and blend mode are in each material's extras. Opa
 Install once:
 1. `python blender_addon\build_zip.py` writes `build\wowdata_blender.zip`.
 2. In Blender: **Edit > Preferences > Add-ons**, the drop-down arrow at the top right, **Install from Disk...**, pick `build\wowdata_blender.zip`.
-3. Tick **Import-Export: WoW 1.12 model (wowdata)**. In its preferences, check the WoWDataTool folder and the Python command (it needs numpy and Pillow; `python` on this machine).
+3. Tick **Import-Export: WoW 1.12 model (wowdata)**. In its preferences, set the WoWDataTool folder (the folder with `wowdata.cmd`; needed only for *from the game data* below, empty until you set it) and check the Python command (it needs numpy and Pillow; `python` on this machine).
 
 (WoW Data Studio installs the same add-on with **Tools > Install the Blender add-on...**.)
 

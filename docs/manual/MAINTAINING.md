@@ -111,6 +111,16 @@ pictures only, set the environment variable `WDS_SCREENSHOT_ONLY=tables` before 
 pictures only, `rig` for the skeleton and animation pictures only, `designers` for the designers' pictures only, `quests` for the
 Quest chains pictures only).
 
+The pictures are published with the manual, so make them from folders whose paths do not show your Windows user name
+(several pictures show folders: the welcome screen, Settings, the export and add-on dialogs, Edit in Noggit, the
+server and version folders). One way: a clone of the repository at `G:\WoW Custom Client\WoWDataTool`, built there,
+with junctions `G:\WoW Custom Client\Client` (to the client copy), `Server` and `third_party` next to it; `TEMP` and
+`TMP` set to a folder without your user name for the run (picture 02 shows it); the `--screenshot` folder on the
+drive of the game's archives (the Noggit client view hard-links them), for example `C:\wds_shots`; and an export
+folder in the run's own settings, written before the run as `<screenshot folder>\_home\settings.json` with
+`{"ExportDir": "G:\\WoW Data Studio\\Exports"}` (else the export dialogs show your Documents folder). Look at
+every picture that shows a path before you copy it.
+
 The names of the data tables and of their columns (shown by the **Data tables** tab) come from the layout file
 `app\WoWData.Core\Dbc\Layouts\dbc_layouts_5875.txt`; the manual may write them in bold, and the check reads them from
 there. The same goes for the server's tables and their described columns (the **Server data** tab) and

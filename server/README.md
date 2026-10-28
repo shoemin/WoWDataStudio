@@ -51,7 +51,7 @@ What it does (equivalent manual commands):
 
 ```powershell
 $cmake = 'C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
-$w = '<your WoW Custom Client folder>'
+$w = (Resolve-Path '..\..').Path   # the WoW Custom Client folder (this runs in WoWDataTool\server)
 $env:PATH += ';C:\Program Files (x86)\Microsoft Visual Studio\Installer'
 python "$w\WoWDataTool\server\tools\apply_patch3.py" "$w\WoWDecomp\work\server_src" "$w\WoWDataTool\server\patches"
 & $cmake -S "$w\WoWDecomp\work\server_src" -B "$w\WoWDataTool\server\build" -G 'Visual Studio 17 2022' -A x64 `

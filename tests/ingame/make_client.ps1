@@ -1,12 +1,12 @@
 # make_client.ps1 -- create the dedicated test client for the in-game visual test (never touches Client or Client1..6):
-#   <your WoW Custom Client folder>\Client_visual
+#   <WoW Custom Client folder>\Client_visual (the folder that holds WoWDataTool)
 #   Data\*.MPQ and Data\Interface\Cinematics\*.avi = HARD LINKS to Client\Data (no extra disk space; the game and the app open them read-only;
 #   the app's loose install / patch build only ever create NEW files in this Data folder, which never touches the linked originals)
 #   game exe + DLLs, realmlist, WTF (Config.wtf set to a 1600x900 window), Interface\AddOns = copies
 #   wowcode.dll / map, WoWDebug.exe, wowsyms.txt, wowpatches.txt = the decomp harness's current test build (as tools\worldtest.ps1 copies them)
-param([string]$Dest = '<your WoW Custom Client folder>\Client_visual', [string]$Resolution = '1600x900')
+param([string]$Dest = (Join-Path (Resolve-Path "$PSScriptRoot\..\..\..").Path 'Client_visual'), [string]$Resolution = '1600x900')
 $ErrorActionPreference = 'Stop'
-$base = '<your WoW Custom Client folder>'
+$base = (Resolve-Path "$PSScriptRoot\..\..\..").Path   # the folder that holds WoWDataTool, WoWDecomp, Server and the clients
 $src = "$base\Client"
 $decomp = "$base\WoWDecomp"
 if (Test-Path $Dest) { throw "$Dest exists already" }

@@ -20,7 +20,7 @@ the picture check and the scenario suite of `tools\regress.ps1` must stay exactl
 
 ## 3. In the game, after that wave: `run_hotreload.ps1`
 
-Client: the dedicated test client `<your WoW Custom Client folder>\Client_visual` only (the script refuses another one).
+Client: the dedicated test client `Client_visual` (next to `WoWDataTool`) only (the script refuses another one).
 Run it when no wave runs (it refuses while a chain log is active, a chain script or a console-mode server runs, or any
 game is running) and the server is up (3306, 3724, 8085).
 

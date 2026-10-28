@@ -29,7 +29,7 @@ $ErrorActionPreference = 'Stop'
 # 2026-10-16: -Only by name as well (quest, trainer, cast, talent)
 $Only = @($Only | ForEach-Object { $_ -split ',' } | Where-Object { $_ } | ForEach-Object { switch ($_.Trim().ToLowerInvariant()) { 'quest' { 'q1' } 'trainer' { 't1' } 'cast' { 'c1' } 'talent' { 'k1' } default { $_.Trim() } } })
 $here = $PSScriptRoot
-$base = '<your WoW Custom Client folder>'
+$base = (Resolve-Path "$PSScriptRoot\..\..\..").Path   # the folder that holds WoWDataTool, WoWDecomp, Server and the clients
 $decomp = "$base\WoWDecomp"
 $client = "$base\Client_visual"
 $exe = "$here\IngameRunner\bin\Release\net8.0\IngameRunner.exe"

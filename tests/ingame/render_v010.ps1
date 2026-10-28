@@ -2,9 +2,9 @@
 # (wds models render, the app's "Save image..."): the game's model (--original) and the workspace edit at the same moments of an
 # animation, as strips in <run>\app\renders\. Reads only the run's isolated home; writes only <run>\app\renders.
 #   .\render_v010.ps1 -Run <run>
-param([Parameter(Mandatory)][string]$Run, [string]$Wds = '<your WoW Custom Client folder>\WoWDataTool\dist\stage\bin\wds.exe')
+param([Parameter(Mandatory)][string]$Run, [string]$Wds = (Join-Path (Resolve-Path "$PSScriptRoot\..\..").Path 'dist\stage\bin\wds.exe'))
 $ErrorActionPreference = 'Stop'
-$client = '<your WoW Custom Client folder>\Client_visual'
+$client = Join-Path (Resolve-Path "$PSScriptRoot\..\..\..").Path 'Client_visual'
 $out = "$Run\app\renders"
 New-Item -ItemType Directory -Force $out | Out-Null
 Get-ChildItem $out -Filter 'test_*' -ErrorAction SilentlyContinue | ForEach-Object { [IO.File]::Delete($_.FullName) }

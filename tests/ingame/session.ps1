@@ -7,10 +7,10 @@
 # `burst NAME SECONDS` to ask for an external capture series (wowshot.exe, PrintWindow) while a spell flies.
 #   .\session.ps1 -Scenario lua\s1_start.lua -Tag before -Pos '-618.5,-4251.7,38.8,1.25' -OutDir <run>\shots
 param([Parameter(Mandatory)][string]$Scenario, [Parameter(Mandatory)][string]$Tag, [Parameter(Mandatory)][string]$Pos, [Parameter(Mandatory)][string]$OutDir,
-      [string]$Client = '<your WoW Custom Client folder>\Client_visual', [int]$Stay = 150, [string]$Camera = '15,8', [switch]$BurstAll,
+      [string]$Client = (Join-Path (Resolve-Path "$PSScriptRoot\..\..\..").Path 'Client_visual'), [int]$Stay = 150, [string]$Camera = '15,8', [switch]$BurstAll,
       [string]$Hooks = 'none;name EvtSched_DispatchUpdateEvent;name EvtSched_DispatchPollEvent;patch 0064d0e0 c3;skip addr 00643a70;patch 00643a70 680000003fd9042459c3 558bec83ec08568bf1e8')
 $ErrorActionPreference = 'Stop'
-$decomp = '<your WoW Custom Client folder>\WoWDecomp'
+$decomp = Join-Path (Resolve-Path "$PSScriptRoot\..\..\..").Path 'WoWDecomp'
 $parent = Split-Path -Parent $decomp
 . "$decomp\tools\lib_wowtest.ps1"
 . "$decomp\tools\wintools.ps1"

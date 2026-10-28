@@ -20,7 +20,7 @@ param([Parameter(Mandatory)][string]$Run, [switch]$Plan, [switch]$UseDecompDll,
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
 $ingame = Split-Path -Parent $here
-$base = '<your WoW Custom Client folder>'
+$base = (Resolve-Path "$PSScriptRoot\..\..\..\..").Path   # the folder that holds WoWDataTool, WoWDecomp, Server and the clients
 $decomp = "$base\WoWDecomp"
 $client = "$base\Client_visual"
 $home_ = "$Run\studio_home"

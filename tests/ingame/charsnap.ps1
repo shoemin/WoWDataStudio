@@ -15,7 +15,7 @@
 param([Parameter(Mandatory)][string]$Out, [string]$Compare = '', [string]$Restore = '', [int]$Guid = 1000, [int]$Account = 9, [switch]$RequireOffline,
       [int]$Port = 3306, [switch]$NoPassword)
 $ErrorActionPreference = 'Stop'
-$base = '<your WoW Custom Client folder>'
+$base = (Resolve-Path "$PSScriptRoot\..\..\..").Path   # the folder that holds WoWDataTool, WoWDecomp, Server and the clients
 $bin = "$base\Server\mysql5\bin"
 $G = $Guid
 $tables = [ordered]@{

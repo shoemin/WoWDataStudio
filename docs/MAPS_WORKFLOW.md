@@ -22,7 +22,7 @@ server\reextract.ps1 (maps, vmaps, mmaps into staging) ──► stop mangosd �
 
 ## 1. Edit in Noggit (the fixed fork)
 
-* Program: `<your WoW Custom Client folder>\third_party\noggit-build\bin\noggit.exe`, built from our fork
+* Program: `<WoW Custom Client folder>\third_party\noggit-build\bin\noggit.exe` (the folder that holds `WoWDataTool`), built from our fork
   `third_party\noggit-cinder-fork` (see its `BUILD_NOTES.md` and `FORK_CHANGES.md`). **Never use the upstream
   prebuilt release** (it has the auto-updater and the vanilla bugs).
 * Project: open **Vanilla112** in the start window. It points at a **copy** of the client
@@ -41,7 +41,7 @@ server\reextract.ps1 (maps, vmaps, mmaps into staging) ──► stop mangosd �
 
 ```powershell
 cd "<your WoW Custom Client folder>\WoWDataTool"
-$proj = "<your WoW Custom Client folder>\third_party\noggit-test\projects\Vanilla112"
+$proj = (Resolve-Path "..\third_party\noggit-test\projects\Vanilla112").Path
 
 .\wowdata.cmd map validate "$proj\World\Maps"             # every saved ADT/WDT/WDL, grouped per map
 .\wowdata.cmd map diff "$proj\World\Maps\Azeroth"          # each saved file against the client's original

@@ -1,6 +1,6 @@
 # restore_char.ps1 -- put the test character (guid 1000, Statclone) back at its start point after the visual test: exactly the "home" step of
 # WoWDecomp\tools\scenario.ps1 (playercreateinfo of an orc warlock; the position it had before this test), after it is offline.
-. '<your WoW Custom Client folder>\WoWDecomp\tools\lib_wowtest.ps1'
+. (Join-Path (Resolve-Path "$PSScriptRoot\..\..\..").Path 'WoWDecomp\tools\lib_wowtest.ps1')
 $mtx = New-Object Threading.Mutex($false, 'Global\WoWDecompClient')
 try { [void]$mtx.WaitOne() } catch [Threading.AbandonedMutexException] { }
 try {

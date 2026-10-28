@@ -658,7 +658,7 @@ What we already automate:
 
 ## Appendix A: probe scripts and outputs (scratch only)
 
-Folder: `<a scratch folder, not in the repo>`.
+Folder: `mapdelta\` in a scratch folder (not in the repo).
 These are read-only tools. They reference `WoWData.Core.dll` from `app\WoWData.Cli\bin\Release\net8.0-windows\win-x64`
 (the build from 07:49 today) and only read `G:\WoW Clients and Patches\Clients\`.
 

@@ -62,7 +62,7 @@ is. Terrain, textures and liquids alone are a useful first milestone. See sectio
 * Only `G:\WoW Clients and Patches\Clients\` was read (read-only, `open(..., 'rb')`). Executables were scanned as bytes.
   Nothing was launched. There was no network access and nothing was downloaded.
 * Probe scripts (Python 3.11, run with `-I`) are in
-  `<a scratch folder, not in the repo>`:
+  `casc_probe\` in a scratch folder (not in the repo):
 
 | Script | What it does |
 |---|---|

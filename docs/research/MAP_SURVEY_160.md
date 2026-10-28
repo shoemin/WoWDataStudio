@@ -49,7 +49,7 @@ Every tile of every map below was read: **no sampling** except two small diagnos
 
 ## 0. Method and probe
 
-Probe: `<a scratch folder, not in the repo>`
+Probe: `survey160\` in a scratch folder (not in the repo)
 (C# console app on `app\WoWData.Core\bin\Release\net8.0\WoWData.Core.dll`; `dotnet build -c Release -o out`).
 
 | Mode | Files | What it does |

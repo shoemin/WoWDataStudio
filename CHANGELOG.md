@@ -233,6 +233,17 @@ recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
   models full) with the GPU textures at about 115, and the second half of the run no longer rises. A terrain build
   keeps one image per texture for the whole build. Tests: `ImageCacheTests`.
 
+### Changed (repository)
+
+* **No personal folder paths in the repository.** The in-game test scripts (`tests\ingame\*.ps1`, `hotreload\`) find
+  the WoW Custom Client folder from their own location (`$PSScriptRoot`) instead of a hard-coded path; the README,
+  `MAPS_WORKFLOW.md`, `MAINTAINING.md`, `server\README.md`, the hot reload test plan and the research notes use
+  `<your WoW Custom Client folder>`, relative paths or "a scratch folder (not in the repo)"; `wowdata.example.json`
+  has neutral example paths (and is valid JSON again: its backslashes were not escaped); the licence names the
+  GitHub account. The Blender add-on's *WoWDataTool folder* preference is empty by default (found by itself when the
+  add-on runs from a WoWDataTool folder; else *Import from the game data* asks you to set it). All 152 screenshots
+  were made again from folders whose paths show no user name ([MAINTAINING.md](docs/manual/MAINTAINING.md#updating-screenshots)).
+
 ### Added (developers)
 
 * **`--leaktest <folder> [--cycles N] [--only views]`**: opens and closes the views many times (the 3D viewer, its
