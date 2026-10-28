@@ -4,7 +4,7 @@ What changed in each release of WoW Data Studio (the desktop app, `app\`). Bugs 
 listed in the manual's [Known issues](docs/manual/known-issues.md); when one is fixed it is removed from that list and
 recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
 
-## Unreleased
+## 0.15.0 (2026-10-28)
 
 ### Added
 
@@ -243,6 +243,9 @@ recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
   GitHub account. The Blender add-on's *WoWDataTool folder* preference is empty by default (found by itself when the
   add-on runs from a WoWDataTool folder; else *Import from the game data* asks you to set it). All 152 screenshots
   were made again from folders whose paths show no user name ([MAINTAINING.md](docs/manual/MAINTAINING.md#updating-screenshots)).
+* **No build folder in the shipped programs.** `app\Directory.Build.props` maps the `app\` folder to `/_/`
+  (`PathMap`), so `WoWDataStudio.dll`, `wds.dll` and `WoWData.Core.dll` no longer carry the local build folder in their
+  debug information and stack traces.
 
 ### Added (developers)
 
