@@ -84,8 +84,20 @@
                 </StackPanel>
             </Border>
 
+            <!-- ============================== TABS: Browse, Maps (M4) ============================== -->
+            <TabControl x:Name="Tabs" SelectedIndex="{Binding SelectedTab}" Margin="0,4,0,0" Padding="0" BorderThickness="0" Background="Transparent"
+                        Visibility="{Binding IsReady, Converter={StaticResource BoolVis}}">
+                <TabControl.Resources>
+                    <Style TargetType="TabPanel">
+                        <Setter Property="Margin" Value="12,0,0,0" />
+                    </Style>
+                </TabControl.Resources>
+                <TabItem Padding="14,6">
+                    <TabItem.Header>
+                        <TextBlock Text="Browse" FontWeight="SemiBold" />
+                    </TabItem.Header>
             <!-- ============================== BROWSE ============================== -->
-            <DockPanel Visibility="{Binding IsReady, Converter={StaticResource BoolVis}}">
+            <DockPanel>
                 <Border DockPanel.Dock="Top" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1" Padding="16,10,16,4">
                     <DockPanel>
                         <TextBlock DockPanel.Dock="Left" Text="Show:" VerticalAlignment="Top" Margin="0,5,10,0" Foreground="{StaticResource TextMuted}" />
@@ -273,6 +285,20 @@
                                         </StackPanel>
                                     </Border>
 
+                                    <!-- M4: the building preview of a WMO (groups and textures by FileDataID) -->
+                                    <Border x:Name="BuildingBox" Visibility="{Binding IsBuildingEntry, Converter={StaticResource BoolVis}}" Margin="0,4,0,0" s:Manual.Topic="other-versions">
+                                        <StackPanel>
+                                            <DockPanel Margin="0,0,0,6">
+                                                <Button DockPanel.Dock="Right" Command="{Binding ResetBuildingViewCommand}" Padding="10,4" VerticalAlignment="Bottom" Content="Reset view"
+                                                        ToolTip="Back to the start view (or double-click the view)." />
+                                                <TextBlock Text="BUILDING (3D)" Style="{StaticResource H3}" FontSize="11" VerticalAlignment="Bottom" Margin="0" />
+                                            </DockPanel>
+                                            <!-- the 3D view is made the first time a building is shown (code-behind): a GL view costs a context -->
+                                            <Border x:Name="BuildingHost" CornerRadius="6" Background="#FF2B3038" Height="380" ClipToBounds="True" />
+                                            <TextBlock Text="{Binding BuildingStatus}" Foreground="{StaticResource TextMuted}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                        </StackPanel>
+                                    </Border>
+
                                     <!-- textures -->
                                     <TextBlock Style="{StaticResource H3}" FontSize="11">
                                         <Run Text="TEXTURES IT USES" /> <Run Text="{Binding Textures.Count, Mode=OneWay, StringFormat=({0})}" />
@@ -348,6 +374,19 @@
                     </Border>
                 </Grid>
             </DockPanel>
+                </TabItem>
+
+                <!-- ============================== MAPS (M4) ============================== -->
+                <!-- its MapsView is made the first time the tab is shown (code-behind): its 3D view costs a GL context -->
+                <TabItem x:Name="MapsTabItem" Padding="14,6" s:Manual.Topic="other-versions">
+                    <TabItem.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE707;" FontFamily="Segoe MDL2 Assets" Margin="0,1,6,0" />
+                            <TextBlock Text="Maps" FontWeight="SemiBold" />
+                        </StackPanel>
+                    </TabItem.Header>
+                </TabItem>
+            </TabControl>
         </Grid>
     </DockPanel>
 </Window>

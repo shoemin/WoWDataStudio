@@ -264,7 +264,7 @@ public sealed partial class TerrainPopoutViewModel : PopoutViewModelBase
 
     private async Task BuildAsync(MapInfo map, int x, int y, bool neighbours)
     {
-        if (_maps.Session.Models == null) return;
+        if (_maps.Session.Looks == null) return;
         int token = ++_token;
         _cts?.Cancel();
         var cts = _cts = new CancellationTokenSource();
@@ -292,11 +292,14 @@ public sealed partial class TerrainPopoutViewModel : PopoutViewModelBase
         }
     }
 
+    /// <summary>M4: the breakdown is your 1.12 game's (hidden in the window of another version opened read only).</summary>
+    public bool CanBreakDown => _maps.CanEdit;
+
     /// <summary>"Break down this tile" for the tile this window shows (0.6.0).</summary>
     [RelayCommand]
     private void BreakDown()
     {
-        if (Map != null && TileX >= 0) _maps.OpenBreakdown(Map, TileX, TileY);
+        if (Map != null && TileX >= 0 && CanBreakDown) _maps.OpenBreakdown(Map, TileX, TileY);
     }
 
     /// <summary>The window closed: stop following, cancel a build.</summary>

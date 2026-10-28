@@ -6,10 +6,29 @@ using WoWData.Core.Workspace;
 
 namespace WoWData.Cli.Commands;
 
-/// <summary>maps (the Maps tab, Noggit, terrain in Blender) and server-maps (the guided server update).</summary>
+/// <summary>maps (the Maps tab, Noggit, terrain in Blender) and server-maps (the guided server update). M4: maps list /
+/// zones / tiles / minimap / tile / render also read another version opened read only (--version, through
+/// <see cref="IMapView"/>); the 1.12 output is unchanged.</summary>
 internal static class MapCommands
 {
-    private static MapCatalog Catalog(AppSession s) => s.MapCatalog ?? throw new CliError(ExitCode.Error, "The maps could not be read.");
+    private static IMapView Catalog(AppSession s) => s.Maps ?? throw new CliError(ExitCode.Error, "The maps could not be read.");
+    private static MapCatalog Catalog112(AppSession s) => s.MapCatalog ?? throw new CliError(ExitCode.Error, "The maps could not be read.");
+
+    /// <summary>M4: a picture of another version never goes into its client's folder.</summary>
+    private static string OutPng(AppSession s, Invocation inv)
+    {
+        var outFile = Path.GetFullPath(inv.Opt("out") ?? throw new CliError(ExitCode.Usage, "give --out <file.png>."));
+        if (s.Profile?.Copy is { } copy && (FindCommands.IsInside(outFile, copy.Folder) || (s.Files != null && FindCommands.IsInside(outFile, s.Files.Storage.DataDirectory))))
+            throw new CliError(ExitCode.Refused, $"Refusing to write into the folder of {copy.Name}: other versions are only read. Save the picture somewhere else.");
+        return outFile;
+    }
+
+    /// <summary>M4: a tile as terrain; a tile file another version cannot read is "not found" with its reason.</summary>
+    private static TerrainTile? Terrain(AppSession s, MapInfo map, int x, int y)
+    {
+        try { return Catalog(s).LoadTerrain(map, x, y); }
+        catch (IOException e) { throw new CliError(ExitCode.NotFound, e.Message); }
+    }
 
     private static MapInfo Map(AppSession s, string text) =>
         MapOperations.Find(Catalog(s), text) ?? throw new CliError(ExitCode.NotFound, $"no map \"{text}\" (a folder name like Azeroth, an id like 0, or a name like \"Eastern Kingdoms\"; \"wds maps list\" lists them).");
@@ -84,13 +103,15 @@ internal static class MapCommands
         {
             Path = "maps list",
             Summary = "every map of the Maps tab: continents, world maps, dungeons, raids, battlegrounds",
-            Examples = new[] { "wds maps list", "wds maps list --json" },
+            Examples = new[] { "wds maps list", "wds maps list --json", "wds maps list --version _classic_beta_" },
             Run = async inv =>
             {
                 var s = await inv.Ctx.SessionAsync();
-                var maps = MapOperations.ListedMaps(Catalog(s));
+                var cat = Catalog(s);
+                var maps = MapOperations.ListedMaps(cat);
                 var r = new CliResult().With(maps.Select(m => MapJson(m, s.Workspace)));
-                foreach (var l in Common.Table(new[] { "ID", "Folder", "Name", "Kind", "Tiles", "Changed" }, maps.Select(m => (IReadOnlyList<string>)new[] { m.Id.ToString(), m.Directory, m.Name, m.Kind, m.Detail, ChangeOperations.MapFiles(s.Workspace!, m).Count.ToString() }))) r.Line(l);
+                foreach (var l in Common.Table(new[] { "ID", "Folder", "Name", "Kind", "Tiles", "Changed" }, maps.Select(m => (IReadOnlyList<string>)new[] { m.Id.ToString(), m.Directory, m.Name, m.Kind, m.Detail, (s.Workspace == null ? 0 : ChangeOperations.MapFiles(s.Workspace, m).Count).ToString() }))) r.Line(l);
+                if (cat is MapCatalog160 other) r.Line("").Line($"{s.Profile!.VersionBuild}, read only: " + other.StatusText);
                 return r;
             },
         };
@@ -99,7 +120,7 @@ internal static class MapCommands
             Path = "maps zones",
             Summary = "the zones of a map (ZONES) with the tiles each covers",
             Args = new[] { "<map>" },
-            Examples = new[] { "wds maps zones Azeroth", "wds maps zones 1 --json" },
+            Examples = new[] { "wds maps zones Azeroth", "wds maps zones 1 --json", "wds maps zones Azeroth --version _classic_beta_" },
             Run = async inv =>
             {
                 var s = await inv.Ctx.SessionAsync();
@@ -116,20 +137,23 @@ internal static class MapCommands
             Summary = "the tiles of a map (the minimap), with the ones you changed and the ones Noggit saved that are not imported yet",
             Args = new[] { "<map>" },
             Options = new[] { new OptionSpec("changed", null, "only the tiles in your workspace (orange on the minimap)"), new OptionSpec("pending", null, "only the tiles Noggit saved that you did not import yet (dashed yellow)") },
-            Examples = new[] { "wds maps tiles Azeroth --changed", "wds maps tiles Kalimdor --json" },
+            Examples = new[] { "wds maps tiles Azeroth --changed", "wds maps tiles Kalimdor --json", "wds maps tiles DeadminesInstance --version _classic_beta_" },
             Run = async inv =>
             {
                 var s = await inv.Ctx.SessionAsync();
                 var map = Map(s, inv.Arg(0));
-                var changed = MapOperations.ChangedTiles(s.Workspace!, map).ToHashSet();
+                var changed = s.Workspace == null ? new HashSet<(int X, int Y)>() : MapOperations.ChangedTiles(s.Workspace, map).ToHashSet();
                 var pending = MapOperations.PendingTiles(s, map).ToHashSet();
+                var other = Catalog(s) as MapCatalog160;
                 var all = new List<(int X, int Y)>();
                 for (int y = 0; y < 64; y++) for (int x = 0; x < 64; x++) if (map.HasTile(x, y)) all.Add((x, y));
                 var list = all.Where(t => (!inv.Flag("changed") || changed.Contains(t)) && (!inv.Flag("pending") || pending.Contains(t))).ToList();
                 var r = new CliResult().With(new { map = map.Directory, total = map.TileCount, tiles = list.Select(t => new { x = t.X, y = t.Y, path = map.TilePath(t.X, t.Y), changed = changed.Contains(t), pending = pending.Contains(t) }) });
-                r.Line($"{map.Name}: {map.TileCount} tiles; {changed.Count} changed in your workspace; {pending.Count} saved by Noggit and not imported yet.");
+                if (other != null) r.Line($"{map.Name}: {map.TileCount} tiles ({s.Profile!.VersionBuild}, read only; the root file's FileDataID after each tile).");
+                else r.Line($"{map.Name}: {map.TileCount} tiles; {changed.Count} changed in your workspace; {pending.Count} saved by Noggit and not imported yet.");
+                if (map.Note != null) r.Line($"  {map.Note}.");
                 foreach (var t in list.Take(inv.Flag("changed") || inv.Flag("pending") ? int.MaxValue : 4096))
-                    r.Line($"  {t.X},{t.Y}  {map.TilePath(t.X, t.Y)}{(changed.Contains(t) ? "  [Modified]" : "")}{(pending.Contains(t) ? "  [saved by Noggit, not imported]" : "")}");
+                    r.Line($"  {t.X},{t.Y}  {map.TilePath(t.X, t.Y)}{(other?.TileFiles(map, t.X, t.Y) is { } maid ? $"  #{maid[0]}" : "")}{(changed.Contains(t) ? "  [Modified]" : "")}{(pending.Contains(t) ? "  [saved by Noggit, not imported]" : "")}");
                 return r;
             },
         };
@@ -139,15 +163,16 @@ internal static class MapCommands
             Summary = "the map's minimap overview as a PNG (the picture the Maps tab shows, cut into its tiles)",
             Args = new[] { "<map>" },
             Options = new[] { new OptionSpec("out", "file.png", "the PNG to write (required)"), new OptionSpec("cell", "pixels", "pixels per tile (default: 32, 64 or 128 by the map's size)") },
-            Examples = new[] { "wds maps minimap Azeroth --out azeroth.png", "wds maps minimap DeadminesInstance --out deadmines.png --cell 128" },
+            Examples = new[] { "wds maps minimap Azeroth --out azeroth.png", "wds maps minimap DeadminesInstance --out deadmines.png --cell 128", "wds maps minimap Azeroth --out azeroth160.png --version _classic_beta_" },
             Run = async inv =>
             {
                 var s = await inv.Ctx.SessionAsync();
                 var map = Map(s, inv.Arg(0));
                 if (map.IsGlobalWmo) return CliResult.Fail(ExitCode.NotFound, $"{map.Name} is a single building: it has no minimap tiles.");
-                var outFile = Path.GetFullPath(inv.Opt("out") ?? throw new CliError(ExitCode.Usage, "give --out <file.png>."));
+                if (map.TileCount == 0) return CliResult.Fail(ExitCode.NotFound, $"{map.Name} has no tiles to show" + (map.Note != null ? $": {map.Note}." : "."));
+                var outFile = OutPng(s, inv);
                 int cell = inv.IntOpt("cell") ?? (map.TileCount > 400 ? 32 : map.TileCount > 60 ? 64 : 128);
-                var ov = Catalog(s).Overview(map, cell, s.Client!.MinimapCacheDir, (a, b) => { if (a % 100 == 0) inv.Ctx.Progress($"  {a} of {b} tiles"); });
+                var ov = Catalog(s).Overview(map, cell, s.MinimapCacheDir, (a, b) => { if (a % 100 == 0) inv.Ctx.Progress($"  {a} of {b} tiles"); });
                 Directory.CreateDirectory(Path.GetDirectoryName(outFile)!);
                 Png.Save(ov.Image, outFile, false);
                 return new CliResult().With(new { map = map.Directory, file = outFile, width = ov.Image.Width, height = ov.Image.Height, cell = ov.Cell, minX = ov.MinX, minY = ov.MinY })
@@ -159,12 +184,14 @@ internal static class MapCommands
             Path = "maps tile",
             Summary = "a tile's details: zones, size, heights, doodads, buildings, water, and \"On this tile\" (what is placed and spawned there)",
             Args = new[] { "<map>", "<x>", "<y>" },
-            Examples = new[] { "wds maps tile Azeroth 32 48", "wds maps tile Kalimdor 40 41 --json" },
+            Examples = new[] { "wds maps tile Azeroth 32 48", "wds maps tile Kalimdor 40 41 --json", "wds maps tile Azeroth 32 48 --version _classic_beta_" },
             Run = async inv =>
             {
                 var s = await inv.Ctx.SessionAsync();
                 var (map, x, y) = Tile(s, inv);
-                var t = MapOperations.Summarize(s, map, x, y);
+                TileSummary t;
+                try { t = MapOperations.Summarize(s, map, x, y); }
+                catch (IOException e) { throw new CliError(ExitCode.NotFound, e.Message); }
                 var r = new CliResult().With(new { map = map.Directory, x, y, path = t.Path, modified = t.Modified, facts = t.Facts, zones = t.Zones.Select(z => new { area = z.Area, name = z.Name, chunks = z.Chunks }), report = FindCommands.ReportJson(t.Report) });
                 r.Line($"{map.Name}, tile {x},{y}: {t.Path}{(t.Modified ? "  [Modified]" : "")}");
                 foreach (var f in t.Facts) r.Line("* " + f);
@@ -224,15 +251,14 @@ internal static class MapCommands
                 new OptionSpec("size", "pixels", "the picture's size (default 512)"),
             },
             Details = "The interactive 3D view of a tile is in the app (Maps tab); this draws the previews of the tile breakdown (\"On its own\").",
-            Examples = new[] { "wds maps render Azeroth 32 48 --out relief.png", "wds maps render Azeroth 32 48 --kind heights --chunks 0,1,2 --out heights.png", "wds maps render Azeroth 32 48 --kind texture --texture Tileset\\Elwynn\\ElwynnGrassBase.blp --out grass.png" },
+            Examples = new[] { "wds maps render Azeroth 32 48 --out relief.png", "wds maps render Azeroth 32 48 --kind heights --chunks 0,1,2 --out heights.png", "wds maps render Azeroth 32 48 --kind texture --texture Tileset\\Elwynn\\ElwynnGrassBase.blp --out grass.png", "wds maps render Azeroth 32 48 --out relief160.png --version _classic_beta_" },
             Run = async inv =>
             {
                 var s = await inv.Ctx.SessionAsync();
                 var (map, x, y) = Tile(s, inv);
-                var outFile = Path.GetFullPath(inv.Opt("out") ?? throw new CliError(ExitCode.Usage, "give --out <file.png>."));
+                var outFile = OutPng(s, inv);
                 int size = inv.IntOpt("size") ?? 512;
-                var data = s.ReadCurrent(map.TilePath(x, y)) ?? throw new CliError(ExitCode.NotFound, $"{map.TilePath(x, y)} could not be read.");
-                var tile = TerrainTile.Load(data, map.Directory, x, y);
+                var tile = Terrain(s, map, x, y) ?? throw new CliError(ExitCode.NotFound, $"{map.TilePath(x, y)} could not be read.");
                 var kind = (inv.Opt("kind") ?? "relief").ToLowerInvariant();
                 RgbaImage img = kind switch
                 {
@@ -460,7 +486,7 @@ internal static class MapCommands
             Run = async inv =>
             {
                 var s = await inv.Ctx.SessionAsync();
-                var u = new ServerMapsUpdater(s, Catalog(s));
+                var u = new ServerMapsUpdater(s, Catalog112(s));
                 var (patchOk, patchText) = u.PatchState();
                 var (running, serverText) = u.ServerState();
                 var rep = u.Report();
@@ -487,7 +513,7 @@ internal static class MapCommands
             Run = async inv =>
             {
                 var s = await inv.Ctx.SessionAsync();
-                var u = new ServerMapsUpdater(s, Catalog(s));
+                var u = new ServerMapsUpdater(s, Catalog112(s));
                 var steps = Steps(inv);
                 var (patchOk, patchText) = u.PatchState();
                 var r = new CliResult();
@@ -510,7 +536,7 @@ internal static class MapCommands
             Run = async inv =>
             {
                 var s = await inv.Ctx.SessionAsync();
-                var u = new ServerMapsUpdater(s, Catalog(s));
+                var u = new ServerMapsUpdater(s, Catalog112(s));
                 if (!inv.DryRun)
                 {
                     var (running, text) = u.ServerState();
@@ -532,7 +558,7 @@ internal static class MapCommands
             Run = async inv =>
             {
                 var s = await inv.Ctx.SessionAsync();
-                var u = new ServerMapsUpdater(s, Catalog(s));
+                var u = new ServerMapsUpdater(s, Catalog112(s));
                 var last = u.LastUpdate();
                 if (last == null) return new CliResult().Line("No server update was done through the app yet (or it was already undone): nothing to undo.").With(new { undone = false });
                 var (running, text) = u.ServerState();

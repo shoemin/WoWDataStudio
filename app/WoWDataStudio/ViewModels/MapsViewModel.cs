@@ -19,13 +19,19 @@ namespace WoWDataStudio.ViewModels;
 /// zones of the selected map (AreaTable), its minimap overview (click a tile), the tile's details with a "Used in game"
 /// style list of what is placed on it, the 3D terrain preview, and the map workflow: Edit in Noggit, Import map
 /// changes (review + compare), Test in game, Build release patch and Update server maps.
+/// M4 (docs\research\OPEN_OTHER_VERSIONS_DESIGN.md): the same tab in the read-only window of another version
+/// (<see cref="MapsViewModel(AppSession, Func{string, bool}, Action{string})"/>): maps, zones, minimap, tile details and
+/// the 3D view through <see cref="IMapView"/>; the editing parts are hidden (<see cref="CanEdit"/>) and never run.
 /// </summary>
 public sealed partial class MapsViewModel : ObservableObject
 {
     private readonly AppSession _session;
     public AppSession Session => _session;
-    private readonly MainViewModel _main;
-    private readonly BrowserViewModel _browser;
+    private readonly MainViewModel? _main;
+    private readonly BrowserViewModel? _browser;
+    /// <summary>The main window (your 1.12 game only; the editing commands use it).</summary>
+    private MainViewModel Main => _main ?? throw new InvalidOperationException("Another version is open read only.");
+    private BrowserViewModel Browser => _browser ?? throw new InvalidOperationException("Another version is open read only.");
     private int _overviewToken, _tileToken, _previewToken;
     private bool _loaded;
 
@@ -45,6 +51,32 @@ public sealed partial class MapsViewModel : ObservableObject
         Scene.Background = new System.Numerics.Vector3(0.55f, 0.68f, 0.82f);
         if (session.Workspace != null) session.Workspace.Changed += (_, _) => Application.Current?.Dispatcher.BeginInvoke(RefreshChangedTiles);
     }
+
+    /// <summary>M4: the Maps tab of another version opened read only: "On this tile" links go to the read-only
+    /// window's Browse list (<paramref name="canNavigate"/>, <paramref name="navigate"/>); nothing can be edited.</summary>
+    public MapsViewModel(AppSession session, Func<string, bool> canNavigate, Action<string> navigate)
+    {
+        _session = session;
+        _readOnly = true;
+        TileUsage = new UsedInGameViewModel(session) { CanNavigate = canNavigate, ServerParts = false };
+        TileUsage.NavigateRequested += navigate;
+        Scene.Background = new System.Numerics.Vector3(0.55f, 0.68f, 0.82f);
+    }
+
+    /// <summary>M4: the open game can be edited (your 1.12 game): the edit buttons, Noggit, the breakdown, the
+    /// specular-ground choice and the workspace legend show; false in the read-only window of another version.</summary>
+    public bool CanEdit => !_readOnly && (_session.Profile?.Has(WoWData.Core.Versions.GameCaps.Edit) ?? true);
+    private readonly bool _readOnly;
+
+    /// <summary>The text of the tile panel before a tile is picked.</summary>
+    public string EmptyTileText => CanEdit
+        ? "Pick a map on the left, then click one of its tiles (or a zone). The tile's zones, what is placed on it and a 3D view of its terrain appear here, with the buttons to edit it in Noggit and bring your changes back."
+        : "Pick a map on the left, then click one of its tiles (or a zone). The tile's zones, what is placed on it and a 3D view of its terrain appear here. This version is only read: nothing here changes it.";
+
+    /// <summary>The help line under the minimap.</summary>
+    public string MinimapHelp => CanEdit
+        ? "Click a tile to select it. Mouse wheel: zoom. Right-drag: move. Double-click: fit. Blue: selected tile. Orange: changed in your workspace. Dashed yellow: saved by Noggit, not imported yet."
+        : "Click a tile to select it. Mouse wheel: zoom. Right-drag: move. Double-click: fit. Blue: selected tile. Lit: the tiles of the selected zone.";
 
     public ObservableCollection<MapInfo> Maps { get; } = new();
     [ObservableProperty] private MapInfo? _selectedMap;
@@ -204,17 +236,19 @@ public sealed partial class MapsViewModel : ObservableObject
         try
         {
             Status = "Reading the maps...";
-            var cat = await Task.Run(() => _session.MapCatalog);
+            var cat = await Task.Run(() => _session.Maps);
             if (cat == null) return;
             foreach (var m in MapOperations.ListedMaps(cat)) Maps.Add(m);
             Status = $"{Maps.Count} maps: {Maps.Count(m => m.Kind == "Continent")} continents, {Maps.Count(m => m.InstanceType == 1)} dungeons, {Maps.Count(m => m.InstanceType == 2)} raids, {Maps.Count(m => m.InstanceType == 3)} battlegrounds.";
+            if (cat is MapCatalog160 other) Status += " " + other.StatusText;
             SelectedMap ??= Maps.FirstOrDefault(m => m.Directory.Equals("Azeroth", StringComparison.OrdinalIgnoreCase)) ?? Maps.FirstOrDefault();
         }
-        catch (Exception e) when (e is IOException or InvalidOperationException or WoWData.Core.Dbc.DbcException)
+        catch (Exception e) when (e is IOException or InvalidOperationException or WoWData.Core.Dbc.DbcException or NotSupportedException or InvalidDataException or WoWData.Core.Db2.Db2FormatException)
         {
             Status = "The maps could not be read: " + e.Message;
         }
     }
+
 
     partial void OnSelectedMapChanged(MapInfo? value)
     {
@@ -232,13 +266,20 @@ public sealed partial class MapsViewModel : ObservableObject
     private async Task LoadMapAsync(MapInfo map)
     {
         int token = ++_overviewToken;
-        var cat = _session.MapCatalog!;
+        var cat = _session.Maps!;
         Tiles = map.Tiles;
         Overview = null;
         RefreshChangedTiles();
+        if (map.Note != null)
+        {
+            OverviewStatus = $"{map.Name}: {map.Note}.";
+            return;
+        }
         if (map.IsGlobalWmo)
         {
-            OverviewStatus = $"{map.Name} is a single building ({map.GlobalWmo}): it has no terrain tiles to show or edit here. Its building can be looked at in the Browse tab.";
+            OverviewStatus = CanEdit
+                ? $"{map.Name} is a single building ({map.GlobalWmo}): it has no terrain tiles to show or edit here. Its building can be looked at in the Browse tab."
+                : $"{map.Name} is a single building ({map.GlobalWmo}): it has no terrain tiles. Search for it in the Browse tab to see the building in 3D.";
             return;
         }
         OverviewStatus = "Building the minimap overview...";
@@ -248,7 +289,7 @@ public sealed partial class MapsViewModel : ObservableObject
         {
             var (ov, zones) = await Task.Run(() =>
             {
-                var o = cat.Overview(map, cell, _session.Client?.MinimapCacheDir, (a, b) => ((IProgress<(int, int)>)progress).Report((a, b)));
+                var o = cat.Overview(map, cell, _session.MinimapCacheDir, (a, b) => ((IProgress<(int, int)>)progress).Report((a, b)));
                 var z = cat.Zones(map);
                 return (o, z);
             });
@@ -340,9 +381,10 @@ public sealed partial class MapsViewModel : ObservableObject
                 if ((dx != 0 || dy != 0) && !neighbours) continue;
                 int tx = x + dx, ty = y + dy;
                 if (!map.HasTile(tx, ty)) continue;
-                var data = _session.ReadCurrent(map.TilePath(tx, ty));
-                if (data == null) continue;
-                var t = TerrainTile.Load(data, map.Directory, tx, ty);
+                TerrainTile? t;
+                try { t = _session.Maps!.LoadTerrain(map, tx, ty); }
+                catch (IOException) when (dx != 0 || dy != 0) { continue; }     // a neighbour another version cannot read
+                if (t == null) continue;
                 if (dx == 0 && dy == 0) list.Insert(0, t);
                 else list.Add(t);
             }
@@ -351,11 +393,23 @@ public sealed partial class MapsViewModel : ObservableObject
 
     public TerrainAsset BuildAsset(IReadOnlyList<TerrainTile> tiles, CancellationToken ct = default)
     {
-        var res = _session.Models!;
+        var res = _session.Looks!;
         // one image per texture for the whole build (the resolver's cache is bounded since 0.14.0 and may forget a texture
         // in the middle of a large build: the doodads sharing it would get two copies, on the GPU too)
         var once = new System.Collections.Concurrent.ConcurrentDictionary<string, WoWData.Core.Imaging.RgbaImage?>(StringComparer.OrdinalIgnoreCase);
-        return TerrainAsset.Build(tiles, p => _session.ReadCurrent(p), p => once.GetOrAdd(p, res.LoadBlp), new TerrainBuildOptions(SpecularGround: _session.SpecularGround, Exists: _session.FileExists), ct);
+        var opts = CanEdit || _session.Files == null
+            ? new TerrainBuildOptions(SpecularGround: _session.SpecularGround, Exists: _session.FileExists)
+            : OtherBuildOptions(_session);
+        return TerrainAsset.Build(tiles, p => _session.ReadCurrent(p), p => once.GetOrAdd(p, res.LoadBlp), opts, ct);
+    }
+
+    /// <summary>M4: how another version's tile is built: its models by the modern reader, its buildings and textures by
+    /// FileDataID; its ground textures are the files the map names (no "_s" choice: 1.60 names them already).</summary>
+    public static TerrainBuildOptions OtherBuildOptions(AppSession session)
+    {
+        var files = session.Files!;
+        var models = session.ModelSource!;
+        return new TerrainBuildOptions(Exists: session.FileExists, LoadModel: models.Load, NameOf: (id, ext) => WoWData.Core.M2.Modern.ModernModelSource.NameOf(files, id, ext));
     }
 
     // ------------------------------------------------------------------ ground textures: base or "_s" (0.6.1)
@@ -364,13 +418,13 @@ public sealed partial class MapsViewModel : ObservableObject
     /// the game's own setting (Config.wtf); ticking it differently is remembered.</summary>
     public bool SpecularGround
     {
-        get => _session.SpecularGround;
+        get => CanEdit && _session.SpecularGround;
         set
         {
-            if (value == SpecularGround) return;
+            if (value == SpecularGround || !CanEdit) return;
             _session.Settings.GroundTextures = value == _session.GameSpecular.UsesSpecularTextures ? GroundTextureMode.AsTheGame
                 : value ? GroundTextureMode.Specular : GroundTextureMode.Base;
-            _main.SaveSettings();
+            Main.SaveSettings();
             OnPropertyChanged();
             OnPropertyChanged(nameof(GroundRuleText));
             _ = BuildPreviewAsync();
@@ -387,7 +441,7 @@ public sealed partial class MapsViewModel : ObservableObject
     public async Task BuildPreviewAsync()
     {
         var map = SelectedMap;
-        if (map == null || SelectedTile == null || _session.Models == null) return;
+        if (map == null || SelectedTile == null || _session.Looks == null) return;
         int x = TileX, y = TileY;
         int token = ++_previewToken;
         _previewCts?.Cancel();
@@ -458,6 +512,7 @@ public sealed partial class MapsViewModel : ObservableObject
     private bool RequireMap()
     {
         if (SelectedMap != null) return true;
+        if (_browser == null) return false;
         _browser.SelectedTab = BrowserViewModel.MapsTab;
         Dialogs.Info("Select a map first", "In the Maps tab, pick a map on the left and click a tile on the minimap, then try again.");
         return false;
@@ -481,17 +536,17 @@ public sealed partial class MapsViewModel : ObservableObject
             NoggitPrepared prepared;
             try
             {
-                prepared = await _main.RunBusyAsync("Preparing Noggit's client view...", () => Task.Run(() => MapOperations.PrepareNoggit(_session, map, x, y, false)));
+                prepared = await Main.RunBusyAsync("Preparing Noggit's client view...", () => Task.Run(() => MapOperations.PrepareNoggit(_session, map, x, y, false)));
             }
             catch (NoggitException e) when (e.NeedsCopy)
             {
                 if (!Dialogs.Confirm("Copy the game's archives for Noggit?", e.Message, "Copy the archives (about 5 GB)", "Cancel", DialogKind.Question)) return;
-                prepared = await _main.RunBusyAsync("Copying the game's archives for Noggit (this takes a few minutes)...", () => Task.Run(() => MapOperations.PrepareNoggit(_session, map, x, y, true)));
+                prepared = await Main.RunBusyAsync("Copying the game's archives for Noggit (this takes a few minutes)...", () => Task.Run(() => MapOperations.PrepareNoggit(_session, map, x, y, true)));
             }
             var vm = new NoggitLaunchViewModel(prepared.Info, prepared.NoggitExe, prepared.Synced, prepared.AlreadyRunning);
             var win = new NoggitWindow(vm) { Owner = Application.Current.MainWindow };
             win.ShowDialog();
-            if (vm.SettingsRequested) _main.OpenSettingsCommand.Execute(null);
+            if (vm.SettingsRequested) Main.OpenSettingsCommand.Execute(null);
         }
         catch (Exception e) when (e is NoggitException or IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
         {
@@ -510,7 +565,7 @@ public sealed partial class MapsViewModel : ObservableObject
         if (map == null || noggit == null || _session.Data == null || _session.Workspace == null) return;
         try
         {
-            var analysis = await _main.RunBusyAsync("Checking the files Noggit saved...", () => Task.Run(() => MapOperations.AnalyzeNoggit(_session, map)));
+            var analysis = await Main.RunBusyAsync("Checking the files Noggit saved...", () => Task.Run(() => MapOperations.AnalyzeNoggit(_session, map)));
             if (analysis.Changes.Count == 0 || analysis.NothingChanged)
             {
                 Dialogs.Info("Import map changes", string.Join("\n\n", analysis.General.DefaultIfEmpty("No changes found.")), $"Noggit's save folder for this map: {noggit.SaveDir(map)}");
@@ -538,8 +593,8 @@ public sealed partial class MapsViewModel : ObservableObject
         if (vm.FromBlender) Manual.SetTopic(win, "terrain-in-blender");     // F1: the terrain-in-Blender chapter
         if (win.ShowDialog() != true) return;
         var ws = _session.Workspace!;
-        var cs = await _main.RunBusyAsync("Saving the map changes to your workspace...", () => Task.Run(() => MapImporter.Commit(analysis, ws)));
-        _main.Toast($"Saved {cs.Files.Count} map file{(cs.Files.Count == 1 ? "" : "s")} into your workspace (\"{cs.Label}\"). Next: Test in game or Build release patch, then Update server maps.");
+        var cs = await Main.RunBusyAsync("Saving the map changes to your workspace...", () => Task.Run(() => MapImporter.Commit(analysis, ws)));
+        Main.Toast($"Saved {cs.Files.Count} map file{(cs.Files.Count == 1 ? "" : "s")} into your workspace (\"{cs.Label}\"). Next: Test in game or Build release patch, then Update server maps.");
         RefreshChangedTiles();
         await LoadTileAsync();
     }
@@ -567,7 +622,7 @@ public sealed partial class MapsViewModel : ObservableObject
         var map = _session.MapCatalog?.ByDirectory(path.Split('\\').ElementAtOrDefault(2) ?? "");
         var xy = MapValidator.TileXY(path);
         if (map == null || xy == null || MapValidator.KindOf(path) != "adt") return null;
-        return await _main.RunBusyAsync("Building the two 3D views...", () => Task.Run(() =>
+        return await Main.RunBusyAsync("Building the two 3D views...", () => Task.Run(() =>
         {
             var b = before != null ? TerrainTile.Load(before, map.Directory, xy.Value.X, xy.Value.Y) : null;
             var a = TerrainTile.Load(after, map.Directory, xy.Value.X, xy.Value.Y);
@@ -617,8 +672,8 @@ public sealed partial class MapsViewModel : ObservableObject
     public async Task RevertPathsAsync(MapInfo map, IEnumerable<string> paths)
     {
         var list = paths.ToList();
-        var done = await _main.RunBusyAsync("Reverting...", () => Task.Run(() => list.SelectMany(p => ChangeOperations.Revert(_session, p, null)).ToList()));
-        _main.Toast(done.LastOrDefault() ?? "Reverted.");
+        var done = await Main.RunBusyAsync("Reverting...", () => Task.Run(() => list.SelectMany(p => ChangeOperations.Revert(_session, p, null)).ToList()));
+        Main.Toast(done.LastOrDefault() ?? "Reverted.");
         RefreshChangedTiles();
         await LoadTileAsync();
     }
@@ -646,18 +701,18 @@ public sealed partial class MapsViewModel : ObservableObject
         int pick = Dialogs.Show("Test in game (install map files as loose files)",
             $"This copies your {paths.Count} changed map file{(paths.Count == 1 ? "" : "s")} of {SelectedMap!.Name} into the game folder:\n{ws.Paths.DataDir}\\World\\Maps\\{SelectedMap.Directory}\\\n\n" +
             "The game reads loose files only with its loose-file mode on (the project's own client from update wave185 on; a normal 1.12.1 client ignores them: use \"Build release patch\" there). Restart the game, or teleport away and back, to see the change.\n\n" + ServerNote,
-            DialogKind.Info, new[] { "Install into the game folder", "Cancel" }, string.Join("\n", paths), "How the loose-file mode works (LOOSE_FILES_PATCH.md)", _main.LooseFilesDoc);
+            DialogKind.Info, new[] { "Install into the game folder", "Cancel" }, string.Join("\n", paths), "How the loose-file mode works (LOOSE_FILES_PATCH.md)", Main.LooseFilesDoc);
         if (pick != 0) return;
         try
         {
             List<DeliveryAction> actions;
-            try { actions = await _main.RunBusyAsync("Installing...", () => Task.Run(() => ws.InstallLoose(paths))); }
+            try { actions = await Main.RunBusyAsync("Installing...", () => Task.Run(() => ws.InstallLoose(paths))); }
             catch (WorkspaceException e) when (ChangeOperations.IsForeignFileRefusal(e))
             {
                 if (!Dialogs.Confirm("A file is already there", e.Message + "\n\nReplace it? The existing file is backed up first and restored when you remove your change from the game.", "Back it up and replace it", "Cancel", DialogKind.Warning)) return;
-                actions = await _main.RunBusyAsync("Installing...", () => Task.Run(() => ws.InstallLoose(paths, force: true)));
+                actions = await Main.RunBusyAsync("Installing...", () => Task.Run(() => ws.InstallLoose(paths, force: true)));
             }
-            await _browser.AfterGameFilesChangedAsync("Installed", $"{actions.Count} map file{(actions.Count == 1 ? " was" : "s were")} copied into the game folder. Restart the game to see the change.\n\nRemember: " + ServerNote,
+            await Browser.AfterGameFilesChangedAsync("Installed", $"{actions.Count} map file{(actions.Count == 1 ? " was" : "s were")} copied into the game folder. Restart the game to see the change.\n\nRemember: " + ServerNote,
                 string.Join("\n", actions.Select(a => $"{a.Action}: {a.Dest}")), actions.Select(a => a.Path).ToList());
         }
         catch (Exception e) when (e is WorkspaceException or IOException or UnauthorizedAccessException)
@@ -667,14 +722,14 @@ public sealed partial class MapsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void BuildPatch() => _browser.BuildPatchCommand.Execute(null);
+    private void BuildPatch() => Browser.BuildPatchCommand.Execute(null);
 
     [RelayCommand]
     private void UpdateServer()
     {
         var cat = _session.MapCatalog;
         if (_session.Workspace == null || cat == null || _session.Client == null) return;
-        var vm = new ServerUpdateViewModel(_session, _main, cat);
+        var vm = new ServerUpdateViewModel(_session, Main, cat);
         var win = new ServerUpdateWindow(vm) { Owner = Application.Current.MainWindow };
         win.Show();
     }

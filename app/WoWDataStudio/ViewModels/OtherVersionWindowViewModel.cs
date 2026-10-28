@@ -30,6 +30,8 @@ public sealed class OtherFileRow
 /// next to your 1.12 window: its own <see cref="AppSession"/> (no workspace), Browse (search, type filters, details
 /// with FileDataIDs, name sources and lock states) and the texture viewer with PNG export. Nothing here can change the
 /// client: there is no edit, import, install or server command in this window.
+/// M4: a Maps tab (the same view as in your game's window, <see cref="MapsViewModel"/> read only) and the building
+/// preview of a WMO entry (its groups by FileDataID, <see cref="WoWData.Core.Maps.WmoGeometry"/>).
 /// </summary>
 public sealed partial class OtherVersionWindowViewModel : ObservableObject, IDisposable, IModelViewerHost
 {
@@ -83,6 +85,121 @@ public sealed partial class OtherVersionWindowViewModel : ObservableObject, IDis
             Chips.Add(chip);
         }
         Title = $"{copy.Name} - read only";
+        Maps = new MapsViewModel(Session, k => Session.FindEntry(k) != null, k => _ = NavigateToKeyAsync(k));
+        Maps.PopOutCommand = OpenTerrainPopoutCommand;
+        BuildingScene.Background = new System.Numerics.Vector3(0.55f, 0.68f, 0.82f);
+    }
+
+    /// <summary>M4: the Maps tab of this version (read only).</summary>
+    public MapsViewModel Maps { get; }
+    /// <summary>The tabs: 0 Browse, 1 Maps.</summary>
+    public const int BrowseTab = 0, MapsTab = 1;
+    [ObservableProperty] private int _selectedTab;
+
+    partial void OnSelectedTabChanged(int value)
+    {
+        if (value == MapsTab && IsReady) _ = Maps.EnsureLoadedAsync();
+    }
+
+    /// <summary>"On this tile" clicked a file: its entry in the Browse tab.</summary>
+    public async Task NavigateToKeyAsync(string key)
+    {
+        var e = Session.FindEntry(key);
+        if (e == null) return;
+        SelectedTab = BrowseTab;
+        foreach (var c in Chips) c.IsChecked = true;
+        SearchText = System.IO.Path.GetFileName(e.Path ?? e.Name);
+        _searchTimer.Stop();
+        await ApplyFilterAsync();
+        SelectedRow = Results.FirstOrDefault(r => ReferenceEquals(r.Entry, e)) ?? Results.FirstOrDefault(r => r.Entry.Key == e.Key);
+        ScrollRequested?.Invoke();
+    }
+
+    /// <summary>The Browse list scrolls to the selected row (after a navigation).</summary>
+    public event Action? ScrollRequested;
+
+    // ------------------------------------------------------------------ M4: building preview (WMO entries)
+
+    public WoWDataStudio.Rendering.TerrainScene BuildingScene { get; } = new();
+    public WoWDataStudio.Rendering.OrbitCamera BuildingCamera { get; } = new();
+    [ObservableProperty] private bool _isBuildingEntry;
+    [ObservableProperty] private string _buildingStatus = "";
+    private int _buildingToken;
+
+    /// <summary>Shows a building (root .wmo) in the preview: its groups by FileDataID with the first texture of each batch.</summary>
+    public async Task LoadBuildingAsync(string path)
+    {
+        int token = ++_buildingToken;
+        BuildingStatus = "Loading the building...";
+        BuildingScene.Asset = null;
+        var files = Session.Files;
+        var looks = Session.Looks;
+        if (files == null || looks == null) return;
+        try
+        {
+            var (asset, geo) = await Task.Run(() =>
+            {
+                Func<uint, string, string> nameOf = (id, ext) => WoWData.Core.M2.Modern.ModernModelSource.NameOf(files, id, ext);
+                var g = WoWData.Core.Maps.WmoGeometry.Load(path, p => Session.ReadCurrent(p), nameOf);
+                var a = WoWDataStudio.Rendering.TerrainAsset.BuildBuilding(path, p => Session.ReadCurrent(p), looks.LoadBlp, nameOf);
+                return (a, g);
+            });
+            if (token != _buildingToken) return;
+            BuildingScene.Asset = asset;
+            BuildingCamera.HomeYaw = 30;
+            BuildingCamera.HomePitch = 25;
+            BuildingCamera.Frame(asset.BoundsMin, asset.BoundsMax);
+            BuildingStatus = BuildingText(asset, geo);
+            // its textures in "Textures it uses" (click one to see it in the texture viewer)
+            foreach (var tp in asset.TexturePaths)
+                if (!Textures.Any(t => string.Equals(t.Path, tp, StringComparison.OrdinalIgnoreCase)))
+                    Textures.Add(new TextureItem(new TextureRef(tp, "building texture", "CASC", ""), false));
+        }
+        catch (Exception e) when (e is IOException or InvalidOperationException or ArgumentException or IndexOutOfRangeException)
+        {
+            if (token == _buildingToken) BuildingStatus = "The building could not be shown: " + e.Message;
+        }
+    }
+
+    /// <summary>What the building preview shows, in words.</summary>
+    public static string BuildingText(WoWDataStudio.Rendering.TerrainAsset a, WoWData.Core.Maps.WmoGeometry? geo)
+    {
+        var mesh = a.Wmos.Count > 0 ? a.Wmos[0].Mesh : null;
+        int tris = mesh == null ? 0 : mesh.Indices.Length / 3;
+        int groups = geo?.Groups.Count ?? 0, total = geo?.GroupCount ?? 0;
+        var t = $"{groups} of {total} groups, {tris:N0} triangles, {a.Textures.Count(x => x != null)} of {a.TexturePaths.Count} textures";
+        if (geo != null && geo.DoodadModels.Count > 0) t += $"; {geo.DoodadModels.Count} doodad models listed (MODI), not drawn";
+        if (geo?.FileDataIdMode == true) t += "; groups and textures by FileDataID (GFID, MOMT)";
+        return t + $". Built in {a.BuildTime.TotalMilliseconds:0} ms.";
+    }
+
+    [RelayCommand]
+    private void ResetBuildingView() => BuildingCamera.ResetView();
+
+    // ------------------------------------------------------------------ M4: terrain pop-out
+
+    /// <summary>This window's terrain pop-out windows (closed with it).</summary>
+    public List<Views.TerrainPopoutWindow> TerrainPopouts { get; } = new();
+
+    [RelayCommand]
+    private void OpenTerrainPopout() => OpenTerrainPopoutWindow();
+
+    /// <summary>A pop-out 3D window on the tile selected in the Maps tab (following the selection or pinned).</summary>
+    public Views.TerrainPopoutWindow? OpenTerrainPopoutWindow(Action<Views.TerrainPopoutWindow>? beforeShow = null)
+    {
+        var map = Maps.SelectedMap;
+        if (map == null || Maps.SelectedTile is not { } t) return null;
+        var settings = Session.Settings.Popout("terrain");
+        var vm = new TerrainPopoutViewModel(Maps);
+        var win = new Views.TerrainPopoutWindow(vm, settings, () => Session.Settings.Save(_paths));
+        if (settings.Placement == null) win.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen;
+        win.Closed += (_, _) => TerrainPopouts.Remove(win);
+        beforeShow?.Invoke(win);
+        TerrainPopouts.Add(win);
+        win.Show();
+        vm.ShowTile(map, (int)t.X, (int)t.Y);
+        if (vm.Scene.Asset != null && ReferenceEquals(vm.Scene.Asset, Maps.Scene.Asset)) vm.Camera.CopyFrom(Maps.Camera);
+        return win;
     }
 
     public ClientCopy Copy => _copy;
@@ -158,6 +275,7 @@ public sealed partial class OtherVersionWindowViewModel : ObservableObject, IDis
             IsOrganizing = false;
             IsReady = true;
             await ApplyFilterAsync();
+            if (SelectedTab == MapsTab) _ = Maps.EnsureLoadedAsync();
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException or InvalidDataException or ArgumentException
                                        or WoWData.Core.Casc.CascMissingException or WoWData.Core.Db2.Db2FormatException or Microsoft.Data.Sqlite.SqliteException)
@@ -246,6 +364,8 @@ public sealed partial class OtherVersionWindowViewModel : ObservableObject, IDis
             Viewer.Clear();
             IsModelEntry = false;
             ModelViewer.Clear();
+            IsBuildingEntry = false;
+            BuildingScene.Asset = null;
             return;
         }
         var entry = row.Entry;
@@ -257,7 +377,17 @@ public sealed partial class OtherVersionWindowViewModel : ObservableObject, IDis
         Facts = d.Facts;
         UsedBy = d.UsedBy;
         Files = d.Files.Select(f => new OtherFileRow(f)).ToList();
-        IsModelEntry = entry.Kind != AssetKind.Texture && d.Models.Count > 0;
+        // M4: a building (a root .wmo and no .m2) shows in the building preview
+        var building = entry.Kind == AssetKind.Texture || d.Models.Any(m => m.EndsWith(".m2", StringComparison.OrdinalIgnoreCase)) ? null
+            : d.Models.FirstOrDefault(m => m.EndsWith(".wmo", StringComparison.OrdinalIgnoreCase));
+        IsBuildingEntry = building != null;
+        if (building != null) _ = LoadBuildingAsync(building);
+        else
+        {
+            ++_buildingToken;
+            BuildingScene.Asset = null;
+        }
+        IsModelEntry = entry.Kind != AssetKind.Texture && d.Models.Count > 0 && building == null;
         if (IsModelEntry)
         {
             _ = ModelViewer.LoadAsync(entry, d);
@@ -392,6 +522,9 @@ public sealed partial class OtherVersionWindowViewModel : ObservableObject, IDis
         _disposed = true;
         _searchTimer.Stop();
         foreach (var w in ModelPopouts.ToList()) w.Close();
+        foreach (var w in TerrainPopouts.ToList()) w.Close();
+        Maps.Scene.Asset = null;
+        BuildingScene.Asset = null;
         ModelViewer.Clear();
         ModelCache.Clear();
         Viewer.Clear();

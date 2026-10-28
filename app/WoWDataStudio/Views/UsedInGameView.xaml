@@ -13,7 +13,7 @@
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                 <Button Content="Back" Command="{Binding BackCommand}" Visibility="{Binding CanGoBack, Converter={StaticResource BoolVis}}" Padding="8,2" Margin="0,0,6,0"
                         ToolTip="Go back to the entry you came from (after clicking a name)." />
-                <Button Content="Refresh server data" Command="{Binding RefreshServerCommand}" Padding="8,2"
+                <Button Content="Refresh server data" Command="{Binding RefreshServerCommand}" Padding="8,2" Visibility="{Binding CanRefreshServer, Converter={StaticResource BoolVis}}"
                         ToolTip="Read the spawns, loot, vendors and quests from the server database again (after you changed it or started the server)." />
             </StackPanel>
             <TextBlock x:Name="Headline" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="13" />

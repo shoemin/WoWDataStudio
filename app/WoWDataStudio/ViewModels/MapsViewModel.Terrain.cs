@@ -37,7 +37,7 @@ public sealed partial class MapsViewModel
     /// <summary>Open the breakdown window of a tile (from the Maps tab, the terrain pop-out or the Tools menu).</summary>
     public TileBreakdownWindow OpenBreakdown(MapInfo map, int x, int y, Action<TileBreakdownWindow>? beforeShow = null)
     {
-        var vm = new TileBreakdownViewModel(this, _browser, map, x, y);
+        var vm = new TileBreakdownViewModel(this, Browser, map, x, y);
         var win = new TileBreakdownWindow(vm);
         win.Closed += (_, _) => BreakdownWindows.Remove(win);
         if (Application.Current?.MainWindow is { IsVisible: true } main && beforeShow == null) win.Owner = main;
@@ -79,7 +79,7 @@ public sealed partial class MapsViewModel
         {
             var res = await ExportTerrainAsync(vm);
             if (vm.OpenAfterExport && vm.BlenderFound)
-                _browser.OpenFileInBlender(res.ManifestPath, $"Blender is starting with {res.Manifest.Tiles.Count} tile(s). When you are done: WoW Terrain panel > Export terrain for WoW Data Studio, then \"Import edited terrain...\" here.");
+                Browser.OpenFileInBlender(res.ManifestPath, $"Blender is starting with {res.Manifest.Tiles.Count} tile(s). When you are done: WoW Terrain panel > Export terrain for WoW Data Studio, then \"Import edited terrain...\" here.");
             else
             {
                 int pick = Dialogs.Show("Terrain exported for Blender",
@@ -98,7 +98,7 @@ public sealed partial class MapsViewModel
     public Task<TerrainExportResult> ExportTerrainAsync(TerrainExportViewModel vm)
     {
         var req = MapOperations.TerrainExport(_session, vm.Map, vm.Chosen.ToList(), (vm.CenterX, vm.CenterY), vm.Folder, vm.IncludeReferences);
-        return _main.RunBusyAsync($"Exporting {req.Tiles.Count} tile(s) for Blender...", () => Task.Run(() => TerrainExporter.Export(req)));
+        return Main.RunBusyAsync($"Exporting {req.Tiles.Count} tile(s) for Blender...", () => Task.Run(() => TerrainExporter.Export(req)));
     }
 
     /// <summary>"Open in Blender" on a building of the breakdown: its shape as a glTF to look at (not importable yet).</summary>
@@ -106,9 +106,9 @@ public sealed partial class MapsViewModel
     {
         try
         {
-            var folder = Path.Combine(_browser.ModelsExportDir, ModelExporter.SafeName(Path.GetFileNameWithoutExtension(path)) + "_building");
-            var gltf = await _main.RunBusyAsync("Exporting the building...", () => Task.Run(() => TerrainExporter.ExportBuilding(path, p => _session.ReadCurrent(p), folder)));
-            _browser.OpenFileInBlender(gltf, "Blender is starting with the building (to look at: buildings cannot be imported back yet).");
+            var folder = Path.Combine(Browser.ModelsExportDir, ModelExporter.SafeName(Path.GetFileNameWithoutExtension(path)) + "_building");
+            var gltf = await Main.RunBusyAsync("Exporting the building...", () => Task.Run(() => TerrainExporter.ExportBuilding(path, p => _session.ReadCurrent(p), folder)));
+            Browser.OpenFileInBlender(gltf, "Blender is starting with the building (to look at: buildings cannot be imported back yet).");
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException)
         {
@@ -131,7 +131,7 @@ public sealed partial class MapsViewModel
         var path = Dialogs.PickFolder("The terrain package folder (or its blender_export folder)", _session.Settings.LastImportDir ?? TerrainExportDir);
         if (path == null) return;
         _session.Settings.LastImportDir = path;
-        _main.SaveSettings();
+        Main.SaveSettings();
         await ImportTerrainAsync(path);
     }
 
@@ -143,13 +143,13 @@ public sealed partial class MapsViewModel
         MapImportAnalysis a;
         try
         {
-            a = await _main.RunBusyAsync("Reading the terrain Blender exported...", () => Task.Run(() => AnalyzeTerrain(path, false)));
+            a = await Main.RunBusyAsync("Reading the terrain Blender exported...", () => Task.Run(() => AnalyzeTerrain(path, false)));
             if (a.Seams.Count > 0)
             {
                 int sync = interactive ? Dialogs.Show("Edges do not match their neighbours", MapOperations.SeamText(a),
                     DialogKind.Warning, new[] { "Sync the edges (copy from the edited side)", "Cancel" }) : 0;
                 if (sync != 0) return false;
-                a = await _main.RunBusyAsync("Syncing the edges...", () => Task.Run(() => AnalyzeTerrain(path, true)));
+                a = await Main.RunBusyAsync("Syncing the edges...", () => Task.Run(() => AnalyzeTerrain(path, true)));
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException or KeyNotFoundException)

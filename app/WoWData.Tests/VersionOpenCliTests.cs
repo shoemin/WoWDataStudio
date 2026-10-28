@@ -58,6 +58,13 @@ public class VersionOpenCliTests : IDisposable
             ["models anims"] = new[] { "models", "anims", CubeName },
             ["models skeleton"] = new[] { "models", "skeleton", "#" + CubeModel },
             ["models render"] = new[] { "models", "render", "cdisplay:1", Path.Combine(outDir, "cube.png"), "--size", "160x120" },
+            // M4: the maps of another version
+            ["maps list"] = new[] { "maps", "list" },
+            ["maps zones"] = new[] { "maps", "zones", SyntheticMaps.MapDir },
+            ["maps tiles"] = new[] { "maps", "tiles", SyntheticMaps.MapDir },
+            ["maps minimap"] = new[] { "maps", "minimap", SyntheticMaps.MapDir, "--out", Path.Combine(outDir, "map.png") },
+            ["maps tile"] = new[] { "maps", "tile", SyntheticMaps.MapDir, "32", "32" },
+            ["maps render"] = new[] { "maps", "render", SyntheticMaps.MapDir, "32", "32", "--out", Path.Combine(outDir, "relief.png") },
         };
     }
 
@@ -171,6 +178,56 @@ public class VersionOpenCliTests : IDisposable
         var img = WoWData.Core.Imaging.Png.Load(png);
         Assert.Equal((200, 150), (img.Width, img.Height));
         Assert.True(img.Pixels.Distinct().Count() > 4);
+    }
+
+    [Fact]
+    public void MapsListZonesTilesMinimapTileAndRenderReadTheMaps()
+    {
+        var list = Run("maps", "list", "--version", _flavor, "--json");
+        Assert.True(list.Code == 0, list.ToString());
+        var maps = list.Data.EnumerateArray().ToList();
+        Assert.Equal(new[] { "TestDungeon", "TestMap", "TestMissing" }, maps.Select(m => m.GetProperty("directory").GetString()).OrderBy(x => x));
+        var tm = maps.Single(m => m.GetProperty("directory").GetString() == SyntheticMaps.MapDir);
+        Assert.Equal((2, 0), (tm.GetProperty("tiles").GetInt32(), tm.GetProperty("changedFiles").GetInt32()));
+        var listText = Run("maps", "list", "--version", _flavor);
+        Assert.Contains("1.60.1.70450, read only: Map table: 3 readable rows, 1 locked (encrypted, no key); AreaTable: 3 readable, 1 locked; 1 map without a readable WDT.", listText.Out);
+        Assert.Contains("is not on this computer: no tiles to show", listText.Out);
+
+        var zones = Run("maps", "zones", SyntheticMaps.MapDir, "--version", _flavor, "--json");
+        Assert.Equal(0, zones.Code);
+        Assert.Equal(new[] { "Other Zone", "Test Zone" }, zones.Data.EnumerateArray().Select(z => z.GetProperty("name").GetString()));
+
+        var tiles = Run("maps", "tiles", SyntheticMaps.MapDir, "--version", _flavor);
+        Assert.Equal(0, tiles.Code);
+        Assert.Contains($@"32,32  World\Maps\TestMap\TestMap_32_32.adt  #{SyntheticMaps.TileARoot}", tiles.Out);
+        Assert.Contains("Test Continent: 2 tiles (1.60.1.70450, read only", tiles.Out);
+
+        var tile = Run("maps", "tile", SyntheticMaps.MapDir, "32", "32", "--version", _flavor);
+        Assert.True(tile.Code == 0, tile.ToString());
+        Assert.Contains("2 doodads (1 models), 1 buildings (WMO), 6 ground textures", tile.Out);
+        Assert.Contains("ON THIS TILE", tile.Out);
+        Assert.DoesNotContain("server", tile.Out, StringComparison.OrdinalIgnoreCase);
+        var locked = Run("maps", "tile", SyntheticMaps.MapDir, "33", "32", "--version", _flavor, "--json");
+        Assert.Equal(0, locked.Code);
+        Assert.Contains(locked.Data.GetProperty("facts").EnumerateArray(), f => f.GetString()!.Contains("encrypted", StringComparison.Ordinal));
+        Assert.Equal(ExitCode.NotFound, Run("maps", "tile", SyntheticMaps.MapDir, "10", "10", "--version", _flavor).Code);
+        Assert.Equal(ExitCode.NotFound, Run("maps", "minimap", "TestMissing", "--out", Path.Combine(_root, "out", "m.png"), "--version", _flavor).Code);
+
+        var png = Path.Combine(_root, "out", "testmap.png");
+        var mm = Run("maps", "minimap", SyntheticMaps.MapDir, "--out", png, "--cell", "16", "--version", _flavor, "--json");
+        Assert.True(mm.Code == 0, mm.ToString());
+        Assert.Equal((64, 48), (mm.Data.GetProperty("width").GetInt32(), mm.Data.GetProperty("height").GetInt32()));
+        Assert.True(File.Exists(png));
+        var relief = Path.Combine(_root, "out", "tile_heights.png");
+        var rd = Run("maps", "render", SyntheticMaps.MapDir, "32", "32", "--kind", "heights", "--size", "128", "--out", relief, "--version", _flavor, "--json");
+        Assert.True(rd.Code == 0, rd.ToString());
+        Assert.Equal(128, WoWData.Core.Imaging.Png.Load(relief).Width);
+        // never into the client's folder
+        Assert.Equal(ExitCode.Refused, Run("maps", "render", SyntheticMaps.MapDir, "32", "32", "--out", Path.Combine(_flavor, "x.png"), "--version", _flavor).Code);
+        Assert.Equal(ExitCode.Refused, Run("maps", "minimap", SyntheticMaps.MapDir, "--out", Path.Combine(_flavor, "x.png"), "--version", _flavor).Code);
+        // the editing map commands refuse
+        Assert.Equal(ExitCode.Refused, Run("maps", "noggit", SyntheticMaps.MapDir, "--version", _flavor).Code);
+        Assert.Equal(ExitCode.Refused, Run("maps", "breakdown", SyntheticMaps.MapDir, "32", "32", "--version", _flavor).Code);
     }
 
     [Fact]

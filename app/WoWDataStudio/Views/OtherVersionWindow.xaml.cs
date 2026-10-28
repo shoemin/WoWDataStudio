@@ -18,6 +18,12 @@ public partial class OtherVersionWindow : Window
     {
         InitializeComponent();
         DataContext = Vm = vm;
+        vm.ScrollRequested += () => { if (vm.SelectedRow != null) ResultsList.ScrollIntoView(vm.SelectedRow); };
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(OtherVersionWindowViewModel.IsBuildingEntry) && vm.IsBuildingEntry && BuildingView == null) CreateBuildingView();
+            if (e.PropertyName == nameof(OtherVersionWindowViewModel.SelectedTab) && vm.SelectedTab == OtherVersionWindowViewModel.MapsTab) _ = MapsScreen;
+        };
         Closed += (_, _) =>
         {
             Windows.Remove(this);
@@ -53,6 +59,37 @@ public partial class OtherVersionWindow : Window
     public static void CloseAll()
     {
         foreach (var w in Windows.ToList()) w.Close();
+    }
+
+    private MapsView? _mapsScreen;
+
+    /// <summary>M4: the Maps tab's view, made the first time the tab is shown (or asked for): a window that never shows
+    /// its maps does not need the GL context of its 3D view.</summary>
+    public MapsView MapsScreen
+    {
+        get
+        {
+            if (_mapsScreen != null) return _mapsScreen;
+            _mapsScreen = new MapsView { DataContext = Vm.Maps, Margin = new Thickness(12, 0, 12, 10) };
+            MapsTabItem.Content = _mapsScreen;
+            return _mapsScreen;
+        }
+    }
+
+    /// <summary>M4: the building preview's 3D view, made the first time this window shows a building (null before):
+    /// every 3D view has its own GL context, which a window that never shows a building does not need.</summary>
+    public Controls.ModelViewport? BuildingView { get; private set; }
+
+    private void CreateBuildingView()
+    {
+        var v = new Controls.ModelViewport
+        {
+            ToolTip = "The building on its own: every group with the first texture of each batch. Left-drag turns, right-drag moves, wheel zooms, H: all the controls.",
+        };
+        v.SetBinding(Controls.ModelViewport.TerrainProperty, new System.Windows.Data.Binding(nameof(OtherVersionWindowViewModel.BuildingScene)));
+        v.SetBinding(Controls.ModelViewport.CameraProperty, new System.Windows.Data.Binding(nameof(OtherVersionWindowViewModel.BuildingCamera)));
+        BuildingHost.Child = v;
+        BuildingView = v;
     }
 
     private void Fit_Click(object sender, RoutedEventArgs e) => TexViewer.FitToView();

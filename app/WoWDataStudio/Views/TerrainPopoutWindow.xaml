@@ -22,7 +22,7 @@
                 Visibility="{Binding ShowToolbar, Converter={StaticResource BoolVis}}">
             <DockPanel>
                 <WrapPanel DockPanel.Dock="Right" VerticalAlignment="Top">
-                    <Button x:Name="BreakDownButton" Style="{StaticResource ToolButton}" Command="{Binding BreakDownCommand}"
+                    <Button x:Name="BreakDownButton" Style="{StaticResource ToolButton}" Command="{Binding BreakDownCommand}" Visibility="{Binding CanBreakDown, Converter={StaticResource BoolVis}}"
                             ToolTip="Every piece of the tile shown here, by kind (ground, chunks, textures, trees, buildings, water...), each viewable on its own.">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE8FD;" FontFamily="Segoe MDL2 Assets" Margin="0,2,6,0" />

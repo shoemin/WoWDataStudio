@@ -47,6 +47,10 @@ public sealed partial class UsedInGameViewModel : ObservableObject
 
     /// <summary>"Refresh server data" (the browser runs the main window's reload of the server part).</summary>
     public event Func<Task>? RefreshServerRequested;
+    /// <summary>M4: the open game has a server part (your 1.12 game); false in the read-only window of another version.</summary>
+    public bool CanRefreshServer => ServerParts && (_session.Profile?.Has(WoWData.Core.Versions.GameCaps.Server) ?? true);
+    /// <summary>M4: false for a report of another version opened read only (no server).</summary>
+    public bool ServerParts { get; init; } = true;
 
     /// <summary>"Back" after following a link.</summary>
     public event Action? BackRequested;

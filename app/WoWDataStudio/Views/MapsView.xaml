@@ -91,9 +91,8 @@
                 </Border>
                 <Border DockPanel.Dock="Bottom" Background="#FFF7F9FC" BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0" Padding="12,6">
                     <StackPanel>
-                        <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextMuted}" FontSize="11"
-                                   Text="Click a tile to select it. Mouse wheel: zoom. Right-drag: move. Double-click: fit. Blue: selected tile. Orange: changed in your workspace. Dashed yellow: saved by Noggit, not imported yet." />
-                        <TextBlock Text="{Binding ChangedSummary}" FontSize="11" Margin="0,2,0,0" />
+                        <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextMuted}" FontSize="11" Text="{Binding MinimapHelp, Mode=OneWay}" />
+                        <TextBlock Text="{Binding ChangedSummary}" FontSize="11" Margin="0,2,0,0" Visibility="{Binding CanEdit, Converter={StaticResource BoolVis}}" />
                     </StackPanel>
                 </Border>
                 <c:MinimapView x:Name="Minimap" Source="{Binding Overview}" Cell="{Binding OverviewCell}" OriginX="{Binding OriginX}" OriginY="{Binding OriginY}" Tiles="{Binding Tiles}"
@@ -107,8 +106,7 @@
                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="30" Visibility="{Binding HasTile, Converter={StaticResource BoolVisInv}}">
                     <TextBlock Text="&#xE707;" FontFamily="Segoe MDL2 Assets" FontSize="40" Foreground="#FFB0B8C4" HorizontalAlignment="Center" />
                     <TextBlock Text="Select a tile on the map" Style="{StaticResource H2}" HorizontalAlignment="Center" Margin="0,10,0,4" />
-                    <TextBlock Style="{StaticResource Muted}" TextAlignment="Center" MaxWidth="380" TextWrapping="Wrap"
-                               Text="Pick a map on the left, then click one of its tiles (or a zone). The tile's zones, what is placed on it and a 3D view of its terrain appear here, with the buttons to edit it in Noggit and bring your changes back." />
+                    <TextBlock Style="{StaticResource Muted}" TextAlignment="Center" MaxWidth="380" TextWrapping="Wrap" Text="{Binding EmptyTileText, Mode=OneWay}" />
                 </StackPanel>
                 <ScrollViewer x:Name="TileScroll" VerticalScrollBarVisibility="Auto" Visibility="{Binding HasTile, Converter={StaticResource BoolVis}}">
                     <StackPanel Margin="14,10">
@@ -120,7 +118,7 @@
                             <TextBlock Text="{Binding TileTitle}" Style="{StaticResource H2}" FontSize="18" TextWrapping="Wrap" />
                         </DockPanel>
                         <TextBlock Text="{Binding TileSubtitle}" Style="{StaticResource Muted}" TextTrimming="CharacterEllipsis" />
-                        <WrapPanel Margin="0,6,0,0">
+                        <WrapPanel Margin="0,6,0,0" Visibility="{Binding CanEdit, Converter={StaticResource BoolVis}}">
                             <Button x:Name="BreakDownButton" Command="{Binding BreakDownTileCommand}" Padding="10,4" Margin="0,0,6,0" Style="{StaticResource PrimaryButton}"
                                     ToolTip="Opens a window that lists every piece of this tile by kind (the ground and its 256 chunks, ground textures, trees and objects, buildings, water, sounds), shows each one in 3D or on its own, and opens it in the Browse tab or in Blender.">
                                 <StackPanel Orientation="Horizontal">
@@ -157,12 +155,12 @@
                             <CheckBox Content="Water" IsChecked="{Binding ShowWater}" Margin="0,0,12,4" />
                             <CheckBox Content="Textures" IsChecked="{Binding ShowTextures}" Margin="0,0,12,4" ToolTip="Untick to see the shape of the ground only." />
                             <CheckBox Content="Wireframe" IsChecked="{Binding Wireframe}" Margin="0,0,12,4" />
-                            <CheckBox IsChecked="{Binding SpecularGround}" Margin="0,0,12,4"
+                            <CheckBox IsChecked="{Binding SpecularGround}" Margin="0,0,12,4" Visibility="{Binding CanEdit, Converter={StaticResource BoolVis}}"
                                       ToolTip="With terrain specular on (Config.wtf: specular 1 and pixelShaders 1) the game draws &lt;name&gt;_s.blp instead of the ground texture the map names. Ticked: the 3D view does the same. It starts as your game's setting.">
                                 <TextBlock Text="Specular ground (_s textures)" />
                             </CheckBox>
                         </WrapPanel>
-                        <TextBlock Text="{Binding GroundRuleText}" Foreground="{StaticResource TextMuted}" FontSize="11" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding GroundRuleText}" Foreground="{StaticResource TextMuted}" FontSize="11" TextWrapping="Wrap" Visibility="{Binding CanEdit, Converter={StaticResource BoolVis}}" />
                         <TextBlock Text="{Binding PreviewStatus}" Foreground="{StaticResource TextMuted}" FontSize="11" TextWrapping="Wrap" />
 
                         <!-- facts -->
@@ -178,7 +176,8 @@
                         </ItemsControl>
 
                         <!-- actions -->
-                        <Border x:Name="MapActions" Margin="0,10,0,0" Padding="10,8" CornerRadius="6" Background="#FFF7F9FC" BorderBrush="{StaticResource Border}" BorderThickness="1">
+                        <Border x:Name="MapActions" Margin="0,10,0,0" Padding="10,8" CornerRadius="6" Background="#FFF7F9FC" BorderBrush="{StaticResource Border}" BorderThickness="1"
+                                Visibility="{Binding CanEdit, Converter={StaticResource BoolVis}}">
                             <StackPanel>
                                 <TextBlock Text="EDIT THE MAP" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMuted}" Margin="0,0,0,6" />
                                 <WrapPanel>
