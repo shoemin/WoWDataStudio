@@ -338,14 +338,16 @@ public sealed class OtherClient : IDisposable
     /// CASC client's DB2 with the field types of its executable and, where a layout file for the build names them, its
     /// columns (<see cref="Db2Layouts"/>). Null when the client has no such table or it is not on this computer.
     /// </summary>
-    public VersionTable? TableView(string name)
+    /// <param name="build">the build whose layout names the columns (default: the copy's; a client opened as another
+    /// version passes its profile's build, which comes from the CASC build when the executable has no version resource)</param>
+    public VersionTable? TableView(string name, int? build = null)
     {
         if (Data != null) return Table(name) is { } t ? VersionTable.FromDbc(t) : null;
         if (Casc == null) return null;
         var n = name.EndsWith(".db2", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".dbc", StringComparison.OrdinalIgnoreCase) ? name[..^4] : name;
         var db2 = Catalog.Open(Casc, n);
         if (db2 == null) return null;
-        Db2Layouts.ForBuild(Copy.Build)?.Apply(db2, out _);
+        Db2Layouts.ForBuild(build ?? Copy.Build)?.Apply(db2, out _);
         return VersionTable.FromDb2(db2);
     }
 

@@ -86,3 +86,66 @@ public sealed class VersionTable
         return new VersionTable(t.Name, names, named, text, raw, coverage, string.Join("; ", notes), t.FieldCount, rows);
     }
 }
+
+/// <summary>
+/// The read-only Data tables tab of another version and "wds dbc tables / rows / get / export --version": finding rows
+/// of a <see cref="VersionTable"/> and exporting them as CSV or JSON to a folder you choose (never into the client).
+/// </summary>
+public static class VersionTableExport
+{
+    /// <summary>The indexes of the rows that have every word of <paramref name="search"/> in some value and match every
+    /// column filter (text: contains, case-insensitive; numbers: equal).</summary>
+    public static List<int> Find(VersionTable t, string search, IEnumerable<(int Column, string Value)>? where = null)
+    {
+        var words = search.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var filters = where?.ToList() ?? new();
+        var res = new List<int>();
+        for (int i = 0; i < t.RowCount; i++)
+        {
+            if (words.Length == 0 && filters.Count == 0)
+            {
+                res.Add(i);
+                continue;
+            }
+            var r = t.RowAt(i);
+            bool ok = filters.All(f => t.IsText[f.Column] ? r[f.Column].Contains(f.Value, StringComparison.OrdinalIgnoreCase) : r[f.Column] == f.Value)
+                      && words.All(w => r.Any(v => v.Contains(w, StringComparison.OrdinalIgnoreCase)));
+            if (ok) res.Add(i);
+        }
+        return res;
+    }
+
+    /// <summary>The column with this name (case-insensitive), or -1.</summary>
+    public static int Column(VersionTable t, string name)
+    {
+        for (int i = 0; i < t.Columns.Count; i++) if (string.Equals(t.Columns[i], name, StringComparison.OrdinalIgnoreCase)) return i;
+        return -1;
+    }
+
+    /// <summary>Writes rows as CSV (the header is the column names) or, for a .json file, as an array of objects.</summary>
+    public static void Write(VersionTable t, IReadOnlyList<int> rows, string file)
+    {
+        var dir = Path.GetDirectoryName(Path.GetFullPath(file));
+        if (dir != null) Directory.CreateDirectory(dir);
+        if (file.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+        {
+            var list = rows.Select(i =>
+            {
+                var r = t.RowAt(i);
+                var o = new System.Text.Json.Nodes.JsonObject();
+                for (int c = 0; c < t.Columns.Count; c++)
+                    o[t.Columns[c]] = !t.IsText[c] && long.TryParse(r[c], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n
+                        : !t.IsText[c] && double.TryParse(r[c], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d
+                        : (System.Text.Json.Nodes.JsonNode?)r[c];
+                return (System.Text.Json.Nodes.JsonNode?)o;
+            }).ToArray();
+            File.WriteAllText(file, new System.Text.Json.Nodes.JsonArray(list).ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+            return;
+        }
+        using var w = new StreamWriter(file, false, new System.Text.UTF8Encoding(true));
+        w.WriteLine(string.Join(",", t.Columns.Select(Csv)));
+        foreach (var i in rows) w.WriteLine(string.Join(",", t.RowAt(i).Select(Csv)));
+    }
+
+    private static string Csv(string v) => v.IndexOfAny(new[] { ',', '"', '\n', '\r' }) < 0 ? v : "\"" + v.Replace("\"", "\"\"") + "\"";
+}

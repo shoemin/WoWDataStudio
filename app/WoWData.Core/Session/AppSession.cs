@@ -31,6 +31,12 @@ public sealed class AppSession : IDisposable
     public WoWData.Core.Versions.GameProfile? Profile { get; private set; }
     /// <summary>True when another version is open (read only): no workspace, no edits, no installs.</summary>
     public bool IsReadOnly => Profile is { IsOwnClient: false };
+    /// <summary>Why the writes are greyed out (another version opened read only), or null for your 1.12 game: the text
+    /// the app shows next to and on hover over every write, the same reason "wds" prints when it refuses one.</summary>
+    public string? WriteRefusal => Profile?.WriteRefusal;
+    /// <summary>The world server of the open version (<see cref="WoWData.Core.Servers.ServerProviders"/>): your 1.12
+    /// game's world database, or, for another version, its provider ("no server connected" until one exists).</summary>
+    public WoWData.Core.Servers.IServerProvider? Server { get; private set; }
     /// <summary>The other version's client (its files and DB2 tables).</summary>
     public WoWData.Core.Versions.OtherClient? Other { get; private set; }
     /// <summary>The other version's files by name or #FileDataID (names from the index).</summary>
@@ -326,6 +332,8 @@ public sealed class AppSession : IDisposable
     /// </summary>
     public WoWData.Core.Usage.UsageReport? UsageReport(string key)
     {
+        // another version: what its client says, and its server provider's note (no u_ tables, no server)
+        if (IsReadOnly) return Index == null ? null : WoWData.Core.Usage.ModernUsage.Report(this, key);
         var rep = Usage?.Report(key);
         if (rep == null) return null;
         try
@@ -350,7 +358,7 @@ public sealed class AppSession : IDisposable
         var e = FindEntry(key);
         if (e == null || Index == null) return null;
         if (e.Path != null && e.Path.EndsWith(".m2", StringComparison.OrdinalIgnoreCase)) return e.Path;
-        return Index.Details(e, Catalog).Models.FirstOrDefault(x => x.EndsWith(".m2", StringComparison.OrdinalIgnoreCase));
+        return (IsReadOnly ? Details(e) : Index.Details(e, Catalog)).Models.FirstOrDefault(x => x.EndsWith(".m2", StringComparison.OrdinalIgnoreCase));
     }
 
     public bool ServerConnected { get; private set; }
@@ -399,6 +407,7 @@ public sealed class AppSession : IDisposable
             ModelPackages = new WoWData.Core.ModelIO.ModelPackageService(data, Catalog, index, ws, Models, Textures);
             ModelSource = new ModelSource112(p => (ws.IsModified(p) ? ws.ReadEdited(p) : null) ?? data.Read(p));
             Profile = WoWData.Core.Versions.GameProfile.Own112(clientDir);
+            Server = new WoWData.Core.Servers.Mangos112ServerProvider(() => ServerConnected, () => ServerMessage);
             ReadMeta();
         }
         catch
@@ -468,7 +477,11 @@ public sealed class AppSession : IDisposable
             Entries = entries;
             _byKey = null;
             Profile = WoWData.Core.Versions.GameProfile.ReadOnly(copy);
+            Server = WoWData.Core.Servers.ServerProviders.ForOther(Profile);
             ReadMeta();
+            // the index of another version never has server names: what the server provider says counts
+            ServerConnected = Server.IsConnected;
+            ServerMessage = Server.Detail;
         }
         catch
         {
@@ -492,6 +505,7 @@ public sealed class AppSession : IDisposable
     /// <summary>Reload the server names into the existing index (after settings changed or the server started).</summary>
     public async Task<(bool Ok, string Message)> RefreshServerAsync(CancellationToken ct = default)
     {
+        if (IsReadOnly && Server != null) return (false, Server.Detail);
         if (Client == null || Index == null) return (false, "No game folder is open.");
         Index.Dispose();
         Index = null;
@@ -531,6 +545,7 @@ public sealed class AppSession : IDisposable
         ModernLooks = null;
         ModelSource = null;
         Profile = null;
+        Server = null;
         lock (_mapsGate)
         {
             _maps = null;

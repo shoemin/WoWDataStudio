@@ -22,6 +22,9 @@ public sealed class ModelExportRequest
 {
     public string ModelPath { get; init; } = "";
     public byte[] ModelData { get; init; } = Array.Empty<byte>();
+    /// <summary>The model already read (another version opened read only: the modern reader's model); null = read
+    /// <see cref="ModelData"/> as a 1.12 model.</summary>
+    public M2Model? Model { get; init; }
     /// <summary>"game" or "workspace" (the model is an earlier edit of yours).</summary>
     public string Source { get; init; } = "game";
     public string? Archive { get; init; }
@@ -166,7 +169,7 @@ public static class ModelExporter
 
     public static ModelExportResult Export(ModelExportRequest req)
     {
-        var m = M2Model.Load(req.ModelData);
+        var m = req.Model ?? M2Model.Load(req.ModelData);
         var f = m.File;
         string name = SafeName(Path.GetFileNameWithoutExtension(req.ModelPath));
         string folder = req.PackageFolder ?? Path.Combine(req.OutputDir, name + "_export");

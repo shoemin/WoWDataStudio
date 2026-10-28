@@ -5,7 +5,7 @@ using WoWData.Core.Session;
 namespace WoWData.Core.Versions;
 
 /// <summary>
-/// M1: what the read-only window's status line and "wds versions open" show about another version: entries, file
+/// M1: what the main window's status line (another version open read only) and "wds versions open" show about another version: entries, file
 /// names and where they come from, readable and locked records of the tables Browse reads (design section 3.1:
 /// "14,204 of 14,229 creature displays readable, 25 locked (encrypted, no key)").
 /// </summary>
@@ -72,7 +72,7 @@ public sealed class OtherVersionStatus
                 yield return l.Locked > 0 ? $"{l.Readable:N0} of {l.Total:N0} {what} readable, {l.Locked:N0} locked (encrypted, no key)" : $"{l.Readable:N0} {what}, all readable";
     }
 
-    /// <summary>The status line of the read-only window.</summary>
+    /// <summary>The status line of the main window while another version is open read only.</summary>
     public string StatusLine => $"{Version} (read only): " + string.Join(" · ", LockedLines());
 
     /// <summary>"names: 183,632 of 1,245,465 files (134,232 checked by the client's own hashes, 49,400 your 1.12 names
