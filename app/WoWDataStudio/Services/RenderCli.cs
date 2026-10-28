@@ -11,7 +11,7 @@ using WoWDataStudio.Rendering;
 namespace WoWDataStudio.Services;
 
 /// <summary>
-/// `--render &lt;model.m2&gt; &lt;out.png&gt; [--display N] [--sequence N] [--time ms] [--yaw deg] [--size WxH] [--original]`: renders
+/// `--render &lt;model.m2&gt; &lt;out.png&gt; [--display N] [--sequence N] [--time ms] [--yaw deg] [--size WxH] [--original] [--no-particles]`: renders
 /// one model offscreen with its default look (or a creature display's skins) and exits. A developer tool for checking the
 /// renderer against many models quickly. 0.6.1: like the app's own views it shows your workspace version (your edited
 /// model and textures, from the app folder of --home or %APPDATA%\WoWDataStudio) when there is one; --original renders
@@ -24,7 +24,7 @@ public static class RenderCli
     /// another version (read only), read by the modern reader, with a creature display's skins, an item display's
     /// texture or the model's default look. "wds models render --version" resolves the model and the animation.
     /// </summary>
-    private static async Task<int> RenderOtherAsync(string folder, string model, string outFile, int display, int itemDisplay, int sequence, double time, float yaw, int w, int h)
+    private static async Task<int> RenderOtherAsync(string folder, string model, string outFile, int display, int itemDisplay, int sequence, double time, float yaw, int w, int h, bool particles)
     {
         var copy = WoWData.Core.Versions.ClientPick.Resolve(folder, Array.Empty<WoWData.Core.Versions.ClientCopy>());
         using var oc = WoWData.Core.Versions.OtherClient.Open(copy);
@@ -35,7 +35,7 @@ public static class RenderCli
         var m = new WoWData.Core.M2.Modern.ModernModelSource(files).Load(model);
         var asset = ModelAsset.Build(model, m, res.LoadBlp);
         var look = display > 0 ? res.CreatureDisplay(display) : itemDisplay > 0 ? res.ItemDisplay(itemDisplay, model) : res.DefaultFor(model);
-        var scene = new ModelScene { Asset = asset, Look = look, Playing = false };
+        var scene = new ModelScene { Asset = asset, Look = look, Playing = false, ShowParticles = particles };
         if (sequence >= asset.Model.Sequences.Length) throw new ArgumentException($"the model has {asset.Model.Sequences.Length} animations (0-{asset.Model.Sequences.Length - 1})");
         if (sequence >= 0) scene.Sequence = sequence;
         scene.SequenceTime = time;
@@ -64,6 +64,7 @@ public static class RenderCli
             string? sequenceName = null;
             double time = 0;
             bool original = args.Any(a => a.Equals("--original", StringComparison.OrdinalIgnoreCase));
+            bool particles = !args.Any(a => a.Equals("--no-particles", StringComparison.OrdinalIgnoreCase));
             float yaw = float.NaN;
             for (int i = 2; i < args.Length; i++)
             {
@@ -90,7 +91,7 @@ public static class RenderCli
                 int itemDisplay = 0;
                 int iat = Array.FindIndex(args, a => a.Equals("--item-display", StringComparison.OrdinalIgnoreCase));
                 if (iat >= 0 && iat + 1 < args.Length) itemDisplay = int.Parse(args[iat + 1]);
-                return await RenderOtherAsync(args[vat + 1], model, outFile, display, itemDisplay, sequence, time, yaw, w, h);
+                return await RenderOtherAsync(args[vat + 1], model, outFile, display, itemDisplay, sequence, time, yaw, w, h, particles);
             }
             using var client = new ClientData(Path.Combine(clientDir, "Data"));
             var cat = new Catalog(client);
@@ -107,7 +108,7 @@ public static class RenderCli
             bool editedModel = ws?.IsModified(model) == true;
             var data = Read(model) ?? throw new FileNotFoundException(model);
             var asset = ModelAsset.Build(model, data, res.LoadBlp);
-            var scene = new ModelScene { Asset = asset, Look = display > 0 ? res.CreatureDisplay(display) : res.DefaultFor(model), Playing = false };
+            var scene = new ModelScene { Asset = asset, Look = display > 0 ? res.CreatureDisplay(display) : res.DefaultFor(model), Playing = false, ShowParticles = particles };
             if (sequenceName != null)
             {
                 var names = WoWData.Core.ModelIO.ModelExporter.ActionNames(asset.Model, res.AnimationName);

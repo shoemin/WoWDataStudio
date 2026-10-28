@@ -88,6 +88,8 @@ public sealed class ModelViewport : UserControl, IDisposable
     public string GlInfo => _renderer.GlInfo;
     /// <summary>Frames drawn so far and the CPU time of the last one (bone matrices + draw calls), for the statistics.</summary>
     public int Frames { get; private set; }
+    /// <summary>The particles and ribbon edges alive in the last frame drawn (the leak test and the screenshots).</summary>
+    public (int Particles, int Edges) EffectCounts => (_renderer.EffectParticles, _renderer.EffectEdges);
     public double LastFrameMs { get; private set; }
     public bool IsDisposed => _disposed;
     public static GLWpfControlSettings Settings => new()

@@ -5,13 +5,15 @@ using WoWData.Core.M2;
 namespace WoWDataStudio.Rendering;
 
 /// <summary>
-/// M3 of docs\research\OPEN_OTHER_VERSIONS_DESIGN.md: the particle emitters and ribbons of a model of another version
-/// (<see cref="WoWData.Core.M2.Modern.M2ModernInfo.Effects"/>), simulated by <see cref="M2EffectSimulation"/> and drawn
-/// after the model: camera-facing (or XY-plane) quads with their texture cell, colour and opacity, ribbons as bands of
-/// their edges. A path of its own: models of your 1.12 game have no <c>Modern</c> info and never reach it, so their
-/// drawing is unchanged. The blend modes are the modern numbering (the materials' and the particles'): 0 opaque,
-/// 1 alpha key, 2 alpha, 3 add without alpha, 4 add, 5 modulate, 6 modulate 2x, 7 blend add (one, one minus source
-/// alpha; FORMAT KNOWLEDGE of the modern client's blend table).
+/// M3 of docs\research\OPEN_OTHER_VERSIONS_DESIGN.md: the particle emitters and ribbons of a model
+/// (<see cref="M2Model.Effects"/>: another version's, and your 1.12 game's own), simulated by
+/// <see cref="M2EffectSimulation"/> and drawn after the model when the scene shows particles
+/// (<see cref="ModelScene.ShowParticles"/>): camera-facing (or XY-plane) quads with their texture cell, colour and
+/// opacity, 1.12 tails stretched back along the particle's movement, ribbons as bands of their edges. The blend modes are
+/// the materials' numbering for both: 0 opaque, 1 alpha key, 2 alpha, 3 add without alpha, 4 add, 5 modulate,
+/// 6 modulate 2x, and for another version 7 blend add (one, one minus source alpha; FORMAT KNOWLEDGE of the modern
+/// client's blend table). The 1.12 client hands a particle's blend to the material blend state itself
+/// (M2Scene_DrawParticleBatch @0070d8b0), so 1.12 particles use the same table.
 /// </summary>
 public sealed partial class ModelRenderer
 {
@@ -87,7 +89,7 @@ public sealed partial class ModelRenderer
         else _fxSim.Step(time, _bones, (float)((scene.GlobalMs - _fxLastMs) / 1000.0));
         _fxLastMs = scene.GlobalMs;
 
-        var (right, up, _) = cam.Basis();
+        var (right, up, back) = cam.Basis();
         var m = a.Model;
         GL.UseProgram(_fxProg);
         Mat(U(_fxProg, "uViewProj"), viewProj);
@@ -106,25 +108,61 @@ public sealed partial class ModelRenderer
             if (list.Count == 0) continue;
             _fxVerts.Clear();
             var bone = e.Bone < _bones.Length ? _bones[e.Bone] : Matrix4x4.Identity;
+            var classic = e.Classic;
             Vector3 ax = right, ay = up;
             if (e.XyQuads)
             {
-                ax = Vector3.TransformNormal(Vector3.UnitX, bone);
-                ay = Vector3.TransformNormal(Vector3.UnitY, bone);
+                // the emitter's XY plane; a 1.12 emitter's frame is its bone's turned 90 degrees about Z
+                var frame = classic != null ? M2EffectSimulation.ClassicTurn * bone : bone;
+                ax = Vector3.TransformNormal(Vector3.UnitX, frame);
+                ay = Vector3.TransformNormal(Vector3.UnitY, frame);
                 ax = ax.LengthSquared() > 1e-10f ? Vector3.Normalize(ax) : Vector3.UnitX;
                 ay = ay.LengthSquared() > 1e-10f ? Vector3.Normalize(ay) : Vector3.UnitY;
             }
-            float cw = 1f / Math.Max(1, e.Cols), ch = 1f / Math.Max(1, e.Rows);
+            // the 1.12 client only takes rows and columns that are powers of two (CParticleEmitter2_SetTextureTiling);
+            // others keep its default of one cell
+            int cols = Math.Max(1, e.Cols), rows = Math.Max(1, e.Rows);
+            if (classic != null && (!IsPow2(cols) || !IsPow2(rows))) cols = rows = 1;
+            float cw = 1f / cols, ch = 1f / rows;
+            bool heads = classic?.Head ?? true, tails = classic?.Tail ?? false;
+            var fwd = -back;
             foreach (var p in list)
             {
-                var (color, size, cell) = M2EffectSimulation.Look(e, p);
-                if (color.W <= 0.002f || size.X <= 0 && size.Y <= 0) continue;
+                var look = M2EffectSimulation.Appearance(e, p);
+                var (color, size) = (look.Color, look.Size);
+                if (!look.Visible || color.W <= 0.002f || size.X <= 0 && size.Y <= 0) continue;
                 var pos = e.Local ? Vector3.Transform(p.Position, bone) : p.Position;
-                float cs = MathF.Cos(p.Rotation), sn = MathF.Sin(p.Rotation);
-                var rx = (ax * cs + ay * sn) * size.X;
-                var ry = (ay * cs - ax * sn) * size.Y;
-                float u0 = cell % Math.Max(1, e.Cols) * cw, v0 = cell / Math.Max(1, e.Cols) * ch;
-                Quad(pos - rx - ry, pos + rx - ry, pos + rx + ry, pos - rx + ry, u0, v0, u0 + cw, v0 + ch, color);
+                if (heads)
+                {
+                    float cs = MathF.Cos(p.Rotation), sn = MathF.Sin(p.Rotation);
+                    var rx = (ax * cs + ay * sn) * size.X;
+                    var ry = (ay * cs - ax * sn) * size.Y;
+                    float u0 = look.Cell % cols * cw, v0 = look.Cell / cols % rows * ch;
+                    Quad(pos - rx - ry, pos + rx - ry, pos + rx + ry, pos - rx + ry, u0, v0, u0 + cw, v0 + ch, color);
+                }
+                if (tails)
+                {
+                    // CParticleEmitter2_BuildVertices: a band from the particle back along its movement for the tail
+                    // length (seconds; growing with the age when flag 0x400 says so), its size wide across the screen;
+                    // a tail shorter than 1/36 yard on screen is drawn as a quad
+                    float len = e.TailLength;
+                    if (classic!.TailGrows && p.Age < len) len = p.Age;
+                    var vel = e.Local ? Vector3.TransformNormal(p.Velocity, bone) : p.Velocity;
+                    var tail = -vel * len;
+                    var flat = tail - fwd * Vector3.Dot(tail, fwd);
+                    float tu = look.TailCell % cols * cw, tv = look.TailCell / cols % rows * ch;
+                    if (flat.LengthSquared() < 1f / (36f * 36f))
+                    {
+                        var rx = right * size.X;
+                        var ry = up * size.Y;
+                        Quad(pos - rx - ry, pos + rx - ry, pos + rx + ry, pos - rx + ry, tu, tv, tu + cw, tv + ch, color);
+                    }
+                    else
+                    {
+                        var side = Vector3.Normalize(Vector3.Cross(fwd, flat)) * size.X;
+                        Quad(pos - side, pos + side, pos + tail + side, pos + tail - side, tu, tv, tu + cw, tv + ch, color);
+                    }
+                }
             }
             DrawFx(scene, a, e.Textures.Length > 0 ? e.Textures[0] : -1, e.Blend);
         }
@@ -137,21 +175,36 @@ public sealed partial class ModelRenderer
             var c = M2EffectSimulation.Eval(r.Color, time, m.GlobalSequences, Vector3.One);
             float alpha = M2EffectSimulation.EvalFixed16(r.Alpha, time, m.GlobalSequences, 1f);
             float life = r.EdgeLifetime > 0 ? r.EdgeLifetime : 0.5f;
+            // 1.12 (CRibbonEmitter_UpdateTexCoords): the texture slot picks a cell; U runs across the cell over an
+            // edge's life, V from the bottom (cell top) to the top edge
+            float cu = 0, cv = 0, cw = 1, ch = 1;
+            if (r.Classic)
+            {
+                int rc = Math.Max(1, r.Cols), rr = Math.Max(1, r.Rows);
+                int slot = M2EffectSimulation.Step(r.TextureSlot, time, m.GlobalSequences, (ushort)0);
+                cw = 1f / rc;
+                ch = 1f / rr;
+                cu = slot % rc * cw;
+                cv = slot / rc % rr * ch;
+            }
             for (int k = 0; k + 1 < edges.Count; k++)
             {
                 var e0 = edges[k];
                 var e1 = edges[k + 1];
-                float u0 = Math.Clamp(e0.Age / life, 0, 1), u1 = Math.Clamp(e1.Age / life, 0, 1);
+                float u0 = cu + Math.Clamp(e0.Age / life, 0, 1) * cw, u1 = cu + Math.Clamp(e1.Age / life, 0, 1) * cw;
                 var col = new Vector4(Math.Clamp(c.X, 0, 1), Math.Clamp(c.Y, 0, 1), Math.Clamp(c.Z, 0, 1), Math.Clamp(alpha, 0, 1));
-                Quad(e0.Top, e1.Top, e1.Bottom, e0.Bottom, u0, 0, u1, 1, col);
+                Quad(e0.Top, e1.Top, e1.Bottom, e0.Bottom, u0, cv, u1, cv + ch, col);
             }
-            int blend = r.Materials.Length > 0 && r.Materials[0] < (m.Modern?.MaterialBlends.Length ?? 0) ? m.Modern!.MaterialBlends[r.Materials[0]] : 4;
+            int blend = r.Classic ? r.Blend :
+                r.Materials.Length > 0 && r.Materials[0] < (m.Modern?.MaterialBlends.Length ?? 0) ? m.Modern!.MaterialBlends[r.Materials[0]] : 4;
             DrawFx(scene, a, r.Textures.Length > 0 ? r.Textures[0] : -1, blend);
         }
         GL.DepthMask(true);
         GL.Disable(EnableCap.Blend);
         GL.BindVertexArray(0);
     }
+
+    private static bool IsPow2(int n) => n > 0 && (n & (n - 1)) == 0;
 
     /// <summary>Two triangles (corners counter-clockwise) with the texture rectangle (u0, v0) - (u1, v1).</summary>
     private void Quad(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float u0, float v0, float u1, float v1, Vector4 c)

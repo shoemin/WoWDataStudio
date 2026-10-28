@@ -207,6 +207,8 @@ public sealed partial class ModelViewerViewModel : ObservableObject
     [ObservableProperty] private bool _showBounds;
     [ObservableProperty] private bool _showGrid = true;
     [ObservableProperty] private bool _showGround = true;
+    /// <summary>The particles and ribbons of the shown model (your 1.12 game's and another version's; on by default).</summary>
+    [ObservableProperty] private bool _showParticles = true;
     [ObservableProperty] private int _skinColor;
     [ObservableProperty] private int _face;
     [ObservableProperty] private int _hairStyle;
@@ -671,6 +673,7 @@ public sealed partial class ModelViewerViewModel : ObservableObject
         Scene.ShowBounds = ShowBounds;
         Scene.ShowGrid = ShowGrid;
         Scene.ShowGround = ShowGround;
+        Scene.ShowParticles = ShowParticles;
         if (SelectedBackground != null) Scene.Background = SelectedBackground.Color;
     }
 
@@ -933,7 +936,13 @@ public sealed partial class ModelViewerViewModel : ObservableObject
         AddStat("Attachments", m.Attachments.Length.ToString("N0"));
         AddStat("Textures", m.Textures.Length.ToString("N0"));
         AddStat("Geosets", a.GeosetIds.Length.ToString("N0"));
-        if (m.ParticleCount + m.RibbonCount > 0) AddStat("Particles / ribbons", $"{m.ParticleCount} / {m.RibbonCount} (not drawn)");
+        if (m.Modern == null && m.ParticleCount + m.RibbonCount > 0)
+        {
+            // your 1.12 game's particles and ribbons, drawn by the viewer's simulation of the 1.12 rules
+            var fx = m.Effects;
+            int drawn = (fx?.Particles.Count ?? 0) + (fx?.Ribbons.Count ?? 0), left = m.ParticleCount + m.RibbonCount - drawn;
+            AddStat("Particles / ribbons", $"{fx?.Particles.Count ?? 0} / {fx?.Ribbons.Count ?? 0} (drawn approximately{(left > 0 ? $"; {left} left out" : "")})");
+        }
         if (m.Modern is { } mi)
         {
             // M2: a model of another version (the modern reader's report is under the numbers)
@@ -943,7 +952,7 @@ public sealed partial class ModelViewerViewModel : ObservableObject
             if (mi.Effects is { } fx) AddStat("Particles / ribbons", $"{fx.Particles.Count} / {fx.Ribbons.Count} (drawn approximately)");
         }
         else AddStat("Format", $"M2 version 0x{m.Version:x}");
-        FormatNotes = ModernNotes(m);
+        FormatNotes = m.Modern != null ? ModernNotes(m) : ClassicEffectNotes(m);
     }
 
     // ---------------------------------------------------------------- animation and display options
@@ -995,6 +1004,7 @@ public sealed partial class ModelViewerViewModel : ObservableObject
     partial void OnShowBoundsChanged(bool value) => Scene.ShowBounds = value;
     partial void OnShowGridChanged(bool value) => Scene.ShowGrid = value;
     partial void OnShowGroundChanged(bool value) => Scene.ShowGround = value;
+    partial void OnShowParticlesChanged(bool value) => Scene.ShowParticles = value;
     partial void OnSelectedBackgroundChanged(BackgroundItem? value)
     {
         if (value == null) return;
@@ -1076,9 +1086,9 @@ public sealed partial class ModelViewerViewModel : ObservableObject
             var (race, sex) = _race.Value;
             var look = new CharacterLook(SkinColor, Face, HairStyle, HairColor, FacialHair);
             var (l, r) = await Task.Run(() => (res.Character(race, sex, look), res.Character(race, sex, new CharacterLook())));
-            return new ModelCompareViewModel($"Compare looks: {System.IO.Path.GetFileName(path)}",
+            return WithParticles(new ModelCompareViewModel($"Compare looks: {System.IO.Path.GetFileName(path)}",
                 new ModelCompareSide("Current look", asset, l, $"skin {look.Skin}, face {look.Face}, hair {look.HairStyle}/{look.HairColor}, facial hair {look.FacialHair}"),
-                new ModelCompareSide("Default look", asset, r, "all choices 0 (character creation start)"));
+                new ModelCompareSide("Default look", asset, r, "all choices 0 (character creation start)")));
         }
         if (Variants.Count < 2) return null;
         left ??= SelectedVariant ?? Variants[0];
@@ -1087,8 +1097,15 @@ public sealed partial class ModelViewerViewModel : ObservableObject
         var b = right;
         ModelLook Look(VariantItem v) => v.IsItem ? res.ItemDisplay((int)v.DisplayId, path) : res.CreatureDisplay((int)v.DisplayId);
         var (la, lb) = await Task.Run(() => (Look(a), Look(b)));
-        return new ModelCompareViewModel($"Compare skins: {System.IO.Path.GetFileName(path)}",
-            new ModelCompareSide(a.Label, asset, la, a.Detail), new ModelCompareSide(b.Label, asset, lb, b.Detail));
+        return WithParticles(new ModelCompareViewModel($"Compare skins: {System.IO.Path.GetFileName(path)}",
+            new ModelCompareSide(a.Label, asset, la, a.Detail), new ModelCompareSide(b.Label, asset, lb, b.Detail)));
+    }
+
+    /// <summary>The comparison shows the particles when this view does (the Particles chip).</summary>
+    private ModelCompareViewModel WithParticles(ModelCompareViewModel vm)
+    {
+        vm.Left.Scene.ShowParticles = vm.Right.Scene.ShowParticles = ShowParticles;
+        return vm;
     }
 
     /// <summary>What "Export for Blender" needs to know about the model shown: what it is, the selected display, the
@@ -1139,6 +1156,7 @@ public sealed partial class ModelViewerViewModel : ObservableObject
         ShowBounds = other.ShowBounds;
         ShowGrid = other.ShowGrid;
         ShowGround = other.ShowGround;
+        ShowParticles = other.ShowParticles;
         SelectedBackground = Backgrounds.FirstOrDefault(b => b.Label == other.SelectedBackground?.Label) ?? SelectedBackground;
         if (other.BackgroundHex != BackgroundHex) BackgroundHex = other.BackgroundHex;
         if (other.Scene.VisibleGeosets is { } g)

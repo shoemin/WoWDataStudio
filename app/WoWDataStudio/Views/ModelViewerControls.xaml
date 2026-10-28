@@ -45,6 +45,7 @@
             <ToggleButton Style="{StaticResource Chip}" Content="Grid" IsChecked="{Binding ShowGrid}" ToolTip="Grid on the ground (red line = the model's front, green = its left)." />
             <ToggleButton Style="{StaticResource Chip}" Content="Ground" IsChecked="{Binding ShowGround}" ToolTip="A light ground plane at height 0." />
             <ToggleButton Style="{StaticResource Chip}" Content="Wireframe" IsChecked="{Binding Wireframe}" ToolTip="Draw the triangle edges over the model." />
+            <ToggleButton Style="{StaticResource Chip}" Content="Particles" IsChecked="{Binding ShowParticles}" ToolTip="The model's particles and ribbons (fire, glows, sparks, trails), simulated by the viewer close to the game's look. Off: the model alone." />
             <ToggleButton Style="{StaticResource Chip}" Content="Bones" IsChecked="{Binding ShowBones}" ToolTip="The skeleton (key bones in red), moving with the animation." />
             <ToggleButton Style="{StaticResource Chip}" Content="Bounding box" IsChecked="{Binding ShowBounds}" ToolTip="The model's bounding box from its header." />
             <ToggleButton Style="{StaticResource Chip}" Content="Attachment points" IsChecked="{Binding ShowAttachments}" ToolTip="Where the game attaches weapons, shields, helmets, spell effects and the name plate (cyan), moving with the animation." />
@@ -175,7 +176,8 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
         </Expander>
-        <!-- M2: a model of another version: what the modern reader read, left out or drew approximately -->
+        <!-- M2: a model of another version: what the modern reader read, left out or drew approximately; your game's
+             model: how its particles and ribbons are drawn -->
         <TextBlock Text="{Binding FormatNotes}" TextWrapping="Wrap" Foreground="{StaticResource TextMuted}" FontSize="12" Margin="4,4,0,0"
                    Visibility="{Binding FormatNotes, Converter={StaticResource NullVis}}" />
     </StackPanel>

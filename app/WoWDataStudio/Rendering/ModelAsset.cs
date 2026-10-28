@@ -91,6 +91,9 @@ public sealed class ModelAsset
         {
             min = m.BoundsMin;
             max = m.BoundsMax;
+            // your game's spell effects made only of particles and ribbons have empty bounds: frame their effects
+            if ((max - min).Length() < 1e-3f && WoWData.Core.M2.M2ClassicEffects.Bounds(m) is { } fx)
+                (min, max) = fx;
         }
         BoundsMin = min;
         BoundsMax = max;

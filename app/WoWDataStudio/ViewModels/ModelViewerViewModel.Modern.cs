@@ -145,6 +145,17 @@ public sealed partial class ModelViewerViewModel
     }
 
     /// <summary>The modern reader's report of a model (the "Model statistics" note under the numbers).</summary>
+    /// <summary>Your 1.12 game's model: what the viewer does with its particles and ribbons (empty without any).</summary>
+    private static string ClassicEffectNotes(M2Model m)
+    {
+        var (summary, approx, leftOut) = M2ClassicEffects.Describe(m);
+        if (summary.Length == 0) return "";
+        var lines = new List<string> { $"Particles and ribbons: {summary}." };
+        if (approx.Count > 0) lines.Add("Drawn approximately: " + string.Join("; ", approx) + ".");
+        if (leftOut.Count > 0) lines.Add("Left out: " + string.Join("; ", leftOut) + ".");
+        return string.Join("\n", lines);
+    }
+
     private static string ModernNotes(M2Model m)
     {
         if (m.Modern is not { } mi) return "";

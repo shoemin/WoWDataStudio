@@ -17,7 +17,7 @@ public sealed class ModelScene
     private double _seqTime, _globalMs;
     private bool _playing = true;
     private float _speed = 1f;
-    private bool _wireframe, _bones, _bounds, _grid = true, _ground = true, _attachments, _loop = true;
+    private bool _wireframe, _bones, _bounds, _grid = true, _ground = true, _attachments, _loop = true, _particles = true;
     private Vector3 _background = new(0.17f, 0.19f, 0.22f);
 
     public event EventHandler? Changed;
@@ -112,11 +112,14 @@ public sealed class ModelScene
     public bool ShowBounds { get => _bounds; set { _bounds = value; Raise(); } }
     public bool ShowGrid { get => _grid; set { _grid = value; Raise(); } }
     public bool ShowGround { get => _ground; set { _ground = value; Raise(); } }
+    /// <summary>The particle emitters and ribbons (<see cref="M2Model.Effects"/>), your 1.12 game's and another
+    /// version's (on by default).</summary>
+    public bool ShowParticles { get => _particles; set { _particles = value; Raise(); } }
     public Vector3 Background { get => _background; set { _background = value; Raise(); } }
 
     /// <summary>True while something moves (an animation plays, or global sequences run).</summary>
     public bool NeedsContinuousRedraw => _asset != null && _playing && (Duration > 0 || _asset.Model.GlobalSequences.Length > 0 || _asset.Model.TextureTransforms.Length > 0 ||
-                                                                       _asset.Model.Modern?.Effects != null);
+                                                                       _particles && _asset.Model.Effects != null);
 
     /// <summary>Advance the clock by real time (seconds); loops the sequence.</summary>
     public void Advance(double seconds)

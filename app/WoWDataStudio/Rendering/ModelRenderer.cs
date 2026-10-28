@@ -297,8 +297,8 @@ public sealed partial class ModelRenderer : IDisposable
         if (a == null) return;
         ComputeBones(scene, a, cam);
         DrawModel(scene, a, view, viewProj, false);
-        // M3: the particles and ribbons of another version's model (a path of its own; 1.12 models have no Modern info)
-        if (a.Model.Modern?.Effects is { } fx) DrawEffects(scene, a, fx, cam, viewProj);
+        // M3: the particles and ribbons (another version's, or your 1.12 game's own), unless switched off
+        if (scene.ShowParticles && a.Model.Effects is { } fx) DrawEffects(scene, a, fx, cam, viewProj);
         if (scene.Wireframe) DrawModel(scene, a, view, viewProj, true);
         if (scene.ShowBounds) DrawBounds(a, viewProj);
         if (scene.ShowBones) DrawSkeleton(a, viewProj);

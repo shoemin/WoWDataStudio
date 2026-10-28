@@ -107,9 +107,12 @@ internal static class ModelCommands
                 var (summary, count, warning) = svc.Users(model, subject);
                 var errors = M2Validator.Errors(M2Validator.Validate(m));
                 bool edited = s.Workspace!.IsModified(model);
+                var (fxSummary, fxApprox, fxLeftOut) = M2ClassicEffects.Describe(m);
                 var r = new CliResult().With(new
                 {
-                    model, subject, edited, stats = Stats(m), animations = m.Sequences.Select(q => new { name = svc.Resolver.AnimationName(q.AnimId), variant = q.SubId, seconds = q.Duration / 1000.0 }),
+                    model, subject, edited, stats = Stats(m),
+                    animations = m.Sequences.Select(q => new { name = svc.Resolver.AnimationName(q.AnimId), variant = q.SubId, seconds = q.Duration / 1000.0 }),
+                    effects = new { particles = m.ParticleCount, ribbons = m.RibbonCount, drawnParticles = m.Effects?.Particles.Count ?? 0, drawnRibbons = m.Effects?.Ribbons.Count ?? 0, approximated = fxApprox, leftOut = fxLeftOut },
                     looks = looks.Select(l => new { name = l.Name, kind = l.Kind }), users = summary, userCount = count, warning, validatorErrors = errors.Select(e => e.ToString()),
                 });
                 r.Line($"{model}{(edited ? "  [Modified: your workspace version]" : "")}");
@@ -120,6 +123,12 @@ internal static class ModelCommands
                 foreach (var l in looks.Take(30)) r.Line("    " + l.Name);
                 if (looks.Count > 30) r.Line($"    ... and {looks.Count - 30} more");
                 r.Line("  animations: " + string.Join(", ", m.Sequences.Take(25).Select(q => $"{svc.Resolver.AnimationName(q.AnimId)}{(q.SubId > 0 ? $" ({q.SubId + 1})" : "")} {q.Duration / 1000.0:0.##} s")) + (m.Sequences.Length > 25 ? ", ..." : ""));
+                if (fxSummary.Length > 0)
+                {
+                    r.Line($"  effects: {fxSummary}");
+                    if (fxApprox.Count > 0) r.Line("    drawn approximately: " + string.Join("; ", fxApprox));
+                    foreach (var n in fxLeftOut) r.Line("    left out: " + n);
+                }
                 r.Line(errors.Count == 0 ? "  the model validator finds no errors" : $"  the model validator finds {errors.Count} error(s): " + string.Join("; ", errors.Take(5)));
                 return r;
             },
@@ -536,8 +545,9 @@ internal static class ModelCommands
                 new OptionSpec("yaw", "degrees", "turn the camera"),
                 new OptionSpec("size", "WxH", "the picture size (default 900x700)"),
                 new OptionSpec("original", null, "the game's files only, not your edits"),
+                new OptionSpec("no-particles", null, "leave the particles and ribbons out (like switching off Particles in the 3D view)"),
             },
-            Details = "Runs WoWDataStudio.exe --render (installed next to wds.exe): the 3D renderer is part of the app. It needs a graphics driver with OpenGL 3.3. With --version: another version's model with its display's skin or item texture (--original does not apply).",
+            Details = "Runs WoWDataStudio.exe --render (installed next to wds.exe): the 3D renderer is part of the app. It needs a graphics driver with OpenGL 3.3. The particles and ribbons are drawn (after two seconds of their simulation, so a still picture shows them running) unless --no-particles. With --version: another version's model with its display's skin or item texture (--original does not apply).",
             Examples = new[] { "wds models render Creature\\Boar\\Boar.m2 boar.png --display 503", "wds models render \"Mottled Boar\" boar.png --size 1920x1080 --original", "wds models render Creature\\Boar\\Boar.m2 walk.png --sequence Walk --time 500", "wds models render cdisplay:503 boar160.png --version _classic_beta_" },
             Run = async inv =>
             {
@@ -551,6 +561,7 @@ internal static class ModelCommands
                 foreach (var o in new[] { "sequence", "time", "yaw", "size" })
                     if (inv.Opt(o) is { } v) { args.Add("--" + o); args.Add(v); }
                 if (inv.Flag("original")) args.Add("--original");
+                if (inv.Flag("no-particles")) args.Add("--no-particles");
                 s.Dispose();   // the app opens the archives itself
                 var output = new List<string>();
                 int code = await RunApp(inv.Ctx, args, output);
@@ -586,6 +597,7 @@ internal static class ModelCommands
         }
         foreach (var o in new[] { "time", "yaw", "size" })
             if (inv.Opt(o) is { } v) { args.Add("--" + o); args.Add(v); }
+        if (inv.Flag("no-particles")) args.Add("--no-particles");
         s.Dispose();   // the app opens the client itself
         var output = new List<string>();
         int code = await RunApp(inv.Ctx, args, output);

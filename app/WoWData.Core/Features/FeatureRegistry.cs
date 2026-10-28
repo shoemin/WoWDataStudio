@@ -86,6 +86,8 @@ public static class FeatureRegistry
         new("models.anims", "Models", "Animations and what the game plays them for", "models anims") { VersionAware = true },
         new("models.skeleton", "Models", "Skeleton, attachment points and events", "models skeleton") { VersionAware = true },
         new("models.animation-preview", "Models", "Loop", "models render"),
+        // your game's particles and ribbons drawn in 3D (the Particles chip; "wds models render --no-particles" leaves them out)
+        new("models.particles", "Models", "Particles", "models render") { VersionAware = true },
         new("models.attachment-points", "Models", "Attachment points", "models skeleton"),
         new("models.compare-animations", "Models", "Same animation on both", "models compare"),
         new("models.compare-skins", "Models", "Tools > Compare two skins of this model (3D)", "", FeatureFront.GuiOnly, "viewing: two live 3D views side by side (render each skin with \"wds models render --display\")"),
