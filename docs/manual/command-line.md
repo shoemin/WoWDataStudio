@@ -54,7 +54,7 @@ The groups follow the app: `setup`, `settings`, `serverdb`, `index`, `find` (the
 |---|---|
 | `--home <folder>` | keeps the settings, the index and your edits in that folder instead of `%APPDATA%\WoWDataStudio` (the app's). Scripts and tests use it to work apart from your normal edits; the app has the same option. |
 | `--client <folder>` | uses that World of Warcraft folder for this one command, instead of the one in the settings |
-| `--version <client>` | opens another World of Warcraft version read only for this one command, instead of your game: its folder, its name in the folder of other versions, a version (`1.60`) or a build (`70450`). Only the commands that read work with it: `wds find search`, `list`, `info`, `files`, `extract`, `wds textures info`, `export`, `export-all`, `wds models info`, `anims`, `skeleton`, `render`, `wds maps list`, `zones`, `tiles`, `minimap`, `tile`, `render` (and `wds versions open`); every other command refuses with exit code 4. Alone, `wds --version` prints the version of wds. See [Another version, read only](#another-version-read-only). |
+| `--version <client>` | opens another World of Warcraft version read only for this one command, instead of your game: its folder, its name in the folder of other versions, a version (`1.60`) or a build (`70450`). The commands that read or export work with it, as the app's main window works on another version: `wds find search`, `list`, `info`, `files`, `extract`, `used`, `wds textures info`, `export`, `export-all`, `wds models info`, `anims`, `skeleton`, `render`, `export`, `wds maps list`, `zones`, `tiles`, `minimap`, `tile`, `render`, `wds dbc tables`, `info`, `rows`, `get`, `export`, `wds index build` (and `wds versions open`); every other command refuses with exit code 4 and the reason the app shows on its greyed-out buttons. Alone, `wds --version` prints the version of wds. See [Another version, read only](#another-version-read-only). |
 | `--json` | prints one JSON object instead of text (see [JSON output](#json-output)) |
 | `--quiet` | no progress messages |
 | `--yes` | confirms a command that changes the game folder or the server, or deletes something (see [Safety](#safety)) |
@@ -278,6 +278,8 @@ wds serverdb reload
 #### wds index build
 
 Organize the game data (build the index) when it is missing or out of date; --rebuild always (File > Rebuild the index).
+With `--version <client>`: the index of another version (as `wds versions open --rebuild`), and the line about its
+server: no server is connected for another version.
 
 ```
 wds index build [options]
@@ -359,6 +361,9 @@ wds find info Creature\Boar\BoarSkinIvory.blp
 #### wds find used
 
 "Used in game": NPCs and their spawns, loot, vendors, quests, placements, spells, what a texture edit affects.
+With `--version <client>`: what another version's client itself says (the displays that share the entry's model, the
+models that draw a texture), and in `notes` that no server is connected for that version: spawns, loot, vendors and
+quests are never made up.
 
 ```
 wds find used <entry>
@@ -536,6 +541,10 @@ wds models info cdisplay:503 --version _classic_beta_
 #### wds models export
 
 "Export for Blender...": a package folder with the glTF, the textures as PNG and wowdata_manifest.json.
+With `--version <client>`: a model of another version (a path, `#FileDataID` or an entry), its looks from that
+version's creature and item displays, its animations in `.anim` files read for the export; the default folder is
+`<exports>\Models\<client>`. Never into the client's folder (exit code 4); the package cannot be imported back into
+that version. `--open` is the app's **Open in Blender** for another version (`wds models open` works on your game only).
 
 ```
 wds models export <model> [options]
@@ -1025,6 +1034,11 @@ wds server-maps undo --yes
 #### wds dbc tables
 
 Every data table of the game: group, what the server does with it, how much is named, your edit.
+With `--version <client>`, `wds dbc tables`, `info`, `rows`, `get` and `export` read the data tables of another
+version, as the app's **Data tables** tab shows them while that version is open: its DB2 tables (names from its
+executable), columns named where the app's layout file for that build knows them (else `col_N`), encrypted rows left
+out (never guessed). `--where column=value` finds text that contains the value, numbers that equal it. Every command
+that changes a table refuses `--version` (exit code 4).
 
 ```
 wds dbc tables [options]
@@ -3076,15 +3090,25 @@ wds models render cdisplay:15363 roar.png --sequence EmoteRoar --time 1600 --ver
 wds maps list --version _classic_beta_
 wds maps tile Azeroth 32 48 --version _classic_beta_
 wds maps minimap Azeroth --out azeroth160.png --version _classic_beta_
+wds find used cdisplay:503 --version _classic_beta_
+wds models export cdisplay:503 --mode all --version _classic_beta_
+wds dbc rows Map --columns ID,Directory --version _classic_beta_
+wds dbc export Map --out map160.csv --version _classic_beta_
 ```
 
 * Files are named by path, or by their FileDataID as `#123456` when no name is known; `wds find info` lists every file
   with its FileDataID, where its name comes from and whether it can be read (*local*, *encrypted*, *not downloaded*).
 * `wds textures export` writes only the PNG (no `.blp.json`: a texture of another version is not imported back into
   your game this way). Nothing is ever written into the other client's folder (exit code 4).
-* Every command that changes something refuses `--version` with exit code 4 and one line, for example
-  `1.60.1.70450 is open read only: wds dbc set changes files.`; the commands that read but do not work with other
-  versions yet (Used in game, the model export, the tile breakdown) refuse the same way.
+* Every command that changes something refuses `--version` with exit code 4 and one line with the same reason the
+  app shows on its greyed-out buttons, for example `1.60.1.70450 is open read only: wds dbc set changes files.
+  Nothing is written into another version's client until the standalone C client exists, and writing its CASC storage
+  is not supported.` The commands of the server, the designers and the quests say that no server is connected for
+  that version. The commands that read but do not work with other versions yet (the tile breakdown, the comparisons
+  with your edits, `wds find where`, `wds index status`) refuse the same way.
+* `wds find used` shows what the client says and that no server is connected; `wds models export` writes the app's
+  **Export for Blender...** package (`--open`: **Open in Blender**); `wds dbc tables`, `info`, `rows`, `get` and
+  `export` read the version's data tables (rows exported as CSV or JSON); `wds index build` builds its index again.
 * `wds maps list`, `zones`, `tiles`, `minimap`, `tile` and `render` read the maps of another version as they read
   your game's (its Map table, each map's WDT, AreaTable and the area of every ground square, the minimaps, the tile
   files read by FileDataID): the same output, with the FileDataID of each tile's root file in `wds maps tiles`, the
@@ -3403,15 +3427,22 @@ app's tests fail when the app, the command line and this table differ.
 | versions.open | **Open read only** | `wds versions open` |
 | versions.open-menu | **File > Open another version (read only)...** | `wds versions open` |
 | versions.open-welcome | **Open another version (read only)...** | `wds versions open` |
-| versions.window-browse | **Read only: nothing here changes the client** | `wds find search` |
-| versions.window-locked | **Locked (encrypted, no key)** | `wds versions open` |
-| versions.window-export | **Export texture as PNG...** | `wds textures export` |
-| versions.window-3d | **3D VIEW** | `wds models render` |
-| versions.window-model-info | **Model statistics** | `wds models info` |
-| versions.window-anim-files | **In .anim files** | `wds models anims` |
-| versions.window-effects | **Particles / ribbons** | `wds models info` |
-| versions.window-popout | **Open in new window** | (app only: viewing: the 3D view of another version in a window of its own ("wds models render --version" draws a picture)) |
-| versions.window-compare | **Compare two skins (3D)** | (app only: viewing: two live 3D views side by side (render each skin with "wds models render --display --version")) |
+| versions.open-back | **File > Back to your 1.12 game** | (app only: navigation: on the command line every command opens your 1.12 game unless --version is given) |
+| versions.open-read-only | **Read only:** | `wds versions open` |
+| versions.open-locked | **Locked (encrypted, no key)** | `wds versions open` |
+| versions.open-files | **FILES** | `wds find info` |
+| versions.open-export-texture | **Export texture as PNG** | `wds textures export` |
+| versions.open-3d | **Save image...** | `wds models render` |
+| versions.open-model-info | **Model statistics** | `wds models info` |
+| versions.open-anim-files | **In .anim files** | `wds models anims` |
+| versions.open-effects | **Particles / ribbons** | `wds models info` |
+| versions.open-export-model | **Export for Blender...** | `wds models export` |
+| versions.open-blender | **Open in Blender** | `wds models export` |
+| versions.open-tables | **Export rows...** | `wds dbc export` |
+| versions.open-table-rows | **Data tables of** | `wds dbc rows` |
+| versions.open-no-server | **No server connected** | `wds index build` |
+| versions.open-popout | **Open in new window** | (app only: viewing: the 3D view of another version in a window of its own ("wds models render --version" draws a picture)) |
+| versions.open-compare-skins | **Tools > Compare two skins of this model (3D)** | (app only: viewing: two live 3D views side by side (render each skin with "wds models render --display --version")) |
 | help.manual | **Help > User manual** | `wds manual` |
 | help.about | **Help > About WoW Data Studio** | `wds version` |
 | help.cli | **Help > The command line (wds)** | `wds manual` |

@@ -697,16 +697,17 @@ are found by number (`#775971`). Wildcard searches need a listfile.
 
 ### Another version opened read only lists most creatures by their display
 
-*What happens:* in the read-only window of another version, creatures are listed by their model and skins (for
-example *Boar - BoarSkinBlue*), not by name, except the 178 creatures the 1.60 client names itself. Creature names are
-kept by the server, and another version has no server here.
+*What happens:* while another version is open (read only, in the main window), creatures are listed by their model
+and skins (for example *Boar - BoarSkinBlue*), not by name, except the 178 creatures the 1.60 client names itself.
+Creature names are kept by the server, and no server can be connected for another version yet (the server button says
+*No server connected for 1.60.1.70450*).
 
 *Who is affected:* anyone looking for a creature of another version by its name.
 
 *Workaround:* search for the model or skin name (`boar`), or the display ID; your 1.12 game's names (with the server
 database) tell which display a creature uses.
 
-*Status:* by design (another version is read without a server).
+*Status:* open (the app is ready for a server of another version, a server provider per version; none exists yet).
 
 ### Humanoid NPCs of 1.60 show numbers instead of model names
 
@@ -715,20 +716,21 @@ name your 1.12 game knows, so without a listfile their model and textures are sh
 
 *Who is affected:* anyone browsing 1.60's humanoid NPCs without a listfile.
 
-*Workaround:* choose a listfile you have (**Choose listfile...**), then **Rebuild the index** in the read-only window.
+*Workaround:* choose a listfile you have (**Choose listfile...**), then, with the other version open,
+**File > Rebuild the index**.
 
 *Status:* by design (the app does not ship or download a listfile).
 
 ### Another version opened read only needs a few hundred MB of memory
 
-*What happens:* the read-only window keeps its whole Browse list in memory, as the main window does: about 257,000
-entries for the 1.60 client (about 300 MB), about 275,000 with a listfile. With a listfile only 200,000 named textures
+*What happens:* another version keeps its whole Browse list in memory, as your game does: about 257,000 entries for
+the 1.60 client (about 300 MB), about 275,000 with a listfile. With a listfile only 200,000 named textures
 and models are listed; the others (about 481,000 for 1.60) are left out of the list.
 
 *Who is affected:* computers with little memory, and anyone looking for a texture that is left out of the list.
 
-*Workaround:* close the read-only window when you are done; find the other files with
-`wds find files <pattern> --version <client>`.
+*Workaround:* **File > Back to your 1.12 game** when you are done (the other version's list is let go); find the other
+files with `wds find files <pattern> --version <client>`.
 
 *Status:* open.
 
@@ -767,7 +769,7 @@ are combined now (204 still show their first texture only).
 
 ### Player characters and NPC customization of other versions are not shown
 
-*What happens:* the read-only window lists no player races, and a humanoid NPC of 1.60 shows its baked texture with
+*What happens:* another version lists no player races, and a humanoid NPC of 1.60 shows its baked texture with
 its model's default parts: its hair, face and clothes choices are not applied (they use the customization tables of
 the newer clients).
 
@@ -779,7 +781,7 @@ the newer clients).
 
 ### The maps of other versions are drawn more simply than in the game
 
-*What happens:* the 3D view of another version's tile (the read-only window's **Maps** tab) draws the ground with up
+*What happens:* the 3D view of another version's tile (its **Maps** tab) draws the ground with up
 to 8 texture layers, the fine alpha maps and holes, the liquids, the doodads and the buildings, but leaves out what
 the app's 3D view also leaves out for your game, and some parts only the newer clients have:
 
@@ -799,9 +801,50 @@ the app's 3D view also leaves out for your game, and some parts only the newer c
 
 *Status:* open (the same limits as the 3D view of your game, see *The 3D views are previews, not the game's renderer*).
 
+### Another version cannot be changed, and replaces your game in the window
+
+*What happens:* another version opens in the main window, in place of your 1.12 game: every button and menu item that
+writes (imports, Test in game, the release patch, revert, hot reload, saving data tables, the map imports, Noggit)
+is greyed out with the reason *Nothing is written into another version's client until the standalone C client exists,
+and writing its CASC storage is not supported.* The Server data tab and the designers show why they are not there.
+To edit your game, or to see both at once, go back to your game (**File > Back to your 1.12 game**); a 3D pop-out
+window (**Open in new window**) can stay open beside it only until you switch.
+
+*Who is affected:* anyone who wants to change a file of another version, or to see two versions side by side.
+
+*Workaround:* export what you need from the other version (PNG, glTF for Blender, rows as CSV or JSON, pictures),
+then go back to your game. The [update catalog](other-versions.md#the-update-catalog-picking-1.60-updates-for-your-game)
+brings 1.60 terrain, textures, interface art, fonts and music into your game.
+
+*Status:* by design (the user's rule: no updates into another version's client before the standalone C client).
+
+### "Used in game" of another version has no server rows and no placements
+
+*What happens:* while another version is open, **Used in game** shows only what its client says: the displays that
+share the entry's model and the models that draw a texture. Spawns, loot, vendors and quests come from a world server,
+and none can be connected for another version yet: the panel says so instead of showing anything made up. Where an
+entry is placed on the maps is not counted yet; the Maps tab's **On this tile** lists what is placed on a tile.
+
+*Who is affected:* anyone looking up where a creature or object of another version is used.
+
+*Workaround:* **On this tile** in the Maps tab; `wds maps tile <map> <x> <y> --version <client>` on the command line.
+
+*Status:* open (the server rows wait for a server of that version; the placements are planned).
+
+### The tile breakdown is greyed out for other versions
+
+*What happens:* **Break down this tile...** reads the tiles of your 1.12 game; with another version open it is greyed
+out ("Not for 1.60.1.70450 yet").
+
+*Who is affected:* anyone who wants to look at one piece of a 1.60 tile on its own.
+
+*Workaround:* the tile's 3D view, its facts and **On this tile** show the tile's pieces; `wds maps tile ... --version`.
+
+*Status:* open (planned).
+
 ### Two maps of the 1.60 copy have no tiles to show
 
-*What happens:* in the read-only window of the 1.60 client, the maps *test* (13) and *Manor Mistmantle* (3109) are
+*What happens:* with the 1.60 client open, the maps *test* (13) and *Manor Mistmantle* (3109) are
 listed with *its WDT (#...) is not in this client: no tiles to show*: their map files are not in the measured copy.
 Another 8 rows of the Map table are encrypted and not listed at all (the status above the minimap counts them).
 
@@ -953,8 +996,7 @@ changes it; the terrain pop-out cannot save a picture.
 
 ### Each closed 3D window leaves two small handles behind
 
-*What happens:* every 3D view that closes (a model or terrain pop-out window, the three views of a compare window, the
-read-only window of another version with its 3D view, its Maps tab's 3D view and its building preview once shown)
+*What happens:* every 3D view that closes (a model or terrain pop-out window, the three views of a compare window)
 leaves two Windows handles (a named shared-memory section and a mutex, both named after the same GUID) and about
 110 to 220 KB of memory behind. The app's own resources come back (the GL contexts, textures and buffers it counts, the
 windows and their view models), so the rest happens below the app, in the OpenGL to Direct3D bridge of the 3D control

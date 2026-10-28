@@ -175,6 +175,15 @@ milliseconds (the time is shown at its bottom).
   table is used. Items in a group without their own chance share what is left of the group equally. *(quest)* marks
   items that drop only while you have the quest.
 
+## Another version
+
+With another version open (read only, see [Other versions](other-versions.md#no-server-for-another-version)), the
+panel shows what that client itself says: **Displays using its model** (the creature and item displays that share the
+entry's model, with the names the client knows) and, for a texture, **Models that draw it**. Spawns, loot, vendors and
+quests come from a world server; none can be connected for another version yet, so the panel says *No server is
+connected for 1.60.1.70450...* instead. Placements on the maps are not counted for other versions yet: the Maps tab's
+**On this tile** lists what is placed on a tile. `wds find used <entry> --version <client>` prints the same.
+
 ## Not shown yet
 
 * Creatures spawned only by scripts, events or spells (the panel says *Not spawned in the world by the database*).

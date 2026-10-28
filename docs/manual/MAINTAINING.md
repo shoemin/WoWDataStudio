@@ -92,12 +92,14 @@ MySQL server loaded with the fixture and its quest-chain supplement `serverdb\qu
 Forest, and the Updates tab with the update catalog and a preview of Elwynn Forest's terrain; dry runs that write
 nothing; the catalog's first scan takes a minute or two) needs a folder of client copies in the environment variable
 `WDS_SCREENSHOT_OTHER_CLIENTS` (else these pictures are skipped); `WDS_SCREENSHOT_ONLY=versions` makes only them.
-`Services\VersionOpenScreenshots.cs` (144-154: the 1.60 client opened read only in its own window: the Other versions
-tab's **Open read only**, a boar's display with its files, an item, an interface icon in the texture viewer, (M2)
+`Services\VersionOpenScreenshots.cs` (144-154 and 157-161: the 1.60 client opened read only in the main window: the
+Other versions tab's **Open read only**, a boar's display with its files, an item, an interface icon in the texture viewer, (M2)
 the boar and the Worn Shortsword in the 3D view, (M3) Taerar playing EmoteRoar from its `.anim` file and the
 Arcane_Missile_Lvl4 spell effect with its particles, and (M4) the Maps tab with Eastern Kingdoms, Elwynn Forest and
 the tile of Northshire Abbey (32, 48) in 3D, and the biggest building of that tile followed from "On this tile" to
-its building preview; the first build of that tile's models takes about 10 seconds) needs the
+its building preview; the first build of that tile's models takes about 10 seconds; then the Data tables tab with
+the Map table, the Server data tab's "No server connected", My changes and the map's edit buttons greyed out with the
+reason, and "Used in game" of the boar's display; at the end your 1.12 game is opened again) needs the
 same folder (with the `_classic_beta_` copy); its index is built in the run's temporary app folder (about 10 seconds);
 `WDS_SCREENSHOT_ONLY=versions-open` makes only them. Use `--client` with a copy of the 1.12 client (`Client3`), never
 the folder you play with.
@@ -176,12 +178,12 @@ for ten frames, shown and cleared), `model_popout` (a model pop-out window opene
 closed), `model_compare` (the compare window of two skins), `model_browse` (another creature every cycle, as when a
 user browses the list), `texture_viewer`, `maps_tab` (two maps in turn, a tile with its 3D preview), `terrain_popout`,
 `data_tables`, `server_data`, `spell_designer`, `class_designer`, `quest_designer`, `other_versions` (the 2.4.3 and
-3.3.5a copies in turn), `versions_window` (the 1.60 client opened read only in its own window: a search, an
+3.3.5a copies in turn), `versions_open` (the 1.60 client opened read only in the main window: a search, an
 entry with its texture and, for a model, its 3D view with up to 8 of its animations kept in `.anim` files played in
-turn and its particles running, for a building its building preview, the window closed; the first cycle builds its
-index), `versions_maps` (M4: the same window's Maps tab: Eastern Kingdoms, Kalimdor, map 2997 with 8-layer ground and
-the Deadmines in turn, one of their tiles in 3D turned around, every other cycle a terrain pop-out window, the window
-closed). Each runs `--cycles` times (default 100); `model_viewer`, `model_popout` and `model_browse`
+turn and its particles running, for a building its building preview, then your 1.12 game opened again; the first
+cycle builds its index), `versions_maps` (the 1.60 client's Maps tab in the main window: Eastern Kingdoms, Kalimdor,
+map 2997 with 8-layer ground and the Deadmines in turn, one of their tiles in 3D turned around, every other cycle a
+terrain pop-out window, then your 1.12 game again). Each runs `--cycles` times (default 100); `model_viewer`, `model_popout` and `model_browse`
 run twice as many.
 
 After every cycle the run collects the garbage (full, blocking, compacting) and records the managed heap

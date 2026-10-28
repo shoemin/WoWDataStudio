@@ -4,6 +4,70 @@ What changed in each release of WoW Data Studio (the desktop app, `app\`). Bugs 
 listed in the manual's [Known issues](docs/manual/known-issues.md); when one is fixed it is removed from that list and
 recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
 
+## Unreleased
+
+### Changed
+
+* **Another version opens in the main window, with the same tabs as your game (experimental).** The separate read-only
+  window of 0.15.0 is gone: **Open read only** (Other versions tab), **File > Open another version (read only)...**
+  and the welcome screen's **Open another version (read only)...** open a modern client such as the "1.60" Classic
+  client in the main window, in place of your 1.12 game: **Browse** with the files of each entry (FileDataID, name
+  source, state) and the building preview, the texture viewer, the 3D view, **Maps**, **Data tables**, **Used in game**,
+  the pop-out windows and the Other versions tab ([Other versions](docs/manual/other-versions.md#opening-another-version-read-only)).
+  **File > Back to your 1.12 game** (and the button in the yellow *Read only* bar) opens your game again; the app
+  always starts with your game, whose folder in the settings is not changed.
+  * *Every write is greyed out with the reason*, shown on hover (also on the greyed-out control) and next to the
+    buttons: *1.60.1.70450 is open read only. Nothing is written into another version's client until the standalone C
+    client exists, and writing its CASC storage is not supported.* That is every import (texture, model, map, terrain),
+    Test in game, Remove from game, revert, the release patch and its uninstall, hot reload, the workspace folder,
+    Noggit, Update server maps, the Data tables' Save and Copy to server, and the server's Apply and cache clearing.
+    The tile breakdown is greyed out as "not for other versions yet". `GameProfile.WriteReason` is the one text; the
+    attached `WriteGuard.Reason` greys a control out and gives it back unchanged when your game is open again.
+  * *No server for another version*: the server-backed parts go through a per-version server provider
+    (`IServerProvider`, `ServerProviders`; your 1.12 game's VMaNGOS / CMaNGOS database is one). Another version has
+    none yet, so the server button says *No server connected for 1.60.1.70450*, the Server data tab and the designer
+    tabs show why they are empty, and **Used in game** shows what the client itself says (the displays sharing a model,
+    the models drawing a texture, `ModernUsage`) with the note that no server is connected. Nothing is made up. A
+    server for that version can be registered later.
+  * *Exports to a folder still work*: **Export texture as PNG...** (no `.blp.json`), **Export for Blender...** and
+    **Open in Blender** (new for other versions: `ModernModelExport`, the same glTF package from the modern reader's
+    model, the looks of the version's creature and item displays, the animations in `.anim` files read for it),
+    **Save image...**, and the **Data tables** tab's **Export rows...** (CSV or JSON). A folder inside the client is
+    refused.
+  * *Data tables of another version*: the tab lists the version's DB2 tables (read when clicked), a row search and the
+    export; columns named where our layout file for the build knows them, encrypted rows left out.
+  * Your 1.12 game is unchanged: the same view models and views with nothing greyed out (the guard does nothing
+    without a reason), the same index and open path; `MainWindowVersionTests` switches to the synthetic 1.60 client
+    and back and checks both.
+* **Command line**: `--version <client>` works for what the main window can do for another version: besides `find`,
+  `textures`, `models info / anims / skeleton / render` and `maps`, now `wds find used`, `wds models export` (with
+  `--open` for Open in Blender), `wds dbc tables`, `info`, `rows`, `get`, `export` and `wds index build`. Every write
+  command refuses `--version` with exit code 4 and the same reason as the app (`1.60.1.70450 is open read only: wds
+  dbc set changes files. Nothing is written into ...`); the server, designer and quest commands say that no server is
+  connected for that version ([Another version, read only](docs/manual/command-line.md#another-version-read-only)).
+
+### Removed
+
+* The read-only window of another version (`OtherVersionWindow`, `OtherVersionWindowViewModel`) and the read-only
+  constructor of the Maps tab's view model: the main window does all of it now. The readers of 0.15.0 (`GameProfile`,
+  `IMapView`, `MapCatalog160`, `TerrainTileFromNeutral`, the FileDataID mode of `WmoGeometry`, `ModernIndexBuilder`,
+  the modern model reader) and each version's own index are kept.
+
+### Tests and tools
+
+* `MainWindowVersionTests` (new): the main window's view models open the synthetic 1.60 client and go back to a linked
+  copy of your 1.12 game (stages, title, tabs, nothing greyed out for 1.12, every write refused with the reason for
+  1.60, no server connected, Used in game, Export for Blender, Export texture as PNG, the read-only Data tables and
+  their CSV export, the client's folder unchanged), `WriteGuard` greying out and giving a control back, a server
+  provider plugged in for another version, exports refusing the client's folder. `VersionOpenCliTests`: the new
+  `--version` commands, the refusal reasons of every other command, the Data tables, Used in game and Export for
+  Blender commands. `OpenOtherVersionTests` and `M4ModernTests` follow the new profile and refusal text.
+* Screenshots 144-154 made again in the main window, and 157-161 new: the read-only Data tables tab, the Server data
+  tab without a server, My changes and the map's edit buttons greyed out, Used in game of a 1.60 display
+  (`WDS_SCREENSHOT_ONLY=versions-open`).
+* Leak test: `versions_window` is now `versions_open` (the 1.60 client opened in the main window, an entry, then your
+  game again); `versions_maps` opens the 1.60 client's Maps tab in the main window and goes back to your game.
+
 ## 0.15.0 (2026-10-28)
 
 ### Added

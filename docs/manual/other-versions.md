@@ -126,12 +126,13 @@ Then the files have their names, and wildcards work.
 
 ## Opening another version (read only)
 
-A modern client, such as the "1.60" Classic client (`_classic_beta_`, build 1.60.1.70450), can be opened the way your
-1.12 game opens: a Browse list of its creatures, items, game objects, spell effects, textures and world models, the
-details of each (where it comes from, its files, its textures), the texture viewer, the 3D view of its models and
-buildings, and its maps (the **Maps** tab). It opens *read only*, in a
-window of its own next to your 1.12 window, so you can look at both side by side. Nothing in the client's folder is
-changed, and your 1.12 game and your changes are not involved.
+A modern client, such as the "1.60" Classic client (`_classic_beta_`, build 1.60.1.70450), opens in the main window
+the way your 1.12 game opens, with the same tabs: **Browse** (its creatures, items, game objects, spell effects,
+textures and world models, the details of each, the texture viewer, the 3D view of its models and buildings),
+**Maps**, **Data tables** (its own tables, read only), **Used in game**, the exports, and the **Other versions** tab.
+It opens *read only*: every button and menu item that would write something is greyed out and says why (see
+[What is greyed out, and why](#what-is-greyed-out-and-why)). Nothing in the client's folder is changed, and your 1.12
+game and your changes are kept as they are.
 
 1. Open it in one of three ways:
    * in the **Other versions** tab, click the client in **Clients found**, then **Open read only**;
@@ -142,15 +143,79 @@ changed, and your 1.12 game and your changes are not involved.
    modern clients, pick one (the newest 1.60 build is selected).
 2. The first time, the window shows *Organizing game data...* while the app reads that version's tables and file names:
    about 8 seconds for the 1.60 client, about 13 seconds with a listfile. The result (its index) is kept in the app's
-   folder, so the next time the window opens in about a second. **Rebuild the index** reads the client again (after
-   you chose another listfile, for example).
-3. Search as in the Browse tab: type words into the search box, tick the types to show, click a result. The
-   **Maps** tab next to **Browse** shows the version's maps (see [Maps](#maps)).
+   folder, so the next time it opens in about a second. **File > Rebuild the index** reads the client again (after you
+   chose another listfile, for example).
+3. Search as for your game: type words into the search box, tick the types to show, click a result.
+4. **File > Back to your 1.12 game** (or the button **Back to your 1.12 game** in the yellow bar) opens your game
+   again, with your changes. The app always starts with your game.
 
 ![The 1.60 client selected in the Other versions tab: Open read only](../screenshots/144_versions_open_tab.png)
 
-The top of the window says which version is open and **Read only: nothing here changes the client**. There are no
-buttons to edit, import, install or test anything in this window.
+While another version is open:
+
+* the window title and the top bar name it (*World of Warcraft 1.60.1.70450 · Classic (modern client) · read only*);
+* a yellow bar under the top bar says **Read only:** and why, with **Back to your 1.12 game**;
+* the line at the bottom shows the locked records and where the file names come from (see
+  [Locked records and names](#locked-records-and-names));
+* the server button says *No server connected for 1.60.1.70450* (see [No server for another version](#no-server-for-another-version)).
+
+### What is greyed out, and why
+
+Everything that writes is greyed out: **Import edited PNG...**, **Test in game**, **Remove from game**, **Revert my
+change**, **Build release patch (patch-3.MPQ)...**, **Import edited model...**, the map's **Edit in Noggit...**,
+imports and server update, **Save to my workspace** and **Copy to server...** of the data tables, **Reload in running
+game**, **Uninstall release patch (patch-3.MPQ)**... Hover over one (it shows its tooltip even greyed out) or read the
+line next to the buttons for the reason:
+
+*1.60.1.70450 is open read only. Nothing is written into another version's client until the standalone C client
+exists, and writing its CASC storage is not supported.*
+
+The command line refuses the same commands with the same reason (exit code 4, see
+[the command line](command-line.md#another-version-read-only)).
+
+What still works is everything that reads or exports to a folder you choose: **Export texture as PNG...** (a PNG, no
+`.blp.json` note), **Export for Blender...** and **Open in Blender** (the package goes to a folder of your exports;
+it cannot be imported back into that version), **Save image...** of the 3D views, **Export rows...** of the data
+tables, and the [command line](command-line.md#another-version-read-only)'s exports and pictures. The app refuses a
+folder inside the client.
+
+### No server for another version
+
+A world server gives the names of most creatures, their spawns, loot, vendors and quests. The app has one for your
+1.12 game (your VMaNGOS or CMaNGOS database); for another version none can be connected yet, so:
+
+* the server button in the top bar says *No server connected for 1.60.1.70450*;
+* **Used in game** shows what the client itself says (the displays that share a model, the models that draw a
+  texture) and the note *No server is connected for 1.60.1.70450...*; nothing is made up in place of the server's
+  rows;
+* the **Server data** tab shows **No server connected** with the reason, and the designer tabs (**Spell designer**,
+  **Classes and talents**, **Quest chains**) show why they are not there for another version: they change your 1.12
+  game's tables and its server.
+
+The app is ready for a server of another version (a *server provider* per version); when one exists, these parts
+show its data.
+
+![Used in game of a 1.60 creature display: the displays of its model, and no server connected](../screenshots/161_versions_open_used.png)
+
+![The Server data tab while the 1.60 client is open: no server connected](../screenshots/158_versions_open_no_server.png)
+
+### My changes
+
+Another version has no workspace and no changes: **My changes** is empty and its buttons are greyed out with the
+reason. Your 1.12 changes are kept; **File > Back to your 1.12 game** shows them again.
+
+![My changes while the 1.60 client is open: no workspace, every button greyed out](../screenshots/159_versions_open_my_changes.png)
+
+### Data tables
+
+The **Data tables** tab shows the version's own data tables (its DB2 files, more than a thousand), read only: pick a
+table on the left (a table is read when you click it), type words into the search box above the rows, and **Export
+rows...** saves the rows shown as CSV (for spreadsheets) or JSON. The columns have names where the app knows them for
+that build (for 1.60.1.70450 the tables of maps, displays, models, textures, items, spells and spell effects), else
+they are called `col_0`, `col_1`... Encrypted rows are left out, and the note above the rows says how many.
+**Save to my workspace** and **Copy to server...** are greyed out with the reason.
+
+![The Data tables tab of the 1.60 client: the Map table read only](../screenshots/157_versions_open_tables.png)
 
 ### What is listed
 
@@ -194,16 +259,21 @@ next to it: a texture of another version is not imported back into your game thi
 ### 3D models
 
 When the entry has a model (a creature display, an item, a game object, a spell effect, a model under `World\`), the
-details show it under **3D VIEW**, with the controls of your game's [3D model viewer](model-viewer.md): turn and zoom
+details show it in the 3D view, with the controls of your game's [3D model viewer](model-viewer.md): turn and zoom
 with the mouse, the animations, the level of detail, the geosets, the background, **Save image...**.
 
 * *Creatures*: **Displays using this model (33)** lists every display of the model with its skin; pick one to see the
   model with that skin. A humanoid NPC shows its baked texture.
 * *Items*: **Item displays using this model (16)** lists the item displays with their texture. An item with a model
   per race and sex shows its first model.
-* **Open in new window** shows the model in a window of its own, as in your game's Browse tab: it follows what you
-  click in this window, or keeps its model when pinned.
-* **Compare two skins (3D)** shows two displays of the model side by side, with the same animation.
+* **Open in new window** shows the model in a window of its own, as for your game: it follows what you click in the
+  Browse tab, or keeps its model when pinned.
+* **Tools > Compare two skins of this model (3D)** shows two displays of the model side by side, with the same
+  animation.
+* **Export for Blender...** (under the view, and in the **Tools** menu) saves the model as a glTF package with its
+  textures as PNG, the look shown or every display's look; **Open in Blender** exports the look shown and starts
+  Blender with it. The animations kept in `.anim` files are read for the export. The package is for Blender and other
+  programs: **Import edited model...** is greyed out, nothing goes back into that version.
 * The animations have the names of your 1.12 game for the same animation numbers (*Stand*, *Walk*...); the others are
   called *Anim* and their number. Without a 1.12 game set, every animation is called that way.
 * **Model statistics** say which format was read (1.60 models are a newer kind of model file than 1.12's: they keep
@@ -276,8 +346,8 @@ are one building, with 1,298 groups and 2,091 textures, all read.
 
 ### Maps
 
-The **Maps** tab of the read-only window works like your game's [Maps tab](maps-and-terrain.md), without anything that
-edits: pick a map on the left, a zone to light up its tiles, click a tile on the minimap.
+The **Maps** tab works like your game's [Maps tab](maps-and-terrain.md), with every button that edits greyed out:
+pick a map on the left, a zone to light up its tiles, click a tile on the minimap.
 
 * **MAPS**: the maps of the version's Map table, in the same groups as your game (continents, world maps, dungeons,
   raids, battlegrounds). The line above the minimap says how many rows of the Map and AreaTable tables are locked; a
@@ -307,9 +377,13 @@ What the 3D view of a 1.60 tile shows:
   have one);
 * the doodads (read like the 1.60 models of the 3D view) and buildings (read by FileDataID), also a building's scale.
 
-The buttons that change a map (**Break down this tile...**, **Edit in Noggit...**, the imports, Blender, **Test map in
-game**, **Build release patch**, **Update server maps...**) and the **Specular ground (_s textures)** choice are not in
-this window: the 1.60 tiles name the textures they are drawn with.
+The buttons that change a map (**Edit in Noggit...**, **Import map changes...**, **Open terrain in Blender...**,
+**Import edited terrain...**, **Test map in game (loose files)**, **Build release patch (patch-3.MPQ)...**, **Update
+server maps...**) are greyed out, with the reason on hover and on the line under **EDIT THE MAP**. **Break down this
+tile...** is greyed out too: it reads the tiles of your 1.12 game, and for other versions it comes later. The
+**Specular ground (_s textures)** choice is not shown: the 1.60 tiles name the textures they are drawn with.
+
+![The edit buttons of a 1.60 tile, greyed out with the reason](../screenshots/160_versions_open_map_actions.png)
 
 When a file of a tile cannot be read (encrypted, or not in the client), the tile still shows what can be read and the
 facts say what is missing, for example *The placement (obj0) file (#123456) is encrypted: its doodads and buildings
@@ -325,7 +399,7 @@ Also on the [command line](command-line.md#another-version-read-only): `wds maps
 ### Locked records and names
 
 Some rows of a modern client's data tables are encrypted (unreleased content); the app never guesses them. The line at
-the bottom of the window, **Locked (encrypted, no key)**, says how many rows of the tables the list comes from can be
+the bottom of the main window, **Locked (encrypted, no key)**, says how many rows of the tables the list comes from can be
 read, for the 1.60 client: 14,204 of 14,229 creature displays (25 locked), 7,056 of 7,071 item displays (15 locked),
 19,179 of 19,268 item names (89 locked), 3,223 of 3,234 game object displays (11 locked), 2,719 of 2,732 spell effects
 (13 locked). The line below it says how many files have a name and where the names come from.
@@ -486,9 +560,10 @@ What an import writes:
 
 ## Not yet
 
-* Another version opened read only shows Browse, textures and 3D models with all their animations and their particle
-  effects. Its maps, player characters, buildings in 3D and "Used in game" are planned, not there yet; 2.4.3 and
-  3.3.5a (MPQ clients) open in this tab only.
+* Another version opens in the main window with the same tabs, read only. Its player characters, the tile breakdown,
+  a world server for it (spawns, loot, quests, names) and the placements in "Used in game" are planned, not there yet;
+  2.4.3 and 3.3.5a (MPQ clients) open in this tab only. Writing into another version comes only after the standalone C
+  client exists.
 * Most columns of the modern clients' data tables have no names yet.
 * Maps convert from 1.60 to 1.12 only: 1.12 to 1.60, and maps of 2.x and 3.x, are planned. The models and buildings
   1.12 does not have are left out (their conversion is planned), see [Known issues](known-issues.md#other-versions).
@@ -503,7 +578,9 @@ What an import writes:
 `wds versions find`, `info`, `files`, `extract`, `tables`, `rows`, `compare`, `convert-map`, `updates`, `update-info` and
 `import-updates` do everything this tab does, and `wds settings set other-clients <folder>` sets the folder; see
 [The command line](command-line.md#other-versions-experimental). `wds versions open <client>` opens another version
-read only, and the commands that read take `--version <client>`: `wds find search boar --version _classic_beta_`,
-`wds models info cdisplay:503 --version _classic_beta_`, `wds models render cdisplay:503 boar.png --version _classic_beta_`,
-`wds models anims cdisplay:15363 --version _classic_beta_` (which animations are in `.anim` files, and whether they
-load); see [Another version, read only](command-line.md#another-version-read-only).
+read only, and the commands that read or export take `--version <client>`, as the main window works on it:
+`wds find search boar --version _classic_beta_`, `wds find used cdisplay:503 --version _classic_beta_`,
+`wds models render cdisplay:503 boar.png --version _classic_beta_`, `wds models export cdisplay:503 --version _classic_beta_`,
+`wds dbc rows Map --version _classic_beta_`, `wds dbc export Map --out map.csv --version _classic_beta_`. The commands
+that write refuse `--version` with the reason the app shows on its greyed-out buttons; see
+[Another version, read only](command-line.md#another-version-read-only).

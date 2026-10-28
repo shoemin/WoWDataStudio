@@ -5,6 +5,15 @@ CHANGELOG); M5-M7 not yet. First target: the modern Classic "1.60" beta
 (`_classic_beta_`, `WowB.exe` 1.60.1.70450, CASC) from `G:\WoW Clients and Patches\Clients\BattleNet snapshot 2026-10-20`.
 Later: 2.4.3 / 3.3.5a (MPQ), Classic Era 1.15.x and Retail (CASC).
 
+**Update 2026-10-28 (the user's decision, replacing section 2.4's recommendation):** another version opens in the
+**main window**, with the same tabs and features as the 1.12 game (Browse, Maps, Data tables, the viewers, 3D, Used in
+game...), not in a window of its own. Server-backed parts go through a per-version server provider
+(`WoWData.Core.Servers.IServerProvider`; none exists for other versions yet, so they say "no server connected");
+every write is greyed out with one reason (`GameProfile.WriteReason`: no updates into another version's client
+before the standalone C client, and CASC writing is not supported), and the command line refuses the same commands
+with the same reason; exports to a folder still work. The separate read-only window was removed; the readers of
+M1-M4 and each version's own index are kept. See the CHANGELOG ("Unreleased") and `docs\manual\other-versions.md`.
+
 What the user asked for (2026-10-25): open another version **the same way the 1.12 client opens today**: Browse
 (creatures, items, game objects, spell effects, textures, world models), the 3D model viewer, the texture viewer and the
 maps. Read only: no editing, no workspace, no patch or install, no server. The existing "Other versions" tab (files,
@@ -154,7 +163,7 @@ not create (`fdid(path, fdid, state)`, `locked(table, clear, locked)`) and that 
 
 ### 2.4 Where the user opens it
 
-* **Recommended: a read-only window per version** ("1.60.1.70450 beta - read only"), opened from the Other versions tab
+* **Superseded (2026-10-28): the main window is used instead, see the update at the top.** Was recommended: a read-only window per version ("1.60.1.70450 beta - read only"), opened from the Other versions tab
   (a button "Open read only" on the selected client), from **File > Open another version (read only)...**, and from the
   welcome screen. It hosts the same `BrowserView`, model viewer, texture viewer and Maps view with its own `AppSession`
   and a `BrowserViewModel` whose tabs and editing commands follow `Profile.Caps` (the constructor,

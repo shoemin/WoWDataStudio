@@ -13,11 +13,13 @@ A tour of everything on the main screen, from top to bottom. The task chapters (
 |---|---|
 | **Change World of Warcraft folder...** | Back to the welcome screen to pick another game folder. Each game folder has its own index and its own edits. |
 | **Settings...** | Opens [Settings](settings.md). |
+| **Open another version (read only)...** | Opens another World of Warcraft version (such as the 1.60 Classic client) in this window, in place of your game, with the same tabs; everything that writes is greyed out with the reason. See [Other versions](other-versions.md#opening-another-version-read-only). |
+| **Back to your 1.12 game** | Shown while another version is open: opens your game folder again, with your changes. |
 | **Import edited model...** | Brings back a model you edited in Blender (or its PNG textures). See [Models and Blender](model-export-import.md). |
 | **Build release patch (patch-3.MPQ)...** | Packs all your changes into one archive. See [Releasing](releasing.md). |
 | **Open my workspace folder** | Opens the folder where your edited files are kept (in Windows Explorer). |
 | **Reload names from the server database** | Reads creature, item and object names again, for example after you started the database. |
-| **Rebuild the index** | Reads the game data again (a few seconds). Your changes are kept. |
+| **Rebuild the index** | Reads the game data again (a few seconds). Your changes are kept. With another version open, it reads that version again. |
 | **Exit** | Closes the app. |
 
 **Tools**
