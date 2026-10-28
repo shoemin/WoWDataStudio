@@ -71,11 +71,44 @@ public sealed class AppSession : IDisposable
         {
             lock (_mapsGate)
             {
-                if (_maps == null && Data != null && Client != null) _maps = WoWData.Core.Maps.MapCatalog.Load(Data, Client.IndexFile);
+                if (_maps == null && Data != null && Client != null)
+                {
+                    _maps = WoWData.Core.Maps.MapCatalog.Load(Data, Client.IndexFile);
+                    _maps.ReadTile = ReadCurrent;     // M4: LoadTerrain reads your workspace's version first, as before
+                }
                 return _maps;
             }
         }
     }
+
+    private WoWData.Core.Maps.MapCatalog160? _maps160;
+
+    /// <summary>M4: the maps of another version opened read only (Map / AreaTable, WDTs, minimaps, tiles through the
+    /// neutral map reader), loaded on first use; null for your 1.12 game.</summary>
+    public WoWData.Core.Maps.MapCatalog160? OtherMaps
+    {
+        get
+        {
+            lock (_mapsGate)
+            {
+                if (_maps160 == null && Other != null && Files != null && OtherPaths != null)
+                {
+                    var names = Files.Names != null ? new WoWData.Core.Maps.ModernAssetNames(Files.Names) : null;
+                    var src = new WoWData.Core.Maps.Conversion.Casc160MapSource(Other, names ?? (WoWData.Core.Maps.Neutral.IAssetNames)new WoWData.Core.Maps.Neutral.CascAssetNames(Files.Storage), "the names of this client's index");
+                    var files = Files;
+                    _maps160 = WoWData.Core.Maps.MapCatalog160.Load(src, (id, ext) => WoWData.Core.M2.Modern.ModernModelSource.NameOf(files, id, ext), OtherPaths.MinimapCacheDir);
+                }
+                return _maps160;
+            }
+        }
+    }
+
+    /// <summary>M4 (design 2.2): the maps of the open game for the viewing code: <see cref="MapCatalog"/> for your 1.12
+    /// game (the same object), <see cref="OtherMaps"/> for another version.</summary>
+    public WoWData.Core.Maps.IMapView? Maps => Data != null ? MapCatalog : OtherMaps;
+
+    /// <summary>M4: where the minimap overviews of the open game are cached (its app folder).</summary>
+    public string? MinimapCacheDir => (Client ?? OtherPaths)?.MinimapCacheDir;
 
     private WoWData.Core.Dbc.DbcService? _dbc;
 
@@ -501,6 +534,7 @@ public sealed class AppSession : IDisposable
         lock (_mapsGate)
         {
             _maps = null;
+            _maps160 = null;
             _dbc = null;
             _serverData = null;
             _usage?.Dispose();

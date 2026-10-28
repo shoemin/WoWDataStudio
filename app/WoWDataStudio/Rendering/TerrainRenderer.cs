@@ -9,7 +9,8 @@ namespace WoWDataStudio.Rendering;
 /// <summary>
 /// Draws a <see cref="TerrainScene"/> with OpenGL 3.3 core (the same viewport and camera as the model viewer):
 /// the terrain per chunk with up to 4 texture layers (tiled 8 times per chunk, as the client does) blended by their
-/// 4-bit alpha maps and darkened by the shadow map, lit with the MCNR normals; holes are left out of the mesh; liquids as
+/// 4-bit alpha maps and darkened by the shadow map (M4: up to 8 layers for another version's tiles, layers 4-7 from a
+/// second alpha atlas; a chunk with at most 4 layers is drawn exactly as before), lit with the MCNR normals; holes are left out of the mesh; liquids as
 /// translucent coloured surfaces; doodads with their own textures in their rest pose (alpha-keyed and blended materials as
 /// in the model viewer, no animation, no particles); WMO groups with the first texture of each batch (no portals,
 /// lights or vertex colours). Must run with the GL context current.
@@ -23,6 +24,7 @@ public sealed class TerrainRenderer : IDisposable
     private int _wVao, _wVbo, _liquidCount;
     private readonly List<int> _textures = new();
     private readonly List<int> _atlases = new();
+    private readonly List<int> _atlases2 = new();
     private readonly Dictionary<ModelAsset, (int Vao, int Vbo, int Ebo)> _doodadBuffers = new();
     private readonly Dictionary<WmoMesh, (int Vao, int Vbo, int Ebo)> _wmoBuffers = new();
     private readonly ConditionalWeakTable<RgbaImage, Holder> _imageTex = new();
@@ -60,7 +62,12 @@ public sealed class TerrainRenderer : IDisposable
         uniform sampler2D uL1;
         uniform sampler2D uL2;
         uniform sampler2D uL3;
+        uniform sampler2D uL4;
+        uniform sampler2D uL5;
+        uniform sampler2D uL6;
+        uniform sampler2D uL7;
         uniform sampler2D uAlpha;
+        uniform sampler2D uAlpha2;
         uniform int uLayers;
         uniform vec2 uCell;
         uniform int uTextured;
@@ -81,6 +88,13 @@ public sealed class TerrainRenderer : IDisposable
                 if (uLayers > 1) c = mix(c, texture(uL1, tuv).rgb, al.r);
                 if (uLayers > 2) c = mix(c, texture(uL2, tuv).rgb, al.g);
                 if (uLayers > 3) c = mix(c, texture(uL3, tuv).rgb, al.b);
+                if (uLayers > 4) {
+                    vec4 a2 = texture(uAlpha2, uCell + (vUv * 63.0 + 0.5) / 1024.0);
+                    c = mix(c, texture(uL4, tuv).rgb, a2.r);
+                    if (uLayers > 5) c = mix(c, texture(uL5, tuv).rgb, a2.g);
+                    if (uLayers > 6) c = mix(c, texture(uL6, tuv).rgb, a2.b);
+                    if (uLayers > 7) c = mix(c, texture(uL7, tuv).rgb, a2.a);
+                }
             } else {
                 c = vec3(0.52, 0.58, 0.42);
             }
@@ -90,6 +104,17 @@ public sealed class TerrainRenderer : IDisposable
             c = c * (0.42 + 0.72 * d) * shade;
             if (uHiMode == 1) c = mix(c, vec3(1.0, 0.86, 0.25), 0.35);
             else if (uHiMode == 2) c = dimmed(c);
+            else if (uHiMode == 3 && uLayers > 4) {
+                vec4 a2 = texture(uAlpha2, uCell + (vUv * 63.0 + 0.5) / 1024.0);
+                float a[8] = float[8](0.0, al.r, al.g, al.b, a2.r, a2.g, a2.b, a2.a);
+                float w = 0.0, rest = 1.0;
+                for (int L = 7; L >= 0; L--) {
+                    float aL = L == 0 ? 1.0 : (L < uLayers ? a[L] : 0.0);
+                    if ((uHiMask & (1 << L)) != 0) w += aL * rest;
+                    rest *= 1.0 - aL;
+                }
+                c = mix(dimmed(c), mix(c, vec3(1.0, 0.86, 0.25), 0.18), clamp(w, 0.0, 1.0));
+            }
             else if (uHiMode == 3) {
                 float a1 = uLayers > 1 ? al.r : 0.0;
                 float a2 = uLayers > 2 ? al.g : 0.0;
@@ -263,6 +288,8 @@ public sealed class TerrainRenderer : IDisposable
         _textures.Clear();
         foreach (var t in _atlases) GlTracker.DeleteTexture(t);
         _atlases.Clear();
+        foreach (var t in _atlases2) if (t != 0) GlTracker.DeleteTexture(t);
+        _atlases2.Clear();
         foreach (var (vao, vbo, ebo) in _doodadBuffers.Values.Concat(_wmoBuffers.Values)) { GlTracker.DeleteVertexArray(vao); GlTracker.DeleteBuffer(vbo); GlTracker.DeleteBuffer(ebo); }
         _doodadBuffers.Clear();
         _wmoBuffers.Clear();
@@ -284,6 +311,7 @@ public sealed class TerrainRenderer : IDisposable
             });
         foreach (var t in a.Textures) _textures.Add(t == null ? _grey : Upload(t, true));
         foreach (var at in a.AlphaAtlases) _atlases.Add(Upload(at, false, clamp: true));
+        foreach (var at in a.AlphaAtlases2) _atlases2.Add(at == null ? 0 : Upload(at, false, clamp: true));
         if (a.Liquid.Length > 0)
         {
             _wVao = GlTracker.GenVertexArray();
@@ -373,6 +401,8 @@ public sealed class TerrainRenderer : IDisposable
         GL.Uniform4(U(_terrainProg, "uSolidColor"), 0.1f, 0.1f, 0.1f, 0.6f);
         for (int i = 0; i < 4; i++) GL.Uniform1(U(_terrainProg, "uL" + i), i);
         GL.Uniform1(U(_terrainProg, "uAlpha"), 4);
+        for (int i = 4; i < 8; i++) GL.Uniform1(U(_terrainProg, "uL" + i), i + 1);     // M4: layers 4-7 on units 5-8
+        GL.Uniform1(U(_terrainProg, "uAlpha2"), 9);
         GL.BindVertexArray(_tVao);
         if (wire)
         {
@@ -398,6 +428,17 @@ public sealed class TerrainRenderer : IDisposable
                 {
                     GL.ActiveTexture(TextureUnit.Texture0 + L);
                     GL.BindTexture(TextureTarget.Texture2D, c.Layers[L] >= 0 ? _textures[c.Layers[L]] : _white);
+                }
+                if (c.LayerCount > 4)
+                {
+                    // M4: another version's chunk with more than 4 layers
+                    for (int L = 4; L < 8; L++)
+                    {
+                        GL.ActiveTexture(TextureUnit.Texture1 + L);
+                        GL.BindTexture(TextureTarget.Texture2D, L < c.LayerCount && c.Layers[L] >= 0 ? _textures[c.Layers[L]] : _white);
+                    }
+                    GL.ActiveTexture(TextureUnit.Texture9);
+                    GL.BindTexture(TextureTarget.Texture2D, c.Tile < _atlases2.Count && _atlases2[c.Tile] != 0 ? _atlases2[c.Tile] : _white);
                 }
                 GL.Uniform1(U(_terrainProg, "uLayers"), Math.Max(1, c.LayerCount));
                 GL.Uniform2(U(_terrainProg, "uCell"), c.ChunkX * 64 / 1024f, c.ChunkY * 64 / 1024f);

@@ -24,15 +24,19 @@ public sealed class TerrainChunk
     public uint Flags;
     /// <summary>The 16-bit hole mask: bit (row * 4 + col) removes the 2x2 quads at (col * 2, row * 2).</summary>
     public uint Holes;
+    /// <summary>M4: the 8 x 8 hole mask of a modern tile (bit row * 8 + col removes one quad), or null (1.12: <see cref="Holes"/>
+    /// only). When set, it decides <see cref="IsHole"/>.</summary>
+    public ulong? HighResHoles;
     /// <summary>Corner of the chunk (its largest world x and y); rows go towards -x, columns towards -y.</summary>
     public Vector3 Position;
     /// <summary>145 heights (absolute: posZ + MCVT), order 9, 8, 9, ... (outer row, inner row, ...).</summary>
     public float[] Heights = new float[145];
     /// <summary>145 normals (world space, from MCNR).</summary>
     public Vector3[] Normals = new Vector3[145];
-    /// <summary>Up to 4 texture layers: the texture path of each.</summary>
+    /// <summary>The texture layers: the texture path of each (1.12: up to 4; M4, another version: up to 8).</summary>
     public List<string> Layers = new();
-    /// <summary>Alpha map of layers 1..3 (64x64, 0..255 expanded from 4 bits); index 0 is null (the base layer).</summary>
+    /// <summary>Alpha map of layers 1.. (64x64, 0..255; 1.12 expanded from 4 bits), each drawn over the layers below it;
+    /// index 0 is null (the base layer).</summary>
     public List<byte[]?> Alpha = new();
     /// <summary>64x64 shadow (true = shadowed), or null.</summary>
     public bool[]? Shadow;
@@ -45,7 +49,11 @@ public sealed class TerrainChunk
     public float MinHeight => Heights.Min();
     public float MaxHeight => Heights.Max();
 
-    public bool IsHole(int quadX, int quadY) => (Holes & (1u << ((quadY / 2) * 4 + quadX / 2))) != 0;
+    public bool IsHole(int quadX, int quadY) =>
+        HighResHoles is { } h ? (h & (1UL << (quadY * 8 + quadX))) != 0 : (Holes & (1u << ((quadY / 2) * 4 + quadX / 2))) != 0;
+
+    /// <summary>The chunk has holes (either mask).</summary>
+    public bool HasHoles => Holes != 0 || HighResHoles is > 0;
 }
 
 public sealed record DoodadPlacement(int Index, uint Uid, string Model, Vector3 Position, Vector3 Rotation, float Scale)
@@ -54,9 +62,10 @@ public sealed record DoodadPlacement(int Index, uint Uid, string Model, Vector3 
     public Vector3 WorldPosition => TerrainMath.PlacementToWorld(Position);
 }
 
-public sealed record WmoPlacement(int Index, uint Uid, string Model, Vector3 Position, Vector3 Rotation, int DoodadSet, Vector3 ExtentMin, Vector3 ExtentMax)
+/// <param name="Scale">M4: a modern placement's scale (MODF flag 0x4); 1 in 1.12.</param>
+public sealed record WmoPlacement(int Index, uint Uid, string Model, Vector3 Position, Vector3 Rotation, int DoodadSet, Vector3 ExtentMin, Vector3 ExtentMax, float Scale = 1f)
 {
-    public Matrix4x4 World => TerrainMath.PlacementMatrix(Position, Rotation, 1f);
+    public Matrix4x4 World => TerrainMath.PlacementMatrix(Position, Rotation, Scale);
     public Vector3 WorldPosition => TerrainMath.PlacementToWorld(Position);
 }
 
@@ -76,6 +85,9 @@ public sealed class TerrainTile
     public List<DoodadPlacement> Doodads { get; } = new();
     public List<WmoPlacement> Wmos { get; } = new();
     public int FileSize { get; init; }
+    /// <summary>M4: what could not be read or is shown approximately (another version: a locked file of the tile...);
+    /// empty for 1.12 tiles.</summary>
+    public List<string> Notes { get; } = new();
 
     public IEnumerable<TerrainChunk> AllChunks => Chunks.Where(c => c != null)!;
 

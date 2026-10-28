@@ -679,8 +679,16 @@ public static class SyntheticClients
         return b.B.ToArray();
     }
 
-    /// <summary>The tables of the test client (rows by column name of our layout file).</summary>
-    public static Dictionary<string, (IReadOnlyList<Row> Rows, IReadOnlyList<int>? Locked)> Tables() => new()
+    /// <summary>The tables of the test client (rows by column name of our layout file); M4: the map tables of
+    /// <see cref="SyntheticMaps.Tables"/> (Map, AreaTable, LiquidType) replace or join them.</summary>
+    public static Dictionary<string, (IReadOnlyList<Row> Rows, IReadOnlyList<int>? Locked)> Tables()
+    {
+        var t = Tables13();
+        foreach (var (k, v) in SyntheticMaps.Tables()) t[k] = v;
+        return t;
+    }
+
+    private static Dictionary<string, (IReadOnlyList<Row> Rows, IReadOnlyList<int>? Locked)> Tables13() => new()
     {
         ["CreatureDisplayInfo"] = (new[]
         {
@@ -745,6 +753,7 @@ public static class SyntheticClients
         files.Add(new StoreFile(LockedSkin, null, Blp(10, 10, 10), true, 0));   // encrypted
         files.Add(new StoreFile(MissingTexture, null, Blp(20, 20, 20), false));  // not downloaded
         files.Add(new StoreFile(HdBake, null, Blp(30, 30, 30)));
+        files.AddRange(SyntheticMaps.Files());                                   // M4: the maps (FileDataIDs only)
         var flavor = WriteStore(install, "wow_classic_beta", "1.60.1.70450", "_classic_beta_", "WowB.exe", paths, files);
         var listfile = Path.Combine(install, "test-listfile.csv");
         File.WriteAllText(listfile, $"{SkinTexture};{SkinName.Replace('\\', '/')}\n{CubeModel};{CubeName}\n999999999;Other/Product/Only.blp\n");

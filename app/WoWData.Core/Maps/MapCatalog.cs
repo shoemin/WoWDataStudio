@@ -21,10 +21,12 @@ public sealed class MapInfo
     /// <summary>A map that is one building (WDT MPHD flag 1): no terrain tiles.</summary>
     public bool IsGlobalWmo { get; init; }
     public string? GlobalWmo { get; init; }
+    /// <summary>M4: why a map of another version shows no tiles (its WDT is encrypted or not on this computer), or null.</summary>
+    public string? Note { get; init; }
 
     public string Kind => InstanceType switch { 1 => "Dungeon", 2 => "Raid", 3 => "Battleground", _ => TileCount >= 100 ? "Continent" : "World map" };
     public string Label => $"{Name} ({Directory})";
-    public string Detail => IsGlobalWmo ? "a single building, no terrain tiles" : $"{TileCount} tile{(TileCount == 1 ? "" : "s")}";
+    public string Detail => Note ?? (IsGlobalWmo ? "a single building, no terrain tiles" : $"{TileCount} tile{(TileCount == 1 ? "" : "s")}");
     public bool HasTile(int x, int y) => x is >= 0 and < 64 && y is >= 0 and < 64 && Tiles[y * 64 + x];
 
     public (int MinX, int MinY, int MaxX, int MaxY) Bounds
@@ -57,7 +59,7 @@ public sealed record ZoneInfo(int Id, string Name, int Parent, int Chunks, List<
 /// and which tiles they cover (the chunk area ids the index stores per tile, u_area_chunk), and the minimap
 /// (textures\Minimap\md5translate.trs: "&lt;map&gt;\mapX_Y.blp" -&gt; a hashed BLP).
 /// </summary>
-public sealed class MapCatalog
+public sealed class MapCatalog : IMapView
 {
     private readonly ClientData _client;
     private readonly string? _indexPath;
@@ -66,6 +68,10 @@ public sealed class MapCatalog
     private readonly object _gate = new();
 
     public List<MapInfo> Maps { get; } = new();
+
+    /// <summary>M4: how <see cref="LoadTerrain"/> reads a tile file: the session sets your workspace's version first
+    /// (<c>AppSession.ReadCurrent</c>); null = the game's archives.</summary>
+    public Func<string, byte[]?>? ReadTile { get; set; }
 
     public MapCatalog(ClientData client, string? indexPath)
     {
@@ -169,36 +175,18 @@ public sealed class MapCatalog
     }
 
     /// <summary>The zones of a map with the tiles they cover (most chunks first).</summary>
-    public List<ZoneInfo> Zones(MapInfo map, Dictionary<(int X, int Y), int[]>? tileAreas = null)
-    {
-        tileAreas ??= TileAreas(map);
-        var chunks = new Dictionary<int, int>();
-        var tiles = new Dictionary<int, HashSet<(int, int)>>();
-        foreach (var (xy, areas) in tileAreas)
-            foreach (var a in areas)
-            {
-                if (a == 0) continue;
-                int z = ZoneOf(a);
-                chunks[z] = chunks.GetValueOrDefault(z) + 1;
-                if (!tiles.TryGetValue(z, out var set)) tiles[z] = set = new HashSet<(int, int)>();
-                set.Add(xy);
-            }
-        return chunks.Keys.Select(z => new ZoneInfo(z, AreaName(z), Areas().TryGetValue(z, out var a) ? a.Parent : 0, chunks[z],
-                tiles[z].OrderBy(t => t.Item2).ThenBy(t => t.Item1).ToList()))
-            .OrderBy(z => z.Name, StringComparer.OrdinalIgnoreCase).ToList();
-    }
+    public List<ZoneInfo> Zones(MapInfo map, Dictionary<(int X, int Y), int[]>? tileAreas = null) =>
+        MapViews.Zones(this, tileAreas ?? TileAreas(map), z => Areas().TryGetValue(z, out var a) ? a.Parent : 0);
 
     /// <summary>The zones and subzones of one tile with their share of its 256 chunks, biggest first.</summary>
-    public List<(int Area, string Name, int Chunks)> TileZones(int[]? areas)
-    {
-        if (areas == null) return new();
-        return areas.Where(a => a != 0).GroupBy(a => a).Select(g => (g.Key, ZoneName(g.Key), g.Count())).OrderByDescending(t => t.Item3).ToList();
-    }
+    public List<(int Area, string Name, int Chunks)> TileZones(int[]? areas) => MapViews.TileZones(this, areas);
 
-    private string ZoneName(int area)
+    /// <summary>M4 (design 2.2, today's code moved here): the tile file as the app has it (<see cref="ReadTile"/>) read as
+    /// terrain; null when there is no such file.</summary>
+    public TerrainTile? LoadTerrain(MapInfo map, int x, int y)
     {
-        int z = ZoneOf(area);
-        return z == area ? AreaName(area) : $"{AreaName(area)} ({AreaName(z)})";
+        var data = (ReadTile ?? _client.Read)(map.TilePath(x, y));
+        return data == null ? null : TerrainTile.Load(data, map.Directory, x, y);
     }
 
     // ------------------------------------------------------------------ minimap
@@ -247,71 +235,8 @@ public sealed class MapCatalog
     /// <summary>The overview of a map: its minimap tiles at <paramref name="cell"/> pixels each over the tiles' bounding
     /// box (one tile of margin), tiles without a minimap in dark grey. Cached as PNG in <paramref name="cacheDir"/>,
     /// keyed by the archives' fingerprint.</summary>
-    public MinimapOverview Overview(MapInfo map, int cell, string? cacheDir, Action<int, int>? progress = null, CancellationToken ct = default)
-    {
-        var (minX, minY, maxX, maxY) = map.Bounds;
-        minX = Math.Max(0, minX - 1); minY = Math.Max(0, minY - 1);
-        maxX = Math.Min(63, maxX + 1); maxY = Math.Min(63, maxY + 1);
-        int w = (maxX - minX + 1) * cell, h = (maxY - minY + 1) * cell;
-        string? cacheFile = cacheDir == null ? null : Path.Combine(cacheDir, $"{map.Directory}_{cell}.png");
-        string key = $"{_client.Fingerprint()}|{minX},{minY},{maxX},{maxY}|{cell}|v1";
-        if (cacheFile != null && File.Exists(cacheFile) && File.Exists(cacheFile + ".key") && File.ReadAllText(cacheFile + ".key") == key)
-        {
-            try { return new MinimapOverview(map, Png.Load(cacheFile), minX, minY, cell, true); }
-            catch (Exception e) when (e is IOException or ImageFormatException) { }
-        }
-        var img = new RgbaImage(w, h);
-        for (int i = 0; i < img.Pixels.Length; i += 4)
-        {
-            img.Pixels[i] = 0x1F; img.Pixels[i + 1] = 0x24; img.Pixels[i + 2] = 0x2C; img.Pixels[i + 3] = 255;
-        }
-        var list = new List<(int X, int Y)>();
-        for (int y = minY; y <= maxY; y++)
-            for (int x = minX; x <= maxX; x++)
-                if (map.HasTile(x, y)) list.Add((x, y));
-        int done = 0;
-        Parallel.ForEach(list, new ParallelOptions { CancellationToken = ct, MaxDegreeOfParallelism = Math.Max(2, Environment.ProcessorCount - 1) }, t =>
-        {
-            var tile = MinimapTile(map, t.X, t.Y);
-            int ox = (t.X - minX) * cell, oy = (t.Y - minY) * cell;
-            if (tile == null)
-            {
-                FillCell(img, ox, oy, cell, 0x55, 0x5D, 0x68);
-            }
-            else
-            {
-                var small = tile.Width == cell && tile.Height == cell ? tile : ImageOps.Resize(tile, cell, cell);
-                for (int yy = 0; yy < cell; yy++)
-                    Buffer.BlockCopy(small.Pixels, yy * cell * 4, img.Pixels, ((oy + yy) * w + ox) * 4, cell * 4);
-                for (int yy = 0; yy < cell; yy++)
-                    for (int xx = 0; xx < cell; xx++) img.Pixels[((oy + yy) * w + ox + xx) * 4 + 3] = 255;
-            }
-            int d = Interlocked.Increment(ref done);
-            if (d % 16 == 0) progress?.Invoke(d, list.Count);
-        });
-        if (cacheFile != null)
-        {
-            try
-            {
-                Directory.CreateDirectory(cacheDir!);
-                Png.Save(img, cacheFile + ".tmp", false);
-                File.Move(cacheFile + ".tmp", cacheFile, true);
-                File.WriteAllText(cacheFile + ".key", key);
-            }
-            catch (IOException) { }
-        }
-        return new MinimapOverview(map, img, minX, minY, cell, false);
-    }
-
-    private static void FillCell(RgbaImage img, int ox, int oy, int cell, byte r, byte g, byte b)
-    {
-        for (int y = 0; y < cell; y++)
-            for (int x = 0; x < cell; x++)
-            {
-                int o = ((oy + y) * img.Width + ox + x) * 4;
-                img.Pixels[o] = r; img.Pixels[o + 1] = g; img.Pixels[o + 2] = b; img.Pixels[o + 3] = 255;
-            }
-    }
+    public MinimapOverview Overview(MapInfo map, int cell, string? cacheDir, Action<int, int>? progress = null, CancellationToken ct = default) =>
+        MapViews.Overview(map, cell, cacheDir, _client.Fingerprint(), (x, y) => MinimapTile(map, x, y), progress, ct);
 
     // ------------------------------------------------------------------ tile report ("Used in game" style)
 
@@ -323,54 +248,8 @@ public sealed class MapCatalog
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var rep = new UsageReport { Key = $"tile:{map.Id}:{x}:{y}" };
         rep.Headline.Add($"{map.Name} tile {x},{y}", bold: true).Muted($"  {map.TilePath(x, y)}");
-        var zones = TileZones(areas);
-        var zs = rep.Add("zones", "Zones on this tile");
-        zs.Summary = zones.Count == 0 ? "no zone ids" : $"{zones.Count} zone{(zones.Count == 1 ? "" : "s")}/subzone{(zones.Count == 1 ? "" : "s")}";
-        foreach (var (area, name, chunks) in zones) zs.Line().Add(name).Muted($"  {chunks} of 256 chunks ({chunks * 100 / 256}%)");
-        if (tile != null)
-        {
-            var dd = rep.Add("doodads", "Doodads placed (M2 models)");
-            var groups = tile.Doodads.GroupBy(d => d.Model, StringComparer.OrdinalIgnoreCase).OrderByDescending(g => g.Count()).ThenBy(g => g.Key).ToList();
-            dd.Summary = $"{tile.Doodads.Count} placements of {groups.Count} models";
-            foreach (var g in groups.Take(40))
-            {
-                var key = "file:" + g.Key;
-                var l = dd.Line();
-                if (isEntry?.Invoke(key) == true) l.Add(Path.GetFileName(g.Key), key);
-                else l.Add(Path.GetFileName(g.Key));
-                l.Muted($"  x{g.Count()}  {Path.GetDirectoryName(g.Key)}");
-            }
-            dd.More = Math.Max(0, groups.Count - 40);
-            var ws = rep.Add("wmos", "Buildings placed (WMO)");
-            var wg = tile.Wmos.GroupBy(w => w.Model, StringComparer.OrdinalIgnoreCase).OrderByDescending(g => g.Count()).ThenBy(g => g.Key).ToList();
-            ws.Summary = $"{tile.Wmos.Count} placements of {wg.Count} buildings";
-            foreach (var g in wg)
-            {
-                var key = "file:" + g.Key;
-                var l = ws.Line();
-                if (isEntry?.Invoke(key) == true) l.Add(Path.GetFileName(g.Key), key);
-                else l.Add(Path.GetFileName(g.Key));
-                l.Muted($"  x{g.Count()}  doodad set {string.Join(", ", g.Select(w => w.DoodadSet).Distinct())}");
-            }
-            var tx = rep.Add("textures", "Ground textures");
-            tx.Summary = $"{tile.Textures.Count} textures";
-            foreach (var t in tile.Textures.Take(30))
-            {
-                var key = "file:" + t;
-                var l = tx.Line();
-                if (isEntry?.Invoke(key) == true) l.Add(Path.GetFileName(t), key);
-                else l.Add(Path.GetFileName(t));
-                l.Muted($"  {Path.GetDirectoryName(t)}");
-            }
-            int water = tile.AllChunks.Count(c => c.Liquids.Count > 0), holes = tile.AllChunks.Count(c => c.Holes != 0);
-            var (lo, hi) = tile.HeightRange;
-            var tr = rep.Add("terrain", "Terrain");
-            tr.Summary = $"heights {lo:0} to {hi:0} yards";
-            tr.Line().Add($"{tile.AllChunks.Count()} chunks, heights {lo:0.#} to {hi:0.#} yards, {tile.AllChunks.Sum(c => c.Layers.Count)} texture layers");
-            tr.Line().Add(water > 0 ? $"water or other liquid in {water} chunks ({string.Join(", ", tile.AllChunks.SelectMany(c => c.Liquids).Select(l => l.Kind).Distinct())})" : "no water");
-            tr.Line().Add(holes > 0 ? $"holes in {holes} chunks (caves, building entrances)" : "no holes");
-            tr.Line().Muted($"file size {tile.FileSize / 1024.0:0} KB");
-        }
+        MapViews.AddZones(rep, TileZones(areas));
+        if (tile != null) MapViews.AddPlacements(rep, tile, isEntry);
         // creature spawns on the tile (server part of the index)
         try
         {

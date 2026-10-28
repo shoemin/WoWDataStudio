@@ -36,6 +36,12 @@ public sealed class WmoRootInfo
 /// (&lt;name&gt;_NNN.wmo: MOGP with MOVT positions, MONR normals, MOTV texture coordinates, MOVI indices and MOBA batches:
 /// start index @+12, count @+16, material @+23). The preview draws the groups with their first texture; portals,
 /// lights, vertex colours, liquids and the WMO's own doodads are not drawn (documented in the manual).
+/// <para>M4: the FileDataID form of a modern client (MVER 17 with a <c>GFID</c> chunk; MEASURED on 60 placed 1.60 roots:
+/// every one has GFID and none has MOTX): the groups are the files of the first MOHD-group-count FileDataIDs of GFID
+/// (more entries are level-of-detail groups), MOMT's texture 1 (+0x0C) is a texture FileDataID (MEASURED: 989 of 989
+/// non-zero values are BLP2 files of the client), the doodads' models are the FileDataIDs of MODI, and a batch with
+/// flag 0x2 (+0x16) takes its material from the 16-bit field at +0x0A (MEASURED: 1,657 of 3,144 batches, every
+/// material then within MOMT). The other modern chunks (MOMX, MGI2, MAVG, MNLD, MFED, MDDI...) are skipped.</para>
 /// </summary>
 public sealed class WmoGeometry
 {
@@ -47,6 +53,10 @@ public sealed class WmoGeometry
     public Vector3 BoundsMax { get; private set; }
     public int GroupCount { get; private set; }
     public int DoodadDefs { get; private set; }
+    /// <summary>M4: the root names its groups, textures and doodad models by FileDataID (GFID; a modern client).</summary>
+    public bool FileDataIdMode { get; private set; }
+    /// <summary>M4: the doodad models the root lists (MODI FileDataIDs in the modern form, else the MODN names).</summary>
+    public List<string> DoodadModels { get; } = new();
 
     private static IEnumerable<(string Magic, int Pos, int Size)> Chunks(byte[] b, int start, int end)
     {
@@ -61,13 +71,19 @@ public sealed class WmoGeometry
     }
 
     /// <summary>Reads the root and its groups through <paramref name="read"/> (game path -> bytes or null). Returns null
-    /// when the root cannot be read.</summary>
-    public static WmoGeometry? Load(string path, Func<string, byte[]?> read)
+    /// when the root cannot be read. M4: <paramref name="nameOf"/> names a FileDataID of the modern form (the name the
+    /// session reads it by; default "#id.ext").</summary>
+    public static WmoGeometry? Load(string path, Func<string, byte[]?> read, Func<uint, string, string>? nameOf = null)
     {
         var root = read(path);
         if (root == null) return null;
+        nameOf ??= (id, ext) => $"#{id}{ext}";
         var w = new WmoGeometry { Path = path };
         byte[] motx = Array.Empty<byte>();
+        byte[] modn = Array.Empty<byte>();
+        var momtTex = new List<uint>();
+        var gfid = new List<uint>();
+        var modi = new List<uint>();
         foreach (var (m, p, size) in Chunks(root, 0, root.Length))
         {
             switch (m)
@@ -85,19 +101,44 @@ public sealed class WmoGeometry
                     for (int i = 0; i + 64 <= size; i += 64)
                     {
                         uint blend = BinaryPrimitives.ReadUInt32LittleEndian(root.AsSpan(p + i + 8));
-                        uint tex = BinaryPrimitives.ReadUInt32LittleEndian(root.AsSpan(p + i + 12));
-                        w.MaterialTextures.Add(ZString(motx, (int)tex));
+                        momtTex.Add(BinaryPrimitives.ReadUInt32LittleEndian(root.AsSpan(p + i + 12)));
                         w.MaterialBlend.Add(blend);
                     }
                     break;
+                case "GFID":
+                    for (int i = 0; i + 4 <= size; i += 4) gfid.Add(BinaryPrimitives.ReadUInt32LittleEndian(root.AsSpan(p + i)));
+                    break;
+                case "MODI":
+                    for (int i = 0; i + 4 <= size; i += 4) modi.Add(BinaryPrimitives.ReadUInt32LittleEndian(root.AsSpan(p + i)));
+                    break;
+                case "MODN":
+                    modn = root.AsSpan(p, size).ToArray();
+                    break;
             }
         }
+        w.FileDataIdMode = gfid.Count > 0;
+        foreach (var tex in momtTex)
+            w.MaterialTextures.Add(w.FileDataIdMode ? tex == 0 ? "" : nameOf(tex, ".blp") : ZString(motx, (int)tex));
+        if (w.FileDataIdMode) w.DoodadModels.AddRange(modi.Where(id => id != 0).Distinct().Select(id => nameOf(id, ".m2")));
+        else
+            for (int i = 0; i < modn.Length;)
+            {
+                var s = ZString(modn, i);
+                if (s.Length > 0) w.DoodadModels.Add(s);
+                i += s.Length + 1;
+            }
         var stem = path[..^4];
         for (int g = 0; g < Math.Min(w.GroupCount, 512); g++)
         {
-            var data = read($"{stem}_{g:D3}.wmo");
+            byte[]? data;
+            if (w.FileDataIdMode)
+            {
+                if (g >= gfid.Count || gfid[g] == 0) continue;
+                data = read(nameOf(gfid[g], ".wmo"));
+            }
+            else data = read($"{stem}_{g:D3}.wmo");
             if (data == null) continue;
-            var grp = ReadGroup(data, g);
+            var grp = ReadGroup(data, g, w.FileDataIdMode);
             if (grp != null) w.Groups.Add(grp);
         }
         return w;
@@ -156,7 +197,7 @@ public sealed class WmoGeometry
         return Encoding.Latin1.GetString(b, start, (e < 0 ? b.Length : e) - start);
     }
 
-    private static WmoGroup? ReadGroup(byte[] b, int index)
+    private static WmoGroup? ReadGroup(byte[] b, int index, bool modern = false)
     {
         foreach (var (m, p, size) in Chunks(b, 0, b.Length))
         {
@@ -192,6 +233,7 @@ public sealed class WmoGeometry
                             int start = (int)BinaryPrimitives.ReadUInt32LittleEndian(b.AsSpan(sp + i + 12));
                             int count = BinaryPrimitives.ReadUInt16LittleEndian(b.AsSpan(sp + i + 16));
                             int mat = b[sp + i + 23];
+                            if (modern && (b[sp + i + 22] & 0x2) != 0) mat = BinaryPrimitives.ReadUInt16LittleEndian(b.AsSpan(sp + i + 10));
                             g.Batches.Add(new WmoBatch(start, count, mat));
                         }
                         break;

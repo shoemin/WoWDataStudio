@@ -63,6 +63,7 @@ public sealed class Casc160MapSource : IMapSource
     private List<SourceMap>? _maps;
     private Dictionary<int, SourceArea>? _areas;
     private Dictionary<int, LiquidKind>? _liquids;
+    private readonly int _build;
 
     public Casc160MapSource(OtherClient client, IAssetNames names, string namesText)
     {
@@ -70,7 +71,9 @@ public sealed class Casc160MapSource : IMapSource
         _storage = client.Casc ?? throw new ArgumentException($"{client.Copy.Name} is not a modern (CASC) client.");
         Names = new CompositeAssetNames(names, new CascAssetNames(_storage));
         NamesText = namesText;
-        if (Db2Layouts.ForBuild(client.Copy.Build) == null)
+        // M4: a copy whose executable has no version resource takes the CASC build's number (as AppSession.OpenOtherAsync does)
+        _build = client.Copy.Build > 0 ? client.Copy.Build : _storage.Build;
+        if (Db2Layouts.ForBuild(_build) == null)
             throw new NotSupportedException($"{client.Copy.Name} ({client.Copy.Label}): the app knows the map tables (Map, AreaTable, LiquidType) of 1.60.1.70450 only. " +
                                             $"Known builds: {string.Join(", ", Db2Layouts.KnownBuilds())}.");
     }
@@ -84,8 +87,8 @@ public sealed class Casc160MapSource : IMapSource
     private Db2Table Table(string name)
     {
         var t = _client.Catalog.Open(_storage, name) ?? throw new InvalidDataException($"{_client.Copy.Name} has no {name} table on this computer.");
-        if (Db2Layouts.ForBuild(_client.Copy.Build) is not { } l || !l.Apply(t, out var why))
-            throw new InvalidDataException($"{_client.Copy.Name}: the {name} table does not have the columns the app knows ({(Db2Layouts.ForBuild(_client.Copy.Build) == null ? "no layout" : "layout does not match")}).");
+        if (Db2Layouts.ForBuild(_build) is not { } l || !l.Apply(t, out var why))
+            throw new InvalidDataException($"{_client.Copy.Name}: the {name} table does not have the columns the app knows ({(Db2Layouts.ForBuild(_build) == null ? "no layout" : "layout does not match")}).");
         return t;
     }
 

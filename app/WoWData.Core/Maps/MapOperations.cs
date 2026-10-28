@@ -21,11 +21,12 @@ public sealed record NoggitPrepared(NoggitLaunchInfo Info, string? NoggitExe, in
 /// </summary>
 public static class MapOperations
 {
-    /// <summary>The maps the Maps tab lists (with terrain tiles, or a single building).</summary>
-    public static List<MapInfo> ListedMaps(MapCatalog cat) => cat.Maps.Where(m => m.TileCount > 0 || m.IsGlobalWmo).ToList();
+    /// <summary>The maps the Maps tab lists (with terrain tiles, or a single building; M4: another version's maps whose
+    /// tiles cannot be read are listed with the reason).</summary>
+    public static List<MapInfo> ListedMaps(IMapView cat) => cat.Maps.Where(m => m.TileCount > 0 || m.IsGlobalWmo || m.Note != null).ToList();
 
     /// <summary>A map by its folder name ("Azeroth"), its id ("0") or its name ("Eastern Kingdoms"), or null.</summary>
-    public static MapInfo? Find(MapCatalog cat, string text)
+    public static MapInfo? Find(IMapView cat, string text)
     {
         if (int.TryParse(text, out var id) && cat.ById(id) is { } byId) return byId;
         return cat.ByDirectory(text) ?? cat.Maps.FirstOrDefault(m => string.Equals(m.Name, text, StringComparison.OrdinalIgnoreCase));
@@ -34,10 +35,9 @@ public static class MapOperations
     /// <summary>The facts and the "On this tile" report of a tile (the Maps tab's tile details).</summary>
     public static TileSummary Summarize(AppSession session, MapInfo map, int x, int y)
     {
-        var cat = session.MapCatalog ?? throw new InvalidOperationException("No game folder is open.");
+        var cat = session.Maps ?? throw new InvalidOperationException("No game folder is open.");
         var path = map.TilePath(x, y);
-        var data = session.ReadCurrent(path);
-        var tile = data == null ? null : TerrainTile.Load(data, map.Directory, x, y);
+        var tile = cat.LoadTerrain(map, x, y);
         int[]? areas = tile != null ? tile.Chunks.Select(c => c?.AreaId ?? 0).ToArray() : cat.TileAreas(map).GetValueOrDefault((x, y));
         var report = cat.TileReport(map, x, y, tile, areas, k => session.FindEntry(k) != null);
         bool modified = session.Workspace?.IsModified(path) == true;
@@ -53,6 +53,7 @@ public static class MapOperations
             if (water > 0) facts.Add($"Water or other liquid in {water} of 256 chunks");
         }
         else facts.Add("The tile file could not be read.");
+        if (tile != null) facts.AddRange(tile.Notes);
         if (modified) facts.Add("Modified: your workspace has an edited version of this tile (the views show it).");
         return new TileSummary(map, x, y, path, tile, facts, zones, modified, report);
     }

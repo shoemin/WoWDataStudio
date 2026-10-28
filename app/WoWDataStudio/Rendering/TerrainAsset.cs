@@ -39,8 +39,8 @@ public sealed class TerrainDrawChunk
     public int Tile;
     public int ChunkX, ChunkY;
     public int IndexStart, IndexCount;
-    /// <summary>Index into <see cref="TerrainAsset.Textures"/> per layer (up to 4), -1 = none.</summary>
-    public int[] Layers = { -1, -1, -1, -1 };
+    /// <summary>Index into <see cref="TerrainAsset.Textures"/> per layer (1.12: up to 4; M4, another version: up to 8), -1 = none.</summary>
+    public int[] Layers = { -1, -1, -1, -1, -1, -1, -1, -1 };
     public int LayerCount;
 }
 
@@ -56,12 +56,17 @@ public sealed class WmoMesh
 /// <summary>Options of the terrain preview.</summary>
 /// <param name="SpecularGround">0.6.1: draw the ground with the "_s" textures, as the game does with terrain specular on
 /// (CMapArea_LoadTextureNames @006c20e0); <paramref name="Exists"/> finds them (a missing "_s" file falls back to the base).</param>
-public sealed record TerrainBuildOptions(bool Doodads = true, bool Wmos = true, int MaxDoodadModels = 400, bool SpecularGround = false, Func<string, bool>? Exists = null);
+/// <param name="LoadModel">M4: reads a doodad's model (another version: the modern reader by
+/// <see cref="WoWData.Core.M2.IModelSource"/>); null = the file's bytes through <c>read</c> and the 1.12 reader.</param>
+/// <param name="NameOf">M4: names a FileDataID of a modern building (groups, textures), see <see cref="WmoGeometry.Load"/>.</param>
+public sealed record TerrainBuildOptions(bool Doodads = true, bool Wmos = true, int MaxDoodadModels = 400, bool SpecularGround = false, Func<string, bool>? Exists = null,
+                                         Func<string, WoWData.Core.M2.M2Model>? LoadModel = null, Func<uint, string, string>? NameOf = null);
 
 /// <summary>
 /// Everything the terrain preview draws, built on a background thread from one tile (and optionally its neighbours):
 /// the terrain mesh per chunk (holes left out, two-sided), the ground textures and one alpha atlas per tile (64 x 64 per
-/// chunk: red, green, blue = the 4-bit alpha maps of layers 1-3, alpha = the shadow map), the liquids as coloured
+/// chunk: red, green, blue = the 4-bit alpha maps of layers 1-3, alpha = the shadow map; M4: a second atlas with layers
+/// 4-7 for another version's tiles with more than 4 layers, none for 1.12), the liquids as coloured
 /// quads, the doodads (M2 models through the model viewer's <see cref="ModelAsset"/>, drawn in their rest pose) and the
 /// WMO buildings (their groups with the first texture of each batch). Positions are relative to <see cref="Origin"/>
 /// (the corner of the first tile), which keeps 32-bit floats precise.
@@ -82,6 +87,9 @@ public sealed class TerrainAsset
     public List<RgbaImage?> Textures { get; } = new();
     /// <summary>One 1024 x 1024 alpha / shadow atlas per tile.</summary>
     public List<RgbaImage> AlphaAtlases { get; } = new();
+    /// <summary>M4: per tile, the alpha maps of layers 4-7 (red, green, blue, alpha) when one of its chunks has more than
+    /// 4 layers (another version), else null (always null for 1.12 tiles).</summary>
+    public List<RgbaImage?> AlphaAtlases2 { get; } = new();
     public ColorVertex[] Liquid { get; private set; } = Array.Empty<ColorVertex>();
     public List<(ModelAsset Asset, Matrix4x4 World)> Doodads { get; } = new();
     public List<(WmoMesh Mesh, Matrix4x4 World)> Wmos { get; } = new();
@@ -127,6 +135,7 @@ public sealed class TerrainAsset
             ct.ThrowIfCancellationRequested();
             var tile = tiles[ti];
             var atlas = new RgbaImage(1024, 1024);
+            RgbaImage? atlas2 = tile.AllChunks.Any(c => c.Layers.Count > 4) ? new RgbaImage(1024, 1024) : null;
             foreach (var c in tile.AllChunks)
             {
                 int vb = verts.Count;
@@ -144,7 +153,7 @@ public sealed class TerrainAsset
                         bmax = Vector3.Max(bmax, p);
                     }
                 }
-                var dc = new TerrainDrawChunk { Tile = ti, ChunkX = c.X, ChunkY = c.Y, IndexStart = idx.Count, LayerCount = Math.Min(4, c.Layers.Count) };
+                var dc = new TerrainDrawChunk { Tile = ti, ChunkX = c.X, ChunkY = c.Y, IndexStart = idx.Count, LayerCount = Math.Min(8, c.Layers.Count) };
                 for (int qi = 0; qi < 8; qi++)
                     for (int qj = 0; qj < 8; qj++)
                     {
@@ -188,6 +197,14 @@ public sealed class TerrainAsset
                         atlas.Pixels[o + 2] = c.Alpha.Count > 3 && c.Alpha[3] is { } a3 ? a3[s] : (byte)0;
                         atlas.Pixels[o + 3] = c.Shadow != null && c.Shadow[s] ? (byte)0 : (byte)255;
                     }
+                if (atlas2 != null && c.Alpha.Count > 4)
+                    for (int y = 0; y < 64; y++)
+                        for (int x = 0; x < 64; x++)
+                        {
+                            int o = ((c.Y * 64 + y) * 1024 + c.X * 64 + x) * 4;
+                            int s = y * 64 + x;
+                            for (int k = 0; k < 4; k++) atlas2.Pixels[o + k] = c.Alpha.Count > 4 + k && c.Alpha[4 + k] is { } ak ? ak[s] : (byte)0;
+                        }
                 a.Chunks.Add(dc);
                 // liquids
                 foreach (var l in c.Liquids)
@@ -209,6 +226,7 @@ public sealed class TerrainAsset
                 }
             }
             a.AlphaAtlases.Add(atlas);
+            a.AlphaAtlases2.Add(atlas2);
         }
         a.GroundTextures = a.TexturePaths.Count;
         a.SpecularGround = opts.SpecularGround;
@@ -234,11 +252,19 @@ public sealed class TerrainAsset
                         asset = null;
                         if (models.Count < opts.MaxDoodadModels)
                         {
-                            var data = read(d.Model);
-                            if (data != null)
+                            if (opts.LoadModel != null)
                             {
-                                try { asset = ModelAsset.Build(d.Model, data, loadTexture); }
-                                catch (Exception e) when (e is WoWData.Core.M2.M2Exception or IndexOutOfRangeException or ArgumentException) { asset = null; }
+                                try { asset = ModelAsset.Build(d.Model, opts.LoadModel(d.Model), loadTexture); }
+                                catch (Exception e) when (e is WoWData.Core.M2.M2Exception or System.IO.IOException or IndexOutOfRangeException or ArgumentException) { asset = null; }
+                            }
+                            else
+                            {
+                                var data = read(d.Model);
+                                if (data != null)
+                                {
+                                    try { asset = ModelAsset.Build(d.Model, data, loadTexture); }
+                                    catch (Exception e) when (e is WoWData.Core.M2.M2Exception or IndexOutOfRangeException or ArgumentException) { asset = null; }
+                                }
                             }
                         }
                         models[d.Model] = asset;
@@ -263,7 +289,7 @@ public sealed class TerrainAsset
                     if (!seen.Add(w.Uid)) continue;
                     if (!meshes.TryGetValue(w.Model, out var mesh))
                     {
-                        mesh = BuildWmo(w.Model, read, loadTexture, a, texIndex);
+                        mesh = BuildWmo(w.Model, read, loadTexture, a, texIndex, opts.NameOf);
                         meshes[w.Model] = mesh;
                         if (mesh == null) a.MissingModels++;
                     }
@@ -279,11 +305,12 @@ public sealed class TerrainAsset
     }
 
     /// <summary>One building on its own (the breakdown's "On its own" view): its groups at the origin, no terrain.</summary>
-    public static TerrainAsset BuildBuilding(string path, Func<string, byte[]?> read, Func<string, RgbaImage?> loadTexture)
+    /// <param name="nameOf">M4: names a FileDataID of a modern building (see <see cref="WmoGeometry.Load"/>)</param>
+    public static TerrainAsset BuildBuilding(string path, Func<string, byte[]?> read, Func<string, RgbaImage?> loadTexture, Func<uint, string, string>? nameOf = null)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var a = new TerrainAsset();
-        var mesh = BuildWmo(path, read, loadTexture, a, new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase))
+        var mesh = BuildWmo(path, read, loadTexture, a, new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase), nameOf)
                    ?? throw new System.IO.IOException($"The building {path} could not be read.");
         a.Wmos.Add((mesh, Matrix4x4.Identity));
         a.WmoUids.Add(0);
@@ -300,10 +327,11 @@ public sealed class TerrainAsset
         return a;
     }
 
-    private static WmoMesh? BuildWmo(string path, Func<string, byte[]?> read, Func<string, RgbaImage?> loadTexture, TerrainAsset a, Dictionary<string, int> texIndex)
+    private static WmoMesh? BuildWmo(string path, Func<string, byte[]?> read, Func<string, RgbaImage?> loadTexture, TerrainAsset a, Dictionary<string, int> texIndex,
+                                     Func<uint, string, string>? nameOf = null)
     {
         WmoGeometry? geo;
-        try { geo = WmoGeometry.Load(path, read); }
+        try { geo = WmoGeometry.Load(path, read, nameOf); }
         catch (Exception e) when (e is IndexOutOfRangeException or ArgumentException) { geo = null; }
         if (geo == null || geo.Groups.Count == 0) return null;
         var m = new WmoMesh { Path = path };
