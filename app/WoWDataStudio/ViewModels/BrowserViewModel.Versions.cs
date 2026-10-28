@@ -45,7 +45,7 @@ public sealed partial class BrowserViewModel
 
     /// <summary>The line under the app's name in the top bar.</summary>
     public string GameTitle => _session.Profile is { IsOwnClient: false } p
-        ? $"World of Warcraft {p.VersionBuild} ({p.Copy?.Release}) · read only"
+        ? $"World of Warcraft {p.VersionBuild} · {p.Copy?.Release} · read only"
         : "World of Warcraft 1.12 game data";
 
     /// <summary>Which version is open, for the read-only banner.</summary>

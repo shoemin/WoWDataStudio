@@ -39,13 +39,14 @@ public static class ModernUsage
                 var inames = Safe(() => ix.ItemNamesForDisplays(id.Select(x => x.Id))) ?? new();
                 foreach (var (did, skins, _) in cd.Take(MaxLines))
                 {
-                    var l = sec.Line().Add(cnames.TryGetValue(did, out var n) ? n : $"Creature display {did}", s.FindEntry($"cdisplay:{did}") != null ? $"cdisplay:{did}" : null);
+                    var de = s.FindEntry($"cdisplay:{did}");
+                    var l = sec.Line().Add(cnames.TryGetValue(did, out var n) ? n : de?.Name ?? $"Creature display {did}", de != null ? $"cdisplay:{did}" : null);
                     var sk = string.Join(" / ", skins.Where(x => x.Length > 0).Select(Path.GetFileNameWithoutExtension));
                     l.Muted($"  display {did}" + (sk.Length > 0 ? $" · {sk}" : ""));
                 }
                 int left = MaxLines - Math.Min(cd.Count, MaxLines);
                 foreach (var (did, tex) in id.Take(left))
-                    sec.Line().Add(inames.TryGetValue(did, out var n) ? n : $"Item display {did}", s.FindEntry($"idisplay:{did}") != null ? $"idisplay:{did}" : null)
+                    sec.Line().Add(inames.TryGetValue(did, out var n) ? n : s.FindEntry($"idisplay:{did}")?.Name ?? $"Item display {did}", s.FindEntry($"idisplay:{did}") != null ? $"idisplay:{did}" : null)
                         .Muted($"  item display {did} · {Path.GetFileNameWithoutExtension(tex)}");
                 sec.More = Math.Max(0, cd.Count + id.Count - MaxLines);
                 shorts.Add(UsageNames.Plural(cd.Count + id.Count, "display"));
