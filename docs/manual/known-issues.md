@@ -123,19 +123,6 @@ but the colours of those pixels come from your PNG: the ground can turn dark in 
 
 ## Textures and models
 
-### Particle blend modes are read by the community's convention
-
-*What happens:* the additive-texture note (*This texture is drawn additively...*) uses each model's blend modes. For
-model materials, ribbons and buildings they are read as the game reads them; for particle emitters the numbering
-(0 opaque, 1 add, 2 alpha, 3 alpha key, 4 add with alpha) is the modding community's, not yet checked in the game's
-code. A particle texture could get the note when it should not, or miss it.
-
-*Who is affected:* edits of spell and particle textures.
-
-*Workaround:* none needed; the note is advice. Keep black backgrounds black in glow textures in any case.
-
-*Status:* open.
-
 ### New textures, new skins and new geosets cannot be added
 
 *What happens:* an import always replaces an existing game texture; models keep their list of textures and geosets
@@ -149,12 +136,43 @@ code. A particle texture could get the note when it should not, or miss it.
 
 ### The 3D views are previews, not the game's renderer
 
-*What happens:* the model viewer does not draw particles, ribbons, lights or worn equipment (capes are grey); the
-terrain preview has no sky, zone lighting, animation or ground shine; buildings in the Browse list have no 3D view.
+*What happens:* the model viewer draws particles and ribbons with its own simulation (close to the game's look, see
+*Particles and ribbons of your game are drawn approximately*), but not the models' lights or worn equipment (capes are
+grey); the terrain preview has no sky, zone lighting, animation or ground shine, and its doodads (trees, torches,
+braziers) are drawn without their particles: a tile with its neighbours shows hundreds of doodads, and running a
+particle simulation for each of them every frame would make the terrain view slow (**Break down this tile...** shows
+a doodad on its own with its particles); buildings in the Browse list have no 3D view.
 
 *Who is affected:* everyone; it does not change what is saved.
 
 *Workaround:* check the result in the game ([Testing changes in the game](testing-in-game.md)).
+
+*Status:* open.
+
+### Particles and ribbons of your game are drawn approximately
+
+*What happens:* the 3D views draw your game's particles and ribbons with the app's own simulation of the rules the
+1.12 client follows (read in its code: where particles start, how they fly, fall and fade, their two colour and size
+stages, texture cells, twinkling, spin, tails, bursts, a ribbon's band and how it rises or falls). They look close to
+the game's, not the same. Measured on the 1.12 client: 2,753 particle emitters and 387 ribbons in 668 creature and
+spell-effect models, every one read and simulated. Drawn approximately or left out (the model statistics say it for
+each model):
+
+* particles that are models (55 emitters) are drawn as flat pictures; effects that each particle sends out of its own
+  (14 emitters) are left out;
+* spline emitters (23) send their particles from straight lines between their points (the game may curve them);
+* particles that the game puts on the ground (44 emitters) start where they are born, and particles that follow or
+  inherit the emitter's movement (164) do not (the 3D view moves the model's bones, not the model);
+* sphere particles that stop at the centre (36 emitters) live their whole life;
+* twinkling uses the app's own random numbers: as many particles flicker as in the game, not the same ones;
+* the game sends fewer particles when the camera is far away or the particle density setting is low; the 3D view
+  always draws all of them;
+* particles never hide what is behind them in depth (the game's 26 cut-out particle emitters do);
+* the models' lights are not drawn.
+
+*Who is affected:* anyone checking a spell effect or a creature's fire, smoke or glow in the app.
+
+*Workaround:* check the effect in the game ([Testing changes in the game](testing-in-game.md)).
 
 *Status:* open.
 
@@ -492,9 +510,10 @@ workspace** (it puts every tree's rows together again).
 ### A duplicated visual's tint and size are an approximation
 
 *What happens:* **Duplicate visual (tint and size)** scales the copied effect models (their geometry, bones, particle
-emitters, particle sizes and speeds, ribbons) and multiplies their colours and textures. Particle effects that the game
-draws in world space, or that use their own spline paths, may look a little different from a truly bigger effect, and a
-tint cannot make a dark texture bright. The copies show in the designer's 3D view only after saving.
+emitters, particle sizes, speeds, areas, gravity and spline paths, ribbons) and multiplies their colours and textures.
+In the designer's 3D view the copy's particles and ribbons are exactly that much bigger and tinted, but in the game an
+effect whose particles fly in world space while the caster moves may still look a little different from a truly bigger
+effect, and a tint cannot make a dark texture bright. The copies show in the designer's 3D view only after saving.
 
 *Who is affected:* everyone who duplicates a visual with another size or colour.
 
@@ -743,7 +762,8 @@ are combined now (204 still show their first texture only).
 
 *Workaround:* none in the app.
 
-*Status:* open (particles of your 1.12 game's models are not drawn either, see above).
+*Status:* open (your 1.12 game's particles follow the 1.12 client's own rules, tails and twinkling included: see
+*Particles and ribbons of your game are drawn approximately*).
 
 ### Player characters and NPC customization of other versions are not shown
 

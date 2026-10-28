@@ -156,6 +156,13 @@ public static class ScreenshotRunner
                 Log(Failures.Count == 0 ? "ALL STEPS OK" : "FAILURES:" + string.Join("", Failures.Select(f => Environment.NewLine + "  " + f)));
                 return Failures.Count == 0 ? 0 : 1;
             }
+            if (Environment.GetEnvironmentVariable("WDS_SCREENSHOT_ONLY") == "particles")
+            {
+                // developers: only the pictures of your game's particles and ribbons in 3D (155-156)
+                await ParticleScreenshots.RunAsync(win, b, outDir);
+                Log(Failures.Count == 0 ? "ALL STEPS OK" : "FAILURES:" + string.Join("", Failures.Select(f => Environment.NewLine + "  " + f)));
+                return Failures.Count == 0 ? 0 : 1;
+            }
             if (Environment.GetEnvironmentVariable("WDS_SCREENSHOT_ONLY") == "tables")
             {
                 // developers: only the Data tables pictures (83-94), for a quick look at that tab
@@ -286,6 +293,9 @@ public static class ScreenshotRunner
 
             // 11. extra screens for the user manual (docs\manual)
             await ManualScreenshots.RunAsync(win, b, outDir);
+
+            // 11b. your game's particles and ribbons in 3D (ParticleScreenshots.cs)
+            await ParticleScreenshots.RunAsync(win, b, outDir);
 
             // 12. Phase 3c: export for Blender, import an edited model (scripted edit), review, compare, my changes
             await ModelIOScreenshots.RunAsync(win, b, outDir);

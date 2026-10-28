@@ -242,7 +242,9 @@ of what the model describes (how many particles a second, their speed, direction
 their life, the bone they follow), so they look close to the game's, not exactly the same. When the view is paused,
 the effect stops too; a model is shown with its effect already running (two seconds of it). **Model statistics**
 count them (**Particles / ribbons**) and, under the numbers, say what is drawn approximately for that model (for
-example *particles with several textures drawn with their first one*).
+example *particles with several textures drawn with their first one*). **Particles** under the view switches them off
+and on. Your 1.12 game's particles and ribbons are drawn too, by the 1.12 client's own rules (with tails and
+twinkling): see [Particles and ribbons](model-viewer.md#particles-and-ribbons).
 
 ![The Arcane_Missile_Lvl4 spell effect of the 1.60 client with its particles](../screenshots/151_versions_open_particles.png)
 

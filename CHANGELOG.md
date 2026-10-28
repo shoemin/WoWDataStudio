@@ -155,8 +155,8 @@ recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
     9,157 emitters and 867 ribbons of the creature and spell-effect models checked on the copy before the viewer used
     them) are drawn by a new effect drawing of the 3D view of another version (`M2EffectSimulation`,
     `ModelRenderer.Effects.cs`), with the modern blend modes (7 = *blend add*: one, one minus source alpha; materials in
-    mode 7 too). The 1.12 viewer still does not draw particles: it has no effect drawing, and its path is unchanged.
-    What is drawn approximately is listed per model (the statistics' notes, `wds models info`).
+    mode 7 too); your 1.12 game's particles came after it (below). What is drawn approximately is listed per model
+    (the statistics' notes, `wds models info`).
   * *Shine and reflection layers*: the commonest combiners of the newer clients (shader ids 0x8000-0x8003, and the
     second-layer mod2x / add below 0x8000) are drawn; 1,641 of the 1,845 two-layer texture units that showed their
     first texture only now combine (their second texture: a reflection map, MEASURED by the names the client has).
@@ -172,7 +172,52 @@ recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
     and runs the effects: 40 cycles, the managed heap flat (157.2 to 157.3 MB), the GL contexts come back, handles +1.93
     per cycle (the two handles each closed GL view leaves, as before); at most 1.6 MB of keys loaded per model there.
 
+* **Particles and ribbons of your game in 3D.** The 3D views of your 1.12 game's models now draw their particles and
+  ribbons (fire, smoke, sparks, glows, light rays, trails): the model viewer and its pop-out, Compare two skins, the
+  designers' 3D views (a Duplicate visual copy shows with its size and tint after saving), the tile breakdown's model
+  preview, and `wds models render` ([Model viewer](docs/manual/model-viewer.md#particles-and-ribbons)).
+  * The records are read as the 1.12 client reads them (`M2ClassicEffects`, from the client's own code:
+    M2Model_InitFromShared, M2Model_UpdateEmittersAndLights, the CParticleEmitter2 and CRibbonEmitter classes) and
+    simulated by its rules where they differ from what M3 assumed for the modern records: the emitter type and the
+    particle type are 16-bit fields (+0x2A, +0x2C); colour, opacity and size are three keys (birth, middle point,
+    death) in two key blocks with a texture-cell range and a repeat count each; one spin, no life or rate variation, a
+    particle dies at the current lifespan; the emitter's frame is its bone's turned 90 degrees about Z; the plane
+    tilts within +-vertical range, the sphere measures its elevation from the XY plane (flag 0x100: straight up), a
+    spline emits between two parameters of its curve at rate x the larger one; wind, bursts (flag 0x8000),
+    twinkling, tails (764 emitters are tails only, 89 heads and tails) and the texture cells are drawn; a ribbon spans
+    its bone's Y axis, a positive gravity lifts its edges by gravity x age squared, its texture slot picks a cell.
+    The tracks keep their per-animation key ranges, as the bones'.
+  * Another version's particles are drawn exactly as before (proof: `ModernEffectsUnchangedTests`, the same numbers
+    as the code of 6a96f3e; the M3 tests unchanged and green).
+  * **Particles** under the 3D view (on by default) switches them off; `wds models render --no-particles` does the
+    same for a picture. **Model statistics** says *Particles / ribbons: 1 / 3 (drawn approximately)* and what is
+    approximated for that model; `wds models info` prints the same (`effects` in `--json`). A spell effect that is
+    only particles and ribbons (no mesh, empty bounds) is framed around where its particles fly.
+  * Measured on the 1.12 client: 668 of the 1,112 creature and spell-effect models have particles or ribbons
+    (109 creatures, 559 spell effects): 2,753 emitters and 387 ribbons, every one read and simulated; what is
+    approximated is in [Known issues](docs/manual/known-issues.md#particles-and-ribbons-of-your-game-are-drawn-approximately).
+    The doodads of the Maps tab's 3D tiles stay without particles (hundreds per view, every frame).
+  * Tests: 1.12 models made from our own bytes (`SyntheticClassicModels`, `Classic112EffectsTests`), the opt-in
+    `RealClient112EffectsTests` (`WOWDATA_CLIENT_DIR`: every creature and spell-effect model read and simulated; the
+    app's renderer with and without `--no-particles`), `CliModelTests`. Screenshots 155 and 156; the pictures that show
+    the 3D viewer's options again (the new chip) and the ones whose model has particles. The leak test's `model_viewer`
+    view also shows the Fire Elemental and the Fireball missile and lets their particles run for ten frames: 80 cycles
+    flat (managed heap 213.5 to 213.3 MB, handles -0.33 per cycle, GL contexts and objects back to 4 / 40);
+    `model_popout` keeps the two handles each closed GL window leaves (+1.88 per cycle), and its private bytes rose
+    from 548 to 638 MB over the first 60 cycles, then stayed.
+
 ### Fixed
+
+* **Particle textures got the additive note by the wrong blend numbering** (the known issue *Particle blend modes are
+  read by the community's convention* is closed): the 1.12 client hands a particle's blend mode (+0x28) to the same
+  blend state as a material's (M2Scene_DrawParticleBatch @0070d8b0 into M2Scene_SetBatchBlendState), so it is the
+  materials' numbering (1 alpha key, 3 add without alpha, 4 add), not the community's (1 add, 3 alpha key). The
+  26 alpha-key particle emitters of the client no longer count as glows.
+* **Duplicate visual scaled a spline emitter's curve range and the speed variation.** A spline emitter's area length
+  and width are positions 0..1 along its curve (they are no longer scaled; its horizontal range, a distance, is), the
+  speed variation is a fraction of the speed (no longer scaled), and the ribbons' gravity and the particles' wind are
+  now scaled with the size. A copy's effect is now exactly the original's, that many times bigger (tested by
+  simulating both).
 
 * **Buildings of another version are shown in 3D** (M4; the known issue *Buildings of other versions are not shown in
   3D* is closed): a game object or world object of the read-only window whose model is a building (WMO) showed only

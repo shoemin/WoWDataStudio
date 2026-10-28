@@ -193,10 +193,11 @@ the effect models each part spawns (on the caster's hands, chest, feet...).
   the other spells keep their look.
 * **Duplicate visual (tint and size)**: makes the spell its own copy of the visual, with its own kits and its own copies
   of the effect models (under `Spells\WDS\`), with a **Tint** (`#8040FF`: the colours of the models, their particles
-  and ribbons and their textures are multiplied by it) and a **Size** (`1.5`: the models, their particle sizes and
-  speeds and their bones are scaled). Click **Duplicate visual**. The original models are not changed.
+  and ribbons and their textures are multiplied by it) and a **Size** (`1.5`: the models, their bones, their particle
+  sizes, speeds, areas, gravity and spline paths, and their ribbons' heights and gravity are scaled). Click
+  **Duplicate visual**. The original models are not changed.
 * **Effect models** lists the models; select one and click **Show in 3D** to see it in the 3D view below (with its
-  animation). A duplicated copy shows after you have saved it.
+  animation, its particles and ribbons). A duplicated copy shows after you have saved it, with its size and tint.
 
 ![A visual made from Shadow Bolt's cast and Fireball's missile and impact, its missile in 3D](../screenshots/121_spell_designer_visual.png)
 

@@ -517,7 +517,8 @@ render it. See [Models and Blender](model-export-import.md) and [Skeleton and an
 
 A model's statistics, its displays and skins, who a mesh change affects, your edit and its checks.
 
-The model is a path (Creature\Boar\Boar.m2) or an entry ("Mottled Boar", creature:3098, cdisplay:503). With
+The model is a path (Creature\Boar\Boar.m2) or an entry ("Mottled Boar", creature:3098, cdisplay:503). For a model
+with particles or ribbons, how many the 3D view draws and what it draws approximately (`effects` in `--json`). With
 `--version`: another version's model (a path, `#FileDataID` or an entry), the file format read, its chunks, skin,
 texture, skeleton and animation files, its particle emitters and ribbons, and what is drawn approximately or not shown
 (see [Another version, read only](#another-version-read-only)).
@@ -691,12 +692,16 @@ wds models render <model> <png> [options]
 * `--yaw <degrees>`: turn the camera
 * `--size <WxH>`: the picture size (default 900x700)
 * `--original`: the game's files only, not your edits
+* `--no-particles`: leave the particles and ribbons out (like switching off Particles in the 3D view)
+
+The particles and ribbons are drawn after two seconds of their simulation, so a still picture shows them running.
 
 ```
 wds models render Creature\Boar\Boar.m2 boar.png --display 503
 wds models render "Mottled Boar" boar.png --size 1920x1080 --original
 wds models render Creature\Boar\Boar.m2 walk.png --sequence Walk --time 500
 wds models render cdisplay:503 boar160.png --version _classic_beta_
+wds models render Creature\FireElemental\FireElemental.m2 fire.png --no-particles
 ```
 
 ### Maps and terrain
@@ -3211,6 +3216,7 @@ app's tests fail when the app, the command line and this table differ.
 | models.anims | **Animations and what the game plays them for** | `wds models anims` |
 | models.skeleton | **Skeleton, attachment points and events** | `wds models skeleton` |
 | models.animation-preview | **Loop** | `wds models render` |
+| models.particles | **Particles** | `wds models render` |
 | models.attachment-points | **Attachment points** | `wds models skeleton` |
 | models.compare-animations | **Same animation on both** | `wds models compare` |
 | models.compare-skins | **Tools > Compare two skins of this model (3D)** | (app only: viewing: two live 3D views side by side (render each skin with "wds models render --display")) |

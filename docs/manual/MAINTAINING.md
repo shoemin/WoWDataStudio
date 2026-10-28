@@ -101,6 +101,9 @@ its building preview; the first build of that tile's models takes about 10 secon
 same folder (with the `_classic_beta_` copy); its index is built in the run's temporary app folder (about 10 seconds);
 `WDS_SCREENSHOT_ONLY=versions-open` makes only them. Use `--client` with a copy of the 1.12 client (`Client3`), never
 the folder you play with.
+`Services\ParticleScreenshots.cs` (155-156: your game's particles and ribbons in the 3D viewer: the Fire Elemental's
+fire and smoke, and the Holy Precast High Hand spell effect with the model statistics' notes on what is drawn
+approximately) runs after the manual's pictures; `WDS_SCREENSHOT_ONLY=particles` makes only them.
 The Server data pictures never use the user's server: the steps start a throwaway
 MySQL server (`ThrowawayMySql`, the local VMaNGOS `mysqld.exe` or `WDS_TEST_MYSQLD`, its own data folder and port) and
 load the tests' fixture `app\WoWData.Tests\serverdb\world_fixture.sql` into it. For a quick look at the Data tables
@@ -158,7 +161,8 @@ server is never used. The output (CSV files and logs about game data) stays in t
 repository.
 
 The views, in order (`--only model_popout,maps_tab` runs some of them): `model_viewer` (the docked 3D viewer: a boar,
-the orc male, a tree, an axe, a spell effect, shown and cleared), `model_popout` (a model pop-out window opened and
+the orc male, a tree, an axe, a spell effect, the Fire Elemental and the Fireball missile with their particles running
+for ten frames, shown and cleared), `model_popout` (a model pop-out window opened and
 closed), `model_compare` (the compare window of two skins), `model_browse` (another creature every cycle, as when a
 user browses the list), `texture_viewer`, `maps_tab` (two maps in turn, a tile with its 3D preview), `terrain_popout`,
 `data_tables`, `server_data`, `spell_designer`, `class_designer`, `quest_designer`, `other_versions` (the 2.4.3 and

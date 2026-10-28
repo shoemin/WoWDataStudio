@@ -404,6 +404,8 @@ public static class LeakTestRunner
                      ("mottled boar", "boar", AssetKind.Creature, "Mottled Boar"), ("orc male", "orc male", AssetKind.Character, ""),
                      ("durotarpalm01", "durotarpalm01", AssetKind.WorldObject, ""), ("worn battleaxe", "axe", AssetKind.Item, ""),
                      ("ice barrier state", "ice barrier", AssetKind.SpellEffect, ""),
+                     // your game's particles and ribbons: a creature of fire (34 emitters) and a spell effect
+                     ("fire elemental", "fireelemental", AssetKind.Creature, ""), ("fireball missile", "fireball", AssetKind.SpellEffect, ""),
                  })
         {
             ResultRow? row = null;
@@ -525,9 +527,18 @@ public static class LeakTestRunner
         await ShowModel(ctx, row);
         ctx.Win.BrowserScreen.ScrollToModel();
         await WaitFrames(vp, f);
+        string item = row.Name;
+        // the model's particles and ribbons run for a few frames (the simulation and its vertex buffers each frame)
+        if (ctx.B.ModelViewer.Scene.Asset?.Model.Effects is { } fx && ctx.B.ModelViewer.Scene.ShowParticles)
+        {
+            ctx.B.ModelViewer.Playing = true;
+            for (int k = 0; k < 10; k++) await WaitFrames(vp, vp.Frames);
+            var (live, edges) = vp.EffectCounts;
+            item += $" ({fx.Particles.Count} emitters, {fx.Ribbons.Count} ribbons: {live} particles, {edges} edges)";
+        }
         ctx.B.SelectedRow = null;
         await ScreenshotRunner.Until(() => !ctx.B.ModelViewer.HasModel, 10000);
-        return row.Name;
+        return item;
     }
 
     /// <summary>Open a model pop-out window on a model (it draws), close it.</summary>

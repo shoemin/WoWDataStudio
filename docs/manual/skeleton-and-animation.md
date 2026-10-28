@@ -204,7 +204,8 @@ folder with a text editor and import the package (or the Blender export) as usua
 *Particles and ribbons of ... (advanced)* with every changed value. The app checks every value: the numbers fit their
 fields, textures, materials and bones exist, key times increase and lie inside their animation, and the number of
 emitters and ribbons stays the same (adding or removing them is not supported). Only the emitters and ribbons you
-edited are written.
+edited are written. After saving, the 3D view draws the edited particles and ribbons ([Particles and
+ribbons](model-viewer.md#particles-and-ribbons)).
 
 ## Used in game
 

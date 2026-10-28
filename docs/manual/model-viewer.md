@@ -139,9 +139,9 @@ The model is lit by a simple light from the upper left (not the zone's lighting 
 game: solid, cut-out (fur edges, leaves), see-through, glowing (additive) and darkening (modulate) parts; colour and
 transparency animation; scrolling textures; the shine on weapons; parts that always face the camera.
 
-Not drawn yet: particles and ribbons (sparks, smoke, sword trails). The [model statistics](#model-statistics) list
-them. Buildings (`.wmo` files) are not shown in 3D: the view says *this is a WMO building; the 3D view shows M2 models
-only*.
+Particles and ribbons (fire, smoke, sparks, glows, trails) are drawn too: see
+[Particles and ribbons](#particles-and-ribbons). Buildings (`.wmo` files) are not shown in 3D: the view says *this is
+a WMO building; the 3D view shows M2 models only*.
 
 Your edited textures appear on the model as soon as you keep an import ([Editing textures](editing-textures.md)).
 
@@ -173,6 +173,7 @@ Buttons that switch an aid on or off (a tick means on):
 | **Grid** | a grid on the ground. The red line points to the model's front, the green line to its left. |
 | **Ground** | a light ground plane at height 0 |
 | **Wireframe** | the triangle edges over the model |
+| **Particles** | on (the default): the model's particles and ribbons (fire, smoke, glows, trails). Off: the model alone |
 | **Bones** | the skeleton, moving with the animation (the important "key" bones in red) |
 | **Attachment points** | where the game attaches weapons, shields, helmets, spell effects and the name plate (cyan crosses), moving with the animation |
 | **Loop** | on (the default): the animation repeats. Off: it plays once and stops on its last frame, as the game plays a death or an emote; press play to start again |
@@ -223,10 +224,33 @@ attachment points with their bones, and its events. To change them, see
 
 ![The skeleton and the attachment points](../screenshots/107_viewer_skeleton.png)
 
+## Particles and ribbons
+
+Many creatures and almost every spell effect are partly made of *particles* (small pictures the model sends out by the
+dozen: flames, smoke puffs, sparks, glows, light rays) and *ribbons* (bands that trail behind a moving part). The view
+draws them with its own simulation of the game's rules for 1.12 models, read from the game's own code: how many
+particles a second, where they start (a rectangle, a sphere or a line of points), their speed and direction, gravity,
+wind, their life, their colour, size and picture over their life, flicker (*twinkling*), spin, the trail some leave
+behind them (*tails*), and the bone they follow. They look close to the game's, not exactly the same: the
+[known issues](known-issues.md#particles-and-ribbons-of-your-game-are-drawn-approximately) say what differs.
+
+* They move with the animation and stop when it is paused. A model is shown with its effect already running (two
+  seconds of it), so a still picture (**Save image...**, `wds models render`) shows the effect, not an empty start.
+* Some effects only switch on at a moment of their animation: drag the timeline or let the animation play.
+* **Particles** (under the view) switches them off and on.
+* A spell effect that is only particles and ribbons (no mesh) is framed around where its particles fly.
+
+![The Fire Elemental with its fire and smoke](../screenshots/155_viewer_particles_creature.png)
+
+![The Holy Precast High Hand spell effect, its light rays and glow, and the model statistics](../screenshots/156_viewer_particles_spell.png)
+
 ## Model statistics
 
 **Model statistics** lists the model's numbers: vertices, triangles, bones, animations (sequences), texture units,
-attachment points, textures, geosets, particle emitters and ribbons, and how long it took to load.
+attachment points, textures, geosets, particle emitters and ribbons, and how long it took to load. For a model with
+particles, **Particles / ribbons** says how many are drawn (*1 / 3 (drawn approximately)*, and how many were left out
+when the model names a bone or texture it does not have), and the lines under the numbers say what is drawn
+approximately for that model, for example *particles that are models drawn as quads (2)*.
 
 ## Compare two skins
 
@@ -271,4 +295,4 @@ Under the 3D view, the box *EDIT THE MODEL IN BLENDER* has **Export for Blender.
 
 ## Command line
 
-The 3D viewer is in the app only; `wds models info <model>` lists a model's statistics, displays and animations, and `wds models render <model> image.png` saves a picture with the same renderer (`--sequence Walk --time 400` for one moment of an animation). `wds models anims <model>` lists the animations and what the game plays them for, `wds models skeleton <model>` the bones, key bones, attachment points and events. See [The command line](command-line.md#models-and-blender).
+The 3D viewer is in the app only; `wds models info <model>` lists a model's statistics, displays and animations, and `wds models render <model> image.png` saves a picture with the same renderer (`--sequence Walk --time 400` for one moment of an animation, `--no-particles` for the model without its particles and ribbons). `wds models anims <model>` lists the animations and what the game plays them for, `wds models skeleton <model>` the bones, key bones, attachment points and events. See [The command line](command-line.md#models-and-blender).
