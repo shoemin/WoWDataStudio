@@ -47,6 +47,54 @@ recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
   * Not yet: external animations and effects (M3), maps (M4), WoWDBDefs names (M5), player characters (M6), and
     opening the MPQ versions (M7); the 3D models came with M2 (below). See [Known issues](docs/manual/known-issues.md#other-versions).
 
+* **Maps of another version opened read only (experimental, M4 of `docs\research\OPEN_OTHER_VERSIONS_DESIGN.md`).**
+  The read-only window has a **Maps** tab next to **Browse**, the same view as your game's Maps tab without anything
+  that edits ([Other versions](docs/manual/other-versions.md#maps)): the maps of the version's Map table, its zones,
+  the minimap overview, a tile's facts, its 3D view (neighbours, doodads, buildings, water, textures, wireframe, the
+  camera bar, **Open in new window**) and **On this tile** (zones, placements, ground textures, terrain; no server).
+  * `IMapView` (new, `WoWData.Core\Maps\IMapView.cs`) is what the Maps tab and `wds maps` read: `MapCatalog` (your
+    1.12 game) implements it unchanged, with `LoadTerrain` (today's tile read, moved into it); `MapCatalog160` (new)
+    reads a modern client through the map converter's reader: maps from the Map table, tiles from each WDT's MAID,
+    zones from AreaTable and the chunk area ids of every root file (cached in the client's app folder), minimaps from
+    the MAID minimap FileDataIDs, and a tile's split files one by one (a locked file only takes its own part away, and
+    the facts say so).
+  * `TerrainTileFromNeutral` (new) turns the converter's neutral tile into the tile the 3D view draws, without going
+    through a 1.12 file: absolute heights and normals, up to 8 layers with their 8-bit alpha (the 1.60 continents'
+    blend weights turned into the same visible share), the 8 x 8 holes, the liquids (MH2O instances by their
+    LiquidType's kind), the doodads and buildings by FileDataID (a building's scale too). The terrain renderer draws
+    layers 4-7 from a second alpha atlas; a chunk with at most 4 layers is drawn as before.
+  * `WmoGeometry` reads the FileDataID form of the modern buildings (MVER 17 with GFID: groups by FileDataID, MOMT
+    texture FileDataIDs, MODI doodad models, a batch's 16-bit material when its flag 0x2 is set; the new chunks are
+    skipped). MEASURED on the 1.60 client before the code used it: 60 of 60 sampled roots have GFID and no MOTX; 989 of
+    989 non-zero MOMT texture values are BLP files of the client; 1,657 of 3,144 batches have flag 0x2, and with the
+    16-bit field every material is in range.
+  * Buildings in **Browse**: a world object or game object that is a building shows **BUILDING (3D)** (its groups with
+    their textures) and lists its textures under **TEXTURES IT USES**; "On this tile" links a building to it.
+  * Measured on 1.60.1.70450: 71 maps (73 of the Map table's 81 rows readable, 8 locked; 2 WDTs not in the copy; 21
+    maps that are one building), 3,322 tiles; Eastern Kingdoms 736 tiles, 28 zones, its minimap overview in about 1.5
+    seconds (512 x 512 minimaps); every tile of 44 maps and every 16th tile of Eastern Kingdoms, Kalimdor and the Emerald Dream (1,466 tiles of 47 maps)
+    load as terrain: 2,822 of 375,296 chunks have more than 4 layers (up to 8), 63,067 have a liquid; 131 buildings with
+    1,298 groups and 2,091 textures, all read; Azeroth 32_48 in 3D: 785 doodads (76 models), 8 buildings.
+  * Command line: `wds maps list`, `zones`, `tiles`, `minimap`, `tile` and `render` with `--version <client>` (the same
+    output; root-file FileDataIDs in `tiles`, the locked rows in `list`, missing tile files in `tile`; pictures never
+    into the client's folder). The other `wds maps` commands refuse `--version` with exit code 4.
+  * The 1.12 path is unchanged: `TerrainAsset112UnchangedTests` hashes everything the 3D view draws for a 1.12 tile
+    built in code and for the stock Azeroth 32_48 (vertices, layers, alpha atlases, liquids, placements, buildings)
+    with the code before the refactor; both digests are unchanged.
+  * Tests: the synthetic client gains maps made from our own bytes (`SyntheticMaps`: a WDT and two split tiles written
+    by `Adt160Writer`, minimap BLPs, a single-building map, a WDT that is not downloaded, a locked obj0, a WMO of
+    version 17 in the FileDataID form), `M4ModernTests`, the `wds maps` cases of `VersionOpenCliTests`, and the opt-in
+    `RealCopyM4Tests` on the real copy. Screenshots 152-154 (145-151 again: the window has tabs now).
+  * Leak test: the new view `versions_maps` opens the read-only window's Maps tab, a tile of Eastern Kingdoms,
+    Kalimdor, map 2997 or the Deadmines in 3D turned around, every other cycle a terrain pop-out, and closes the
+    window; `versions_window` also shows a building. The Maps view and the building's 3D view are made only when first
+    shown (each 3D view costs a GL context and leaves two handles when its window closes): 60 cycles each,
+    `versions_maps` managed heap flat (155.1 MB), GL contexts back, no closed window or view model alive, handles +5.0
+    per cycle (2.5 closed 3D views per cycle); `versions_window` managed heap flat (157.0 to 157.1 MB), handles +2.1
+    and private bytes +1.0 MB per cycle, as before M4 (the code of M3 measured the same way: +2.1 handles, +1.2 MB).
+  * Not yet: the tile breakdown and the map editing of other versions (read only by design), the buildings' own
+    furniture, animated liquids; see [Known issues](docs/manual/known-issues.md#the-maps-of-other-versions-are-drawn-more-simply-than-in-the-game).
+
 * **3D models of another version opened read only (experimental, M2 of `docs\research\OPEN_OTHER_VERSIONS_DESIGN.md`).**
   The read-only window shows the model of a creature display, an item, a game object, a spell effect or a world model
   in the same 3D viewer as your game ([Other versions](docs/manual/other-versions.md#3d-models)): animations, levels of
@@ -126,6 +174,9 @@ recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
 
 ### Fixed
 
+* **Buildings of another version are shown in 3D** (M4; the known issue *Buildings of other versions are not shown in
+  3D* is closed): a game object or world object of the read-only window whose model is a building (WMO) showed only
+  its files and *this is a building*; it now shows the building preview (see M4 above).
 * **`wds models render` into a folder that does not exist waited forever.** The app's renderer could not write the
   picture there and stopped on an error message nobody saw; the command line now creates the folder first.
 * **Browsing many models no longer grows the memory without end.** The decoded textures of the 3D viewer were all kept

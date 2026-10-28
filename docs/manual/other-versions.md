@@ -128,8 +128,8 @@ Then the files have their names, and wildcards work.
 
 A modern client, such as the "1.60" Classic client (`_classic_beta_`, build 1.60.1.70450), can be opened the way your
 1.12 game opens: a Browse list of its creatures, items, game objects, spell effects, textures and world models, the
-details of each (where it comes from, its files, its textures), the texture viewer and the 3D view of its models. It
-opens *read only*, in a
+details of each (where it comes from, its files, its textures), the texture viewer, the 3D view of its models and
+buildings, and its maps (the **Maps** tab). It opens *read only*, in a
 window of its own next to your 1.12 window, so you can look at both side by side. Nothing in the client's folder is
 changed, and your 1.12 game and your changes are not involved.
 
@@ -144,7 +144,8 @@ changed, and your 1.12 game and your changes are not involved.
    about 8 seconds for the 1.60 client, about 13 seconds with a listfile. The result (its index) is kept in the app's
    folder, so the next time the window opens in about a second. **Rebuild the index** reads the client again (after
    you chose another listfile, for example).
-3. Search as in the Browse tab: type words into the search box, tick the types to show, click a result.
+3. Search as in the Browse tab: type words into the search box, tick the types to show, click a result. The
+   **Maps** tab next to **Browse** shows the version's maps (see [Maps](#maps)).
 
 ![The 1.60 client selected in the Other versions tab: Open read only](../screenshots/144_versions_open_tab.png)
 
@@ -255,7 +256,69 @@ Not shown (the statistics say it for each model):
   particles; the models' lights.
 * Player characters and the hair, faces and clothes of humanoid NPCs (they show their baked texture and their default
   parts).
-* Buildings (WMO): the 3D view says *this is a building*; buildings come with the maps.
+
+### Buildings
+
+When the entry is a building (a world object or a game object whose model is a `.wmo`), the details show it under
+**BUILDING (3D)**: every part of the building (its *groups*) with the first texture of each of its surfaces, as the
+tile breakdown of your game shows a building on its own. Turn and zoom with the mouse; **Reset view** goes back to the
+start. The line under the view says how many groups, triangles and textures were read, and how many furniture models
+(the building's own doodads) it lists; those are not drawn, as in your game. **TEXTURES IT USES** lists the building's
+textures: click one to see it in the texture viewer.
+
+A 1.60 building names its parts and textures by FileDataID instead of by name (the line says *groups and textures by
+FileDataID*). Measured on the 1.60 client: 131 buildings placed on Eastern Kingdoms and Kalimdor and the 21 maps that
+are one building, with 1,298 groups and 2,091 textures, all read.
+
+![A 1.60 building (a gold mine of Elwynn Forest) in the building preview, followed from "On this tile"](../screenshots/154_versions_open_building.png)
+
+### Maps
+
+The **Maps** tab of the read-only window works like your game's [Maps tab](maps-and-terrain.md), without anything that
+edits: pick a map on the left, a zone to light up its tiles, click a tile on the minimap.
+
+* **MAPS**: the maps of the version's Map table, in the same groups as your game (continents, world maps, dungeons,
+  raids, battlegrounds). The line above the minimap says how many rows of the Map and AreaTable tables are locked; a
+  map whose map file (WDT) is encrypted or not in the client is listed with the reason and shows no tiles; a map that
+  is one building says so (find it in **Browse** to see the building). Measured on the 1.60 client: 71 maps (73 of
+  the Map table's 81 rows can be read, 8 are locked; 2 maps' files are not in the copy; 21 maps are one building),
+  3,322 tiles; Eastern Kingdoms has 736 tiles and 28 zones.
+* **ZONES**: from the version's AreaTable (1,375 readable rows in 1.60, 46 locked) and the area of each ground square
+  of every tile. The first time you pick a map, the app reads every tile's ground file for that (about 1 to 2 seconds
+  for Eastern Kingdoms) and keeps the result in the app's folder of that client.
+* *The minimap*: the version's own minimap pictures (512 x 512 per tile in 1.60), scaled down; built in about 1 to 2
+  seconds the first time and kept in the app's folder.
+* *The tile*: its zones, size, heights, doodads, buildings and water, the 3D view with **Neighbour tiles**,
+  **Doodads**, **Buildings**, **Water**, **Textures**, **Wireframe**, the camera bar and **Open in new window** (a
+  window of its own that follows the tile you click, or stays on its tile when pinned), and **On this tile**: the
+  zones, the doodads, buildings and ground textures placed on it, and the terrain. A doodad or building that is in the
+  Browse list is a link: click it to see it there (a building in the building preview). There is no server here, so
+  no spawns are listed.
+
+What the 3D view of a 1.60 tile shows:
+
+* the ground with up to 8 texture layers per square (1.12 has 4; measured on 1,466 tiles of 47 maps of the 1.60
+  client: 2,822 of 375,296 squares have more than 4 layers, up to 8) and their fine alpha maps (256 levels, where
+  1.12 has 16). The 1.60 continents store how much of each texture shows; the app draws exactly that share;
+* the finer holes of 1.60 (8 x 8 per square instead of 4 x 4);
+* water, ocean, lava and slime from the tile's liquid data, by the kind of each liquid (63,067 of those squares
+  have one);
+* the doodads (read like the 1.60 models of the 3D view) and buildings (read by FileDataID), also a building's scale.
+
+The buttons that change a map (**Break down this tile...**, **Edit in Noggit...**, the imports, Blender, **Test map in
+game**, **Build release patch**, **Update server maps...**) and the **Specular ground (_s textures)** choice are not in
+this window: the 1.60 tiles name the textures they are drawn with.
+
+When a file of a tile cannot be read (encrypted, or not in the client), the tile still shows what can be read and the
+facts say what is missing, for example *The placement (obj0) file (#123456) is encrypted: its doodads and buildings
+are not shown.* Measured on the 1.60 client: none of the 1,466 tiles sampled has such a file.
+
+![The Maps tab of the 1.60 client: Eastern Kingdoms with Elwynn Forest lit, the tile of Northshire Abbey with its facts and 3D view](../screenshots/152_versions_open_maps.png)
+
+![The same tile of the 1.60 client in 3D, closer on Northshire Abbey, with "On this tile" under it](../screenshots/153_versions_open_tile_3d.png)
+
+Also on the [command line](command-line.md#another-version-read-only): `wds maps list`, `zones`, `tiles`, `minimap`,
+`tile` and `render` with `--version <client>`.
 
 ### Locked records and names
 

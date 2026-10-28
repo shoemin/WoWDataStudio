@@ -33,6 +33,7 @@ public static class LeakTestRunner
     {
         "model_viewer", "model_popout", "model_compare", "model_browse", "texture_viewer", "maps_tab", "terrain_popout",
         "data_tables", "server_data", "spell_designer", "class_designer", "quest_designer", "other_versions", "versions_window",
+        "versions_maps",
     };
 
     private static readonly HashSet<string> Doubled = new() { "model_viewer", "model_popout", "model_browse" };
@@ -456,10 +457,11 @@ public static class LeakTestRunner
                 "quest_designer" => i => QuestCycle(ctx, i),
                 "other_versions" => i => VersionsCycle(ctx, i),
                 "versions_window" => i => VersionsWindowCycle(ctx, i),
+                "versions_maps" => i => VersionsMapsCycle(ctx, i),
                 _ => throw new ArgumentException("unknown view " + view),
             };
             if (view == "other_versions" && !await PrepareVersions(ctx)) return new Result { View = view, Error = "no folder of other clients (WDS_SCREENSHOT_OTHER_CLIENTS)" };
-            if (view == "versions_window" && !await PrepareVersionsWindow()) return new Result { View = view, Error = "no 1.60 client (_classic_beta_) in WDS_SCREENSHOT_OTHER_CLIENTS" };
+            if (view is "versions_window" or "versions_maps" && !await PrepareVersionsWindow()) return new Result { View = view, Error = "no 1.60 client (_classic_beta_) in WDS_SCREENSHOT_OTHER_CLIENTS" };
             for (int i = 0; i < n; i++)
             {
                 _cycle = i;
@@ -888,7 +890,8 @@ public static class LeakTestRunner
 
     // M3: Taerar (7 animations in .anim files, 39 particle emitters) and a character-style NPC (#1733758: a skeleton
     // file with a parent, 54 animations in .anim files, more than the 8 MB budget together)
-    private static readonly string[] OtherSearches = { "boar", "inv_sword_04", "worn shortsword", "orcbonfire", "taerar", "1733758", "arcane_missile_lvl4" };
+    // M4: a building (its building preview: a GL view of its own)
+    private static readonly string[] OtherSearches = { "boar", "inv_sword_04", "worn shortsword", "orcbonfire", "taerar", "1733758", "arcane_missile_lvl4", "md_goldmine" };
 
     /// <summary>The most keys a model kept in one cycle (the budget plus its largest single animation at most).</summary>
     public static long MaxAnimBytes { get; private set; }
@@ -911,8 +914,16 @@ public static class LeakTestRunner
         if (vm.SelectedTexture is { Exists: true }) await ScreenshotRunner.Until(() => vm.Viewer.IsLoaded || vm.Viewer.Error.Length > 0, 30000);
         // M2: a model entry opens its 3D view (a GL view: closing it leaks 2 handles, see known-issues.md)
         if (vm.IsModelEntry) await ScreenshotRunner.Until(() => !vm.ModelViewer.IsLoading && (vm.ModelViewer.HasModel || vm.ModelViewer.Message.Length > 0), 60000);
+        // M4: a building entry opens the building preview
+        if (vm.IsBuildingEntry)
+        {
+            await ScreenshotRunner.Until(() => vm.BuildingScene.Asset != null || vm.BuildingStatus.StartsWith("The building could not", StringComparison.Ordinal), 60000);
+            await ScreenshotRunner.Until(() => w.BuildingView != null, 10000);
+            if (w.BuildingView != null) await WaitFrames(w.BuildingView, 0);
+        }
         await ScreenshotRunner.Settle(150);
-        string item = $"{q}: {vm.Results.Count} results, {vm.DetailTitle}{(vm.ModelViewer.HasModel ? $", 3D {System.IO.Path.GetFileName(vm.ModelViewer.ModelPath)}" : "")}";
+        string item = $"{q}: {vm.Results.Count} results, {vm.DetailTitle}{(vm.ModelViewer.HasModel ? $", 3D {System.IO.Path.GetFileName(vm.ModelViewer.ModelPath)}" : "")}" +
+                      (vm.IsBuildingEntry ? $", building: {vm.BuildingStatus}" : "");
         // M3: play several animations kept in .anim files in turn (each read when chosen; the keys kept stay within the
         // model's budget) and let the effects run
         if (vm.ModelViewer.HasModel && vm.ModelViewer.Scene.Asset?.Model.Modern?.Animations is { } ext)
@@ -931,6 +942,58 @@ public static class LeakTestRunner
         Watch(w, nameof(OtherVersionWindow));
         Watch(vm, nameof(OtherVersionWindowViewModel));
         Watch(vm.ModelViewer, "read-only window's ModelViewerViewModel");
+        Watch(vm.Session, "read-only AppSession");
+        w.Close();
+        await ScreenshotRunner.Settle(150);
+        return item;
+    }
+
+    /// <summary>M4: the maps of the 1.60 client: (map, tile step) in turn: Eastern Kingdoms, Kalimdor, a 1.60-only map
+    /// with 8-layer chunks (2997), the Deadmines (4-bit alpha).</summary>
+    private static readonly string[] OtherMaps = { "Azeroth", "Kalimdor", "2997", "DeadminesInstance" };
+
+    /// <summary>M4: the read-only window's Maps tab: a map, one of its tiles with its 3D view (turned around a few times),
+    /// "On this tile", every other cycle a terrain pop-out window too; then the window closed.</summary>
+    private static async Task<string> VersionsMapsCycle(Ctx ctx, int i)
+    {
+        var w = OtherVersionWindow.Open(ctx.Main, _betaCopy!, null, show: false);
+        ScreenshotRunner.Place(w, 1440, 900);
+        w.Show();
+        var vm = w.Vm;
+        await ScreenshotRunner.Until(() => vm.IsReady || vm.Error.Length > 0, 600000);
+        if (!vm.IsReady) throw new InvalidOperationException("the read-only window did not open: " + vm.Error);
+        vm.SelectedTab = OtherVersionWindowViewModel.MapsTab;
+        var m = vm.Maps;
+        await m.EnsureLoadedAsync();
+        await ScreenshotRunner.Until(() => m.Maps.Count > 0, 120000);
+        var dir = OtherMaps[i % OtherMaps.Length];
+        var map = m.Maps.First(v => v.Directory.Equals(dir, StringComparison.OrdinalIgnoreCase));
+        m.SelectedMap = map;
+        await ScreenshotRunner.Until(() => m.Overview != null && m.Zones.Count > 0, 300000);
+        var tiles = Enumerable.Range(0, 4096).Where(k => map.Tiles[k]).ToList();
+        int t = tiles[(i / OtherMaps.Length * 37 + tiles.Count / 2) % tiles.Count];
+        await SelectTile(m, t % 64, t / 64);
+        var view = w.MapsScreen.TerrainView;
+        for (int k = 0; k < 4; k++)
+        {
+            m.Camera.Yaw += 90f;
+            await WaitFrames(view, 0);
+        }
+        var asset = m.Scene.Asset!;
+        string item = $"{dir} {t % 64},{t / 64}: {asset.Summary}; {m.TileUsage.Report?.Short}";
+        if (i % 2 == 1)
+        {
+            var pw = vm.OpenTerrainPopoutWindow(v => ScreenshotRunner.Place(v, 1300, 860)) ?? throw new InvalidOperationException("the terrain pop-out did not open");
+            await ScreenshotRunner.Until(() => !pw.Vm.Loading && pw.Vm.Scene.Asset != null, 120000);
+            await WaitFrames(pw.Viewport, 0);
+            Watch(pw, "read-only window's TerrainPopoutWindow");
+            Watch(pw.Vm, "read-only window's TerrainPopoutViewModel");
+            item += "; pop-out";
+        }
+        Watch(w, nameof(OtherVersionWindow));
+        Watch(vm, nameof(OtherVersionWindowViewModel));
+        Watch(m, "read-only window's MapsViewModel");
+        Watch(asset, "read-only window's TerrainAsset");
         Watch(vm.Session, "read-only AppSession");
         w.Close();
         await ScreenshotRunner.Settle(150);

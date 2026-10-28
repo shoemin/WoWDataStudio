@@ -54,7 +54,7 @@ The groups follow the app: `setup`, `settings`, `serverdb`, `index`, `find` (the
 |---|---|
 | `--home <folder>` | keeps the settings, the index and your edits in that folder instead of `%APPDATA%\WoWDataStudio` (the app's). Scripts and tests use it to work apart from your normal edits; the app has the same option. |
 | `--client <folder>` | uses that World of Warcraft folder for this one command, instead of the one in the settings |
-| `--version <client>` | opens another World of Warcraft version read only for this one command, instead of your game: its folder, its name in the folder of other versions, a version (`1.60`) or a build (`70450`). Only the commands that read work with it: `wds find search`, `list`, `info`, `files`, `extract`, `wds textures info`, `export`, `export-all`, `wds models info`, `anims`, `skeleton`, `render` (and `wds versions open`); every other command refuses with exit code 4. Alone, `wds --version` prints the version of wds. See [Another version, read only](#another-version-read-only). |
+| `--version <client>` | opens another World of Warcraft version read only for this one command, instead of your game: its folder, its name in the folder of other versions, a version (`1.60`) or a build (`70450`). Only the commands that read work with it: `wds find search`, `list`, `info`, `files`, `extract`, `wds textures info`, `export`, `export-all`, `wds models info`, `anims`, `skeleton`, `render`, `wds maps list`, `zones`, `tiles`, `minimap`, `tile`, `render` (and `wds versions open`); every other command refuses with exit code 4. Alone, `wds --version` prints the version of wds. See [Another version, read only](#another-version-read-only). |
 | `--json` | prints one JSON object instead of text (see [JSON output](#json-output)) |
 | `--quiet` | no progress messages |
 | `--yes` | confirms a command that changes the game folder or the server, or deletes something (see [Safety](#safety)) |
@@ -712,7 +712,12 @@ wds maps list
 ```
 wds maps list
 wds maps list --json
+wds maps list --version _classic_beta_
 ```
+
+With `--version`: the maps of another version (its Map table; a map whose WDT is encrypted or not in the client is
+listed with the reason), and a last line with the locked rows of its Map and AreaTable tables (see
+[Another version, read only](#another-version-read-only)).
 
 #### wds maps zones
 
@@ -725,6 +730,7 @@ wds maps zones <map>
 ```
 wds maps zones Azeroth
 wds maps zones 1 --json
+wds maps zones Azeroth --version _classic_beta_
 ```
 
 #### wds maps tiles
@@ -741,7 +747,11 @@ wds maps tiles <map> [options]
 ```
 wds maps tiles Azeroth --changed
 wds maps tiles Kalimdor --json
+wds maps tiles DeadminesInstance --version _classic_beta_
 ```
+
+With `--version`, each tile line ends with the FileDataID of the tile's root file (`#778027`); another version has no
+changed or pending tiles.
 
 #### wds maps minimap
 
@@ -757,6 +767,7 @@ wds maps minimap <map> [options]
 ```
 wds maps minimap Azeroth --out azeroth.png
 wds maps minimap DeadminesInstance --out deadmines.png --cell 128
+wds maps minimap Azeroth --out azeroth160.png --version _classic_beta_
 ```
 
 #### wds maps tile
@@ -770,7 +781,12 @@ wds maps tile <map> <x> <y>
 ```
 wds maps tile Azeroth 32 48
 wds maps tile Kalimdor 40 41 --json
+wds maps tile Azeroth 32 48 --version _classic_beta_
 ```
+
+With `--version`: "On this tile" lists the zones and what is placed (no server: no spawns), and the facts say when a
+file of the tile is encrypted or not in the client (its doodads and buildings, or its ground textures, are then not
+shown).
 
 #### wds maps breakdown
 
@@ -806,6 +822,7 @@ wds maps render <map> <x> <y> [options]
 wds maps render Azeroth 32 48 --out relief.png
 wds maps render Azeroth 32 48 --kind heights --chunks 0,1,2 --out heights.png
 wds maps render Azeroth 32 48 --kind texture --texture Tileset\Elwynn\ElwynnGrassBase.blp --out grass.png
+wds maps render Azeroth 32 48 --out relief160.png --version _classic_beta_
 ```
 
 #### wds maps noggit
@@ -3051,6 +3068,9 @@ wds models anims Creature\Boar\Boar.m2 --version _classic_beta_
 wds models anims cdisplay:15363 --version _classic_beta_
 wds models render cdisplay:503 boar160.png --version _classic_beta_
 wds models render cdisplay:15363 roar.png --sequence EmoteRoar --time 1600 --version _classic_beta_
+wds maps list --version _classic_beta_
+wds maps tile Azeroth 32 48 --version _classic_beta_
+wds maps minimap Azeroth --out azeroth160.png --version _classic_beta_
 ```
 
 * Files are named by path, or by their FileDataID as `#123456` when no name is known; `wds find info` lists every file
@@ -3059,7 +3079,13 @@ wds models render cdisplay:15363 roar.png --sequence EmoteRoar --time 1600 --ver
   your game this way). Nothing is ever written into the other client's folder (exit code 4).
 * Every command that changes something refuses `--version` with exit code 4 and one line, for example
   `1.60.1.70450 is open read only: wds dbc set changes files.`; the commands that read but do not work with other
-  versions yet (maps, Used in game, the model export) refuse the same way. The maps of other versions come later.
+  versions yet (Used in game, the model export, the tile breakdown) refuse the same way.
+* `wds maps list`, `zones`, `tiles`, `minimap`, `tile` and `render` read the maps of another version as they read
+  your game's (its Map table, each map's WDT, AreaTable and the area of every ground square, the minimaps, the tile
+  files read by FileDataID): the same output, with the FileDataID of each tile's root file in `wds maps tiles`, the
+  locked rows of the Map and AreaTable tables in `wds maps list`, and, in `wds maps tile`, a fact for each file of
+  the tile that is encrypted or not in the client. "On this tile" has no spawns (there is no server). The pictures
+  of `wds maps minimap` and `render` are never written into the other client's folder (exit code 4).
 * `wds models info` reads the model of another version (a path, `#FileDataID` or an entry) and prints, besides the
   statistics and its displays, the file format read (1.60: version 272 or 274, its parts in separate files), its skin
   and texture files by FileDataID, its skeleton file and the parent skeleton (character-style models), where its

@@ -757,16 +757,39 @@ the newer clients).
 
 *Status:* open (planned with the characters).
 
-### Buildings of other versions are not shown in 3D
+### The maps of other versions are drawn more simply than in the game
 
-*What happens:* a game object of another version whose model is a building (WMO) shows its files, but its 3D view
-says *this is a building*. Measured on the 1.60 client: 10 of 457 sampled game object models are buildings.
+*What happens:* the 3D view of another version's tile (the read-only window's **Maps** tab) draws the ground with up
+to 8 texture layers, the fine alpha maps and holes, the liquids, the doodads and the buildings, but leaves out what
+the app's 3D view also leaves out for your game, and some parts only the newer clients have:
 
-*Who is affected:* anyone looking at doors, gates and other building-like objects of 1.60.
+* liquids are flat coloured surfaces by their kind (water, ocean, lava, slime): no animated textures, no new liquid
+  looks (fel, tar), no waterfalls from the newer liquid objects;
+* the ground's vertex colours and the newer ground lighting are not applied; a ground texture's height-blending
+  parameters (used by the newer clients to blend layers by height) are ignored: the layers are blended by their alpha
+  maps only;
+* a building's own furniture (its doodads), lights, portals, vertex colours and liquids are not drawn (the building
+  preview counts the furniture models); level-of-detail copies of the doodads and buildings are not used;
+* the doodads are shown in their rest pose, without particles;
+* a chunk with more than 8 texture layers would show its first 8 (none measured on the 1.60 client).
 
-*Workaround:* none in the app yet.
+*Who is affected:* anyone comparing a tile of 1.60 with the game.
 
-*Status:* open (buildings of other versions come with their maps).
+*Workaround:* none in the app.
+
+*Status:* open (the same limits as the 3D view of your game, see *The 3D views are previews, not the game's renderer*).
+
+### Two maps of the 1.60 copy have no tiles to show
+
+*What happens:* in the read-only window of the 1.60 client, the maps *test* (13) and *Manor Mistmantle* (3109) are
+listed with *its WDT (#...) is not in this client: no tiles to show*: their map files are not in the measured copy.
+Another 8 rows of the Map table are encrypted and not listed at all (the status above the minimap counts them).
+
+*Who is affected:* anyone looking for those maps.
+
+*Workaround:* none: the files are not on this computer, or locked without a key.
+
+*Status:* by design (the app never guesses locked or missing data).
 
 ### "Blizzard archives only" knows three releases
 
@@ -911,7 +934,7 @@ changes it; the terrain pop-out cannot save a picture.
 ### Each closed 3D window leaves two small handles behind
 
 *What happens:* every 3D view that closes (a model or terrain pop-out window, the three views of a compare window, the
-read-only window of another version with its 3D view)
+read-only window of another version with its 3D view, its Maps tab's 3D view and its building preview once shown)
 leaves two Windows handles (a named shared-memory section and a mutex, both named after the same GUID) and about
 110 to 220 KB of memory behind. The app's own resources come back (the GL contexts, textures and buffers it counts, the
 windows and their view models), so the rest happens below the app, in the OpenGL to Direct3D bridge of the 3D control

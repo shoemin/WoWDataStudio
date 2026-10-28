@@ -1,5 +1,6 @@
 using System.IO;
 using WoWData.Core.Index;
+using WoWDataStudio.Rendering;
 using WoWDataStudio.ViewModels;
 using WoWDataStudio.Views;
 
@@ -19,6 +20,11 @@ namespace WoWDataStudio.Services;
 ///   149_versions_open_item_3d      M2: the Worn Shortsword in the 3D view with its item texture
 ///   150_versions_open_anim_file    M3: Taerar's EmoteRoar, kept in an .anim file, read when chosen, paused at 1.6 s
 ///   151_versions_open_particles    M3: the Arcane_Missile_Lvl4 spell effect with its particles (simulated)
+///   152_versions_open_maps         M4: the Maps tab: Eastern Kingdoms (Azeroth) with Elwynn Forest lit on the minimap
+///                                  overview, Goldshire's tile (32, 48) with its zones, facts and 3D view
+///   153_versions_open_tile_3d      M4: the same tile in 3D, closer on Goldshire's buildings and trees, and "On this tile"
+///   154_versions_open_building     M4: a building of that tile (followed from "On this tile" to Browse) in the building
+///                                  preview: its groups and textures by FileDataID
 /// </summary>
 internal static class VersionOpenScreenshots
 {
@@ -36,7 +42,7 @@ internal static class VersionOpenScreenshots
         if (v.SelectedTexture is { Exists: true })
             await ScreenshotRunner.Until(() => v.Viewer.IsLoaded || v.Viewer.Error.Length > 0, 30000);
         if (v.IsModelEntry)
-            await ScreenshotRunner.Until(() => !v.ModelViewer.IsLoading && (v.ModelViewer.HasModel || v.ModelViewer.Message.Length > 0), 60000);
+            await ScreenshotRunner.Until(() => ReferenceEquals(v.ModelViewer.Loaded?.Entry, row.Entry) && !v.ModelViewer.IsLoading && (v.ModelViewer.HasModel || v.ModelViewer.Message.Length > 0), 60000);
         await ScreenshotRunner.Settle(500);
     }
 
@@ -52,6 +58,94 @@ internal static class VersionOpenScreenshots
         w.ModelBox.BringIntoView(new System.Windows.Rect(0, 0, Math.Max(1, w.ModelBox.ActualWidth), 620));
         await ScreenshotRunner.Settle(900);
         ScreenshotRunner.Log($"versions-open: {what}: {string.Join(", ", m.Stats.Select(x => $"{x.Label} {x.Value}"))}");
+    }
+
+    /// <summary>M4: the Maps tab of the read-only window (152-154).</summary>
+    private static async Task MapsAsync(OtherVersionWindow w, string outDir)
+    {
+        var vm = w.Vm;
+        var m = vm.Maps;
+        vm.SelectedTab = OtherVersionWindowViewModel.MapsTab;
+        await m.EnsureLoadedAsync();
+        await ScreenshotRunner.Until(() => m.Maps.Count > 0 || m.Status.StartsWith("The maps could not", StringComparison.Ordinal), 120000);
+        Expect(m.Maps.Count >= 60, $"versions-open maps: {m.Maps.Count} maps listed ({m.Status})");
+        Expect(!m.CanEdit, "versions-open maps: the Maps tab of the read-only window cannot edit");
+        Expect(m.Status.Contains("8 locked (encrypted, no key)", StringComparison.Ordinal), "versions-open maps: the status says how many Map rows are locked: " + m.Status);
+        var az = m.Maps.FirstOrDefault(x => x.Directory.Equals("Azeroth", StringComparison.OrdinalIgnoreCase));
+        Expect(az != null && az.TileCount == 736, $"versions-open maps: Azeroth has {az?.TileCount} tiles");
+        if (az == null) return;
+        if (m.SelectedMap != az) m.SelectedMap = az;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        await ScreenshotRunner.Until(() => m.Overview != null && m.Zones.Count > 0, 300000);
+        Expect(m.Overview != null, $"versions-open maps: the minimap overview is built in {sw.ElapsedMilliseconds} ms ({m.OverviewStatus})");
+        var elwynn = m.Zones.FirstOrDefault(z => z.Name == "Elwynn Forest");
+        Expect(elwynn != null && elwynn.Tiles.Count > 5, $"versions-open maps: Elwynn Forest covers {elwynn?.Tiles.Count} tiles ({m.Zones.Count} zones)");
+        if (elwynn != null) m.SelectedZone = elwynn;
+        m.SelectTile(32, 48);
+        await ScreenshotRunner.Until(() => !m.IsTileLoading && m.HasTile && m.CurrentTile != null && m.TileUsage.Report != null, 120000);
+        await ScreenshotRunner.Until(() => !m.PreviewLoading && m.Scene.Asset != null, 180000);
+        var asset = m.Scene.Asset;
+        Expect(asset != null && asset.Chunks.Count == 256 && asset.Doodads.Count > 50 && asset.Wmos.Count > 0 && asset.MissingModels == 0, $"versions-open maps: the tile in 3D: {asset?.Summary}");
+        Expect(m.TileFacts.Any(f => f.Contains("doodads", StringComparison.Ordinal)), "versions-open maps: the tile's facts: " + string.Join(" | ", m.TileFacts));
+        ScreenshotRunner.Log($"versions-open maps: {m.Status} | {m.OverviewStatus} | {m.PreviewStatus}");
+        await ScreenshotRunner.Settle(800);
+        w.MapsScreen.FitMinimap();
+        w.MapsScreen.TileScroll.ScrollToTop();
+        await ScreenshotRunner.Settle(600);
+        await ScreenshotRunner.Shot(w, outDir, "152_versions_open_maps");
+        if (asset == null) return;
+
+        // closer on the biggest building standing on the tile (Northshire Abbey) and the trees around it, "On this tile" under it
+        (System.Numerics.Vector3 Lo, System.Numerics.Vector3 Hi) Box(WmoMesh mesh, System.Numerics.Matrix4x4 world)
+        {
+            var lo = new System.Numerics.Vector3(float.MaxValue);
+            var hi = new System.Numerics.Vector3(float.MinValue);
+            foreach (var vx in mesh.Vertices)
+            {
+                var p = System.Numerics.Vector3.Transform(vx.Position, world);
+                lo = System.Numerics.Vector3.Min(lo, p);
+                hi = System.Numerics.Vector3.Max(hi, p);
+            }
+            return (lo, hi);
+        }
+        bool OnTile(System.Numerics.Vector3 c) => c.X >= asset.BoundsMin.X && c.X <= asset.BoundsMax.X && c.Y >= asset.BoundsMin.Y && c.Y <= asset.BoundsMax.Y;
+        var boxes = asset.Wmos.Select(x => (x.Mesh, Box: Box(x.Mesh, x.World))).Where(x => OnTile((x.Box.Lo + x.Box.Hi) / 2)).OrderByDescending(x => x.Mesh.Indices.Length).ToList();
+        Expect(boxes.Count > 0, "versions-open maps: a building stands on the tile");
+        if (boxes.Count > 0)
+        {
+            var (lo, hi) = boxes[0].Box;
+            m.Camera.Set(215f, 30f, Math.Max(160f, (hi - lo).Length() * 2.8f), (lo + hi) / 2);
+        }
+        var img = await w.MapsScreen.TerrainView.CaptureAsync(640, 420);
+        WoWData.Core.Imaging.Png.Save(img, Path.Combine(outDir, "render_versions_open_tile.png"), false);
+        Expect(ScreenshotRunner.LooksRendered(img, out var why), $"versions-open maps: the tile renders: {why}");
+        // the 3D view at the top of the tile panel, "On this tile" under it
+        var top = w.MapsScreen.PreviewBox.TranslatePoint(new System.Windows.Point(0, 0), (System.Windows.UIElement)w.MapsScreen.TileScroll.Content).Y;
+        w.MapsScreen.TileScroll.ScrollToVerticalOffset(Math.Max(0, top - 6));
+        await ScreenshotRunner.Settle(900);
+        await ScreenshotRunner.Shot(w, outDir, "153_versions_open_tile_3d");
+
+        // a building of the tile, followed from "On this tile" to its Browse entry and its building preview
+        var linked = m.TileUsage.Report!.Section("wmos")?.Lines.SelectMany(l => l.Spans).Where(x => x.Key != null).Select(x => x.Key!).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? new();
+        var link = m.CurrentTile!.Wmos.OrderByDescending(x => (x.ExtentMax - x.ExtentMin).Length()).Select(x => "file:" + x.Model).FirstOrDefault(linked.Contains);
+        string? path = link?[5..];
+        if (link != null) await vm.NavigateToKeyAsync(link);
+        else
+        {
+            // no building of the tile is a Browse entry: the first one by its FileDataID
+            path = m.CurrentTile!.Wmos[0].Model;
+            vm.SelectedTab = OtherVersionWindowViewModel.BrowseTab;
+            await vm.LoadBuildingAsync(path);
+        }
+        Expect(link != null, "versions-open maps: a building on the tile links to its Browse entry");
+        await ScreenshotRunner.Until(() => vm.BuildingScene.Asset != null || vm.BuildingStatus.StartsWith("The building could not", StringComparison.Ordinal), 120000);
+        Expect(vm.IsBuildingEntry && vm.BuildingScene.Asset is { Wmos.Count: 1 }, $"versions-open maps: {path} is shown in the building preview: {vm.BuildingStatus}");
+        Expect(vm.BuildingStatus.Contains("by FileDataID (GFID, MOMT)", StringComparison.Ordinal), "versions-open maps: the building's groups and textures were found by FileDataID");
+        ScreenshotRunner.Log($"versions-open maps: building {path}: {vm.BuildingStatus}");
+        vm.BuildingCamera.ResetView();
+        w.DetailsScroll.ScrollToTop();
+        await ScreenshotRunner.Settle(900);
+        await ScreenshotRunner.Shot(w, outDir, "154_versions_open_building");
     }
 
     public static async Task RunAsync(MainWindow win, MainViewModel main, BrowserViewModel b, string outDir)
@@ -149,6 +243,8 @@ internal static class VersionOpenScreenshots
             w.DetailsScroll.ScrollToTop();
             await ScreenshotRunner.Settle(300);
             await ScreenshotRunner.Shot(w, outDir, "147_versions_open_texture");
+
+            await MapsAsync(w, outDir);
         }
         finally
         {
