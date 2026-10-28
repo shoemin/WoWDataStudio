@@ -316,8 +316,9 @@ public static class SpellVisuals
 
     /// <summary>
     /// A scaled and tinted variant of an M2: positions (vertices, bone pivots and moves, attachments, events, lights,
-    /// particle and ribbon emitters, bounds, collision) and sizes (particle sizes, speeds, areas, gravity; ribbon heights)
-    /// times <paramref name="scale"/>; the model's colour tracks and the particle and ribbon colours times
+    /// particle and ribbon emitters, bounds, collision) and sizes (particle sizes, speeds, areas, gravity, wind, a spline
+    /// emitter's spread distance; ribbon heights and gravity) times <paramref name="scale"/>; the model's colour tracks and
+    /// the particle and ribbon colours times
     /// <paramref name="tint"/>; texture file names replaced by <paramref name="renameTexture"/> (null = keep).
     /// </summary>
     public static byte[] Variant(byte[] data, float scale, Vector3? tint, Func<string, string?> renameTexture)
@@ -341,18 +342,28 @@ public static class SpellVisuals
             var parts = f["particles"];
             for (int i = 0; i < parts.Count; i++)
             {
-                foreach (var tr in new[] { "emission_speed", "speed_variation", "gravity", "emission_area_length", "emission_area_width", "z_source" })
+                // the speed variation is a fraction of the speed (CParticleEmitter2_RandomSpeed: speed x (1 + random x
+                // variation)), so it is not scaled. A spline emitter's (type 3) area length and width are positions 0..1
+                // along its curve and its horizontal range is a distance (CParticleEmitter2Spline vf6, vf7, vf9)
+                bool spline = parts.U16(i, "emitter_type") == 3;
+                foreach (var tr in new[] { "emission_speed", "gravity", "z_source" })
+                    ScaleTrack(parts.Track(i, tr), scale);
+                foreach (var tr in spline ? new[] { "horizontal_range" } : new[] { "emission_area_length", "emission_area_width" })
                     ScaleTrack(parts.Track(i, tr), scale);
                 var sc = parts.Floats(i, "scales");
                 for (int k = 0; k < sc.Length; k++) BinaryPrimitives.WriteSingleLittleEndian(parts.Bytes.AsSpan(i * parts.Elem.Size + parts.Rec.Field("scales").Offset + k * 4), sc[k] * scale);
-                var spline = parts.Child(i, "spline_points");
-                for (int k = 0; k < spline.Count; k++) ScaleFloats(spline.Bytes, k * 12, 3, scale);
+                // the wind (params +0x38..+0x40: a pull in yards a second, CParticleEmitter2_IntegrateParticle)
+                ScaleFloats(parts.Bytes, i * parts.Elem.Size + parts.Rec.Field("params_17c").Offset + 14 * 4, 3, scale);
+                var points = parts.Child(i, "spline_points");
+                for (int k = 0; k < points.Count; k++) ScaleFloats(points.Bytes, k * 12, 3, scale);
             }
             var ribs = f["ribbons"];
             for (int i = 0; i < ribs.Count; i++)
             {
                 ScaleTrack(ribs.Track(i, "height_above"), scale);
                 ScaleTrack(ribs.Track(i, "height_below"), scale);
+                // the ribbon's gravity moves its edges by gravity x age squared (CRibbonEmitter_Update): a distance
+                ribs.SetF32(i, "gravity", ribs.F32(i, "gravity") * scale);
             }
             foreach (var p in new[] { "bounds_min", "bounds_max", "collision_min", "collision_max" })
                 f.Header.SetVec3(0, p, f.Header.Vec3(0, p) * scale);

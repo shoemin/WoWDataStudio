@@ -214,6 +214,24 @@ public sealed class M2Model
     }
 
     public static M2Model Load(byte[] data) => new(M2File.Parse(data));
+
+    private (M2EffectSet? Effects, List<string> Notes)? _classicFx;
+    private readonly object _fxGate = new();
+
+    /// <summary>
+    /// The particle emitters and ribbons the 3D view draws: another version's (<see cref="Modern"/>.Effects), or this 1.12
+    /// model's own records read by <see cref="M2ClassicEffects"/> on first use. Null when the model has none.
+    /// </summary>
+    public M2EffectSet? Effects => Modern != null ? Modern.Effects : ClassicEffects().Effects;
+
+    /// <summary>1.12: the emitters left out of <see cref="Effects"/> and why (empty for another version, whose notes are
+    /// in <see cref="Modern"/>).</summary>
+    public IReadOnlyList<string> EffectNotes => Modern != null ? System.Array.Empty<string>() : ClassicEffects().Notes;
+
+    private (M2EffectSet? Effects, List<string> Notes) ClassicEffects()
+    {
+        lock (_fxGate) return _classicFx ??= M2ClassicEffects.Read(this);
+    }
     public static M2Model FromFile(M2File f) => new(f);
 
     /// <summary>M2 (other versions): set when the model was read by <see cref="Modern.M2ModernReader"/> from a chunked
@@ -321,7 +339,7 @@ public sealed class M2Model
         return a;
     }
 
-    private static M2Track<T> Track<T>(M2TrackView t, Func<byte[], int, T> read, int size) where T : struct
+    internal static M2Track<T> Track<T>(M2TrackView t, Func<byte[], int, T> read, int size) where T : struct
     {
         var vals = t.Values;
         if (t.KeyCount == 0 && t.Ranges.Count == 0 && (vals == null || vals.Count == 0)) return new M2Track<T>(t.Interpolation, t.GlobalSequence, System.Array.Empty<(uint, uint)>(), System.Array.Empty<uint>(), System.Array.Empty<T>());
@@ -330,12 +348,12 @@ public sealed class M2Model
         return new M2Track<T>(t.Interpolation, t.GlobalSequence, t.RangePairs(), t.Timestamps.AsU32(), v);
     }
 
-    private static M2Track<Vector3> Vec3Track(M2TrackView t) => Track(t, (b, o) =>
+    internal static M2Track<Vector3> Vec3Track(M2TrackView t) => Track(t, (b, o) =>
         new Vector3(BinaryPrimitives.ReadSingleLittleEndian(b.AsSpan(o)), BinaryPrimitives.ReadSingleLittleEndian(b.AsSpan(o + 4)), BinaryPrimitives.ReadSingleLittleEndian(b.AsSpan(o + 8))), 12);
 
     private static M2Track<Quaternion> QuatTrack(M2TrackView t) => Track(t, (b, o) =>
         new Quaternion(BinaryPrimitives.ReadSingleLittleEndian(b.AsSpan(o)), BinaryPrimitives.ReadSingleLittleEndian(b.AsSpan(o + 4)),
             BinaryPrimitives.ReadSingleLittleEndian(b.AsSpan(o + 8)), BinaryPrimitives.ReadSingleLittleEndian(b.AsSpan(o + 12))), 16);
 
-    private static M2Track<short> I16Track(M2TrackView t) => Track(t, (b, o) => BinaryPrimitives.ReadInt16LittleEndian(b.AsSpan(o)), 2);
+    internal static M2Track<short> I16Track(M2TrackView t) => Track(t, (b, o) => BinaryPrimitives.ReadInt16LittleEndian(b.AsSpan(o)), 2);
 }

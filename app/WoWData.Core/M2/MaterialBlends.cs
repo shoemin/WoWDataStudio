@@ -15,7 +15,9 @@ public sealed record TextureMaterialUse(string Model, BlendKind Kind, string Ble
 /// The blend modes with which models and buildings draw a texture: the M2 texture units of view 0 (render-flag entry
 /// +2 = blend: 0 opaque, 1 alpha key, 2 alpha, 3 no-alpha add, 4 add, 5 mod, 6 mod2x, as M2Scene_SetBatchBlendState
 /// @0070c190 reads it), the ribbon emitters (their materials are render-flag entries too), the particle emitters
-/// (blending field +0x28: 0 opaque, 1 additive, 2 alpha, 3 alpha key, 4 additive with alpha) and the WMO materials
+/// (blending field +0x28: the same numbering, because M2Scene_DrawParticleBatch @0070d8b0 hands it to
+/// M2Scene_SetBatchBlendState as a material's blend; the modding community's 0 opaque, 1 additive, 2 alpha, 3 alpha
+/// key, 4 additive with alpha does not match the 1.12 client) and the WMO materials
 /// (MOMT +8, the Gx blend: 0 opaque, 1 alpha key, 2 alpha, 3 add, 4 mod, 5 mod2x). Used for the additive-texture
 /// advice and for deciding whether colour under fully transparent pixels can be seen.
 /// </summary>
@@ -28,11 +30,8 @@ public static class MaterialBlends
 
     public static string M2Name(int blend) => blend >= 0 && blend < M2Schema.BlendModes.Length ? M2Schema.BlendModes[blend] : $"blend {blend}";
 
-    private static (BlendKind, string) OfParticle(int b) => b switch
-    {
-        0 => (BlendKind.Opaque, "opaque"), 1 => (BlendKind.Additive, "add"), 2 => (BlendKind.Alpha, "alpha"), 3 => (BlendKind.AlphaKey, "alpha key"),
-        4 => (BlendKind.Additive, "add (alpha)"), _ => (BlendKind.Other, $"blend {b}"),
-    };
+    /// <summary>A particle emitter's blend (record +0x28): the materials' numbering (see the class remarks).</summary>
+    public static (BlendKind Kind, string Name) OfParticle(int b) => (OfM2(b), M2Name(b));
 
     private static (BlendKind, string) OfWmo(int b) => b switch
     {

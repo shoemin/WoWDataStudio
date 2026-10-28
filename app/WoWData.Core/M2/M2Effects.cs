@@ -46,7 +46,8 @@ public sealed class M2LifeTrack<T> where T : struct
 
 /// <summary>
 /// M3: a particle emitter of a modern model (version 264 and later, record of 0x1EC bytes; FORMAT KNOWLEDGE, every
-/// record of the 1.60 copy checked, see <see cref="Modern.M2ModernReader"/>). The tracks run on the model's timeline
+/// record of the 1.60 copy checked, see <see cref="Modern.M2ModernReader"/>), or of your 1.12 game's model (record of
+/// 0x1F8 bytes, <see cref="Classic"/>, read by <see cref="M2ClassicEffects"/>). The tracks run on the model's timeline
 /// (as the bones' do); the life tracks run over each particle's life.
 /// </summary>
 public sealed class M2ParticleEmitter
@@ -57,7 +58,8 @@ public sealed class M2ParticleEmitter
     public int Bone;
     /// <summary>The texture(s): one index, or up to three with the multi-texture flag (0x10000000).</summary>
     public int[] Textures = System.Array.Empty<int>();
-    /// <summary>The blend mode (the modern numbering, as the materials': 0 opaque ... 7 blend add).</summary>
+    /// <summary>The blend mode (the modern numbering, as the materials': 0 opaque ... 7 blend add; a 1.12 particle's is
+    /// the 1.12 materials' 0-6, see <see cref="MaterialBlends"/>).</summary>
     public int Blend;
     /// <summary>1 plane, 2 sphere, 3 spline.</summary>
     public int EmitterType;
@@ -83,6 +85,9 @@ public sealed class M2ParticleEmitter
     public bool SpawnsModels;
     /// <summary>What of this emitter the viewer draws approximately or leaves out (empty: drawn as read).</summary>
     public List<string> Approximated = new();
+    /// <summary>Read from your 1.12 game's model (M2 version 256/257, record of 0x1F8 bytes): what the 1.12 client draws
+    /// differently from the modern records (<see cref="M2ClassicEffects"/>); null for another version's emitter.</summary>
+    public M2ClassicParticle? Classic;
 
     public bool MultiTexture => (Flags & 0x10000000) != 0;
     /// <summary>The gravity values are packed vectors (flag 0x800000).</summary>
@@ -117,7 +122,8 @@ public sealed class M2ParticleEmitter
 
 /// <summary>
 /// M3: a ribbon emitter of a modern model (record of 0xB0 bytes; FORMAT KNOWLEDGE, every record of the 1.60 copy
-/// checked): a band trailing behind a point of a bone, made of edges dropped over time.
+/// checked), or of your 1.12 game's model (record of 0xDC bytes, <see cref="Classic"/>): a band trailing behind a point
+/// of a bone, made of edges dropped over time.
 /// </summary>
 public sealed class M2RibbonEmitter
 {
@@ -136,6 +142,11 @@ public sealed class M2RibbonEmitter
     public M2Track<byte> Visibility = M2Track<byte>.Empty;
     public int PriorityPlane;
     public List<string> Approximated = new();
+    /// <summary>Read from your 1.12 game's model (record of 0xDC bytes): the band spans the bone's Y axis, gravity moves
+    /// the edges along +Z by gravity x age squared, the texture slot picks a cell (<see cref="M2ClassicEffects"/>).</summary>
+    public bool Classic;
+    /// <summary>1.12: the blend mode of the first material (the materials' numbering), resolved when read.</summary>
+    public int Blend = -1;
 
     internal ModernAnimations.Bound? BindTrack(ExtRecord r) => r.Field switch
     {
