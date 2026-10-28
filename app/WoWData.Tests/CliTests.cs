@@ -313,6 +313,33 @@ public class CliModelTests
         Assert.Equal((320, 240), (img.Width, img.Height));
         Assert.True(img.Pixels.Distinct().Count() > 4);
     }
+
+    [Fact]
+    public void InfoCountsAndRenderLeavesOutYourGamesParticles()
+    {
+        using var env = new CliTestEnv("render_fx");
+        // a spell effect with 1 particle emitter and 3 ribbons, every one drawn
+        const string model = @"Spells\Holy_Precast_High_Hand.m2";
+        var info = env.Json("models", "info", model);
+        var fx = info.Data.GetProperty("effects");
+        Assert.Equal((1, 3, 1, 3), (fx.GetProperty("particles").GetInt32(), fx.GetProperty("ribbons").GetInt32(), fx.GetProperty("drawnParticles").GetInt32(), fx.GetProperty("drawnRibbons").GetInt32()));
+        Assert.Equal(0, fx.GetProperty("leftOut").GetArrayLength());
+        Assert.Contains("effects: 1 particle emitter and 3 ribbons drawn by the viewer's own simulation of the 1.12 client's rules", env.Run("models", "info", model).Out);
+        Assert.Contains("--no-particles", env.Run("models", "render", "--help").Out);
+        // the Fire Elemental's fire: many bright orange pixels with the particles, far fewer without
+        const string fire = @"Creature\FireElemental\FireElemental.m2";
+        var with = Path.Combine(env.Work, "with.png");
+        var without = Path.Combine(env.Work, "without.png");
+        Assert.Equal(0, env.Run("models", "render", fire, with, "--size", "320x240", "--original").Code);
+        Assert.Equal(0, env.Run("models", "render", fire, without, "--size", "320x240", "--original", "--no-particles").Code);
+        static int Orange(string f)
+        {
+            var p = Png.Load(f).Pixels;
+            return Enumerable.Range(0, p.Length / 4).Count(i => p[i * 4] > 200 && p[i * 4 + 1] > 90 && p[i * 4 + 2] < 120);
+        }
+        int a = Orange(with), b = Orange(without);
+        Assert.True(a > b + 1500, $"orange pixels: {a} with particles, {b} without");
+    }
 }
 
 [Collection(IndexCollection.Name)]
