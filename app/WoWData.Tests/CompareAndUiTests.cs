@@ -192,7 +192,8 @@ public class UiSmokeTests
             psi.ArgumentList.Add(TestEnv.ClientDir);
             using var p = Process.Start(psi)!;
             var stdout = p.StandardOutput.ReadToEndAsync();
-            if (!p.WaitForExit(600_000))
+            // 20 minutes: the whole run takes about 11 minutes alone on the maintainer's machine, longer beside the other tests
+            if (!p.WaitForExit(1_200_000))
             {
                 p.Kill(true);
                 throw new TimeoutException("the app did not finish the screenshot run");
