@@ -55,6 +55,9 @@ public sealed class AppSettings
     /// <summary>A listfile the user chose ("FileDataID;path" lines): names for the files of modern (CASC) clients; null = none.
     /// Never bundled or downloaded by the app.</summary>
     public string? OtherClientsListfile { get; set; }
+    /// <summary>M5: a folder of WoWDBDefs definition files (.dbd) the user chose: column names for other versions' DB2
+    /// tables, read at run time; null = none (our measured names). Never bundled or downloaded by the app.</summary>
+    public string? OtherClientsDbd { get; set; }
 
     // ---- 3D pop-out windows (0.5.1)
     /// <summary>Per kind ("model", "terrain"): the last size, position, monitor and layout of the pop-out 3D window.</summary>

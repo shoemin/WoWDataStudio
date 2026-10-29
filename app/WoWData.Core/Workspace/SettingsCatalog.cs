@@ -23,6 +23,7 @@ public static class SettingsCatalog
         new("other-clients", "Folder of other game versions", "experimental: a folder with copies of other World of Warcraft clients (any version) whose data the Other versions tab and \"wds versions\" read, never change (empty: none)"),
         new("other-clients.blizzard-only", "Blizzard archives only", "true or false: other versions are read without patch archives Blizzard did not ship (a private server's or a mod's patch-?.MPQ)"),
         new("other-clients.listfile", "Listfile for modern clients", "experimental, optional: a listfile you chose (FileDataID;path lines) that names the files of modern (CASC) clients; never bundled or downloaded by the app (empty: files without a known name are shown by number)"),
+        new("other-clients.dbd", "WoWDBDefs folder (optional)", "experimental, optional: a folder with WoWDBDefs definition files (.dbd, or a copy of the WoWDBDefs repository with its definitions folder) whose column names the tables of modern (CASC) clients show; read at run time, never bundled or downloaded by the app (empty: our own measured names, else col_N)"),
         new("server-tools", "Server tools folder", "the folder with reextract.ps1 and swap_in.ps1 (empty: found next to the app or the game folder)"),
         new("server-data", "Server data folder", "the world server's data folder with maps, vmaps, mmaps and 5875\\dbc (empty: Server\\data next to the game folder)"),
         new("server.enabled", "Use the server database for names", "true or false"),
@@ -54,6 +55,7 @@ public static class SettingsCatalog
         "other-clients" => s.OtherClientsDir ?? "",
         "other-clients.blizzard-only" => s.OtherClientsBlizzardOnly ? "true" : "false",
         "other-clients.listfile" => s.OtherClientsListfile ?? "",
+        "other-clients.dbd" => s.OtherClientsDbd ?? "",
         "noggit-client" => s.NoggitClientDir ?? "",
         "server-tools" => s.ServerToolsDir ?? "",
         "server-data" => s.ServerDataDir ?? "",
@@ -131,6 +133,10 @@ public static class SettingsCatalog
                 if (N(value) is { } lf && !File.Exists(lf)) throw new ArgumentException($"the file \"{lf}\" does not exist.");
                 s.OtherClientsListfile = N(value);
                 break;
+            case "other-clients.dbd":
+                if (Db2.DbdFolder.Check(N(value), out _) is { } bad) throw new ArgumentException(bad);
+                s.OtherClientsDbd = N(value);
+                break;
             case "noggit-client":
                 if (N(value) != null && s.ClientDir != null && NoggitService.IsSameOrInside(Path.GetFullPath(value.Trim()), Path.GetFullPath(s.ClientDir)))
                     throw new ArgumentException("Noggit must never read or write the game folder itself: choose a copy of it (or leave this empty for the app's own client view).");
@@ -198,6 +204,7 @@ public static class SettingsCatalog
             case "other-clients": s.OtherClientsDir = null; break;
             case "other-clients.blizzard-only": s.OtherClientsBlizzardOnly = false; break;
             case "other-clients.listfile": s.OtherClientsListfile = null; break;
+            case "other-clients.dbd": s.OtherClientsDbd = null; break;
             case "noggit-client": s.NoggitClientDir = null; break;
             case "server-tools": s.ServerToolsDir = null; break;
             case "server-data": s.ServerDataDir = null; break;

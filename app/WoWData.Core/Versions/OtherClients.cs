@@ -238,16 +238,20 @@ public static class VersionCompare
             var (client, t) = tables[i];
             if (t == null) { notes.Add($"{client}: no {table} table."); continue; }
             if (t.IsRaw) notes.Add($"{client}: {table} has no known layout for this version yet (raw columns{(includeRaw ? "" : ", left out")}).");
+            if (t.Naming.Source == ColumnNameSource.WoWDBDefs) notes.Add($"{client}: column names from WoWDBDefs.");
+            else if (t.Naming.Fallback.Length > 0) notes.Add($"{client}: column names {t.Naming.Text}, not WoWDBDefs: {t.Naming.Fallback}.");
             var row = t.Row(id);
             if (row == null) { notes.Add($"{client}: no row {id}."); continue; }
             for (int c = 0; c < t.Columns.Count; c++)
             {
                 var name = t.Columns[c];
                 if (!includeRaw && name.StartsWith("col_", StringComparison.Ordinal)) continue;
-                if (!values.TryGetValue(name, out var v))
+                // the same column named by different sources: WoWDBDefs' "MapName_lang" is our "MapName"
+                var key = VersionTableExport.LogicalName(name);
+                if (!values.TryGetValue(key, out var v))
                 {
-                    values[name] = v = new string?[tables.Count];
-                    order.Add(name);
+                    values[key] = v = new string?[tables.Count];
+                    order.Add(key);
                 }
                 v[i] = row[c];
             }
@@ -347,8 +351,38 @@ public sealed class OtherClient : IDisposable
         var n = name.EndsWith(".db2", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".dbc", StringComparison.OrdinalIgnoreCase) ? name[..^4] : name;
         var db2 = Catalog.Open(Casc, n);
         if (db2 == null) return null;
-        Db2Layouts.ForBuild(build ?? Copy.Build)?.Apply(db2, out _);
-        return VersionTable.FromDb2(db2);
+        var b = build ?? DefaultBuild;
+        var naming = ColumnNames.Apply(db2, b, VersionOf(b), Dbd);
+        return VersionTable.FromDb2(db2, naming);
+    }
+
+    /// <summary>
+    /// M5: the WoWDBDefs definitions the user chose (setting other-clients.dbd), or null. With them, <see cref="TableView"/>
+    /// names a modern client's DB2 columns from WoWDBDefs first, then from our measured layout file (<see cref="ColumnNames"/>).
+    /// </summary>
+    public DbdFolder? Dbd { get; set; }
+
+    /// <summary>The build whose layouts name the tables: the executable's, else (no version resource) the CASC build's.</summary>
+    public int DefaultBuild => Copy.Build > 0 ? Copy.Build : Casc?.Build ?? 0;
+
+    /// <summary>The version as WoWDBDefs writes it ("1.60.1.70450"): the executable's version and build, else the CASC
+    /// build's (an executable without a version resource). <paramref name="build"/>: another build of the same version.</summary>
+    public string VersionOf(int? build = null)
+    {
+        int b = build ?? DefaultBuild;
+        if (b > 0 && Copy.Build > 0) return $"{Copy.Version}.{b}";
+        if (Casc is { } c && c.Version.Count(ch => ch == '.') == 3 && (b == 0 || c.Build == b)) return c.Version;
+        return b > 0 ? $"{Copy.Version}.{b}" : Copy.Version;
+    }
+
+    /// <summary>The name source a table is expected to get (lists of tables, without reading them): an MPQ client's
+    /// .dbc tables use this build's DBC layouts; a modern client's DB2 tables <see cref="ColumnNames.Expected"/>.</summary>
+    public TableNaming ExpectedNaming(string table, int? build = null)
+    {
+        if (Casc == null) return Layouts.Get(table) != null ? new TableNaming(ColumnNameSource.Measured) : TableNaming.Raw;
+        var b = build ?? DefaultBuild;
+        var e = Catalog.Get(table);
+        return ColumnNames.Expected(table, e?.LayoutHash is > 0 ? e.LayoutHash : null, b, VersionOf(b), Dbd);
     }
 
     /// <summary>A data table (a WDBC .dbc file) read with this build's layout, or null when the client has no such table.</summary>

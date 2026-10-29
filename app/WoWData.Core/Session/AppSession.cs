@@ -431,6 +431,7 @@ public sealed class AppSession : IDisposable
         if (copy.Format != WoWData.Core.Versions.ClientFormat.Casc)
             throw new NotSupportedException($"{copy.Name} ({copy.Label}) stores its data in MPQ archives: opening it like your game comes later. The Other versions tab reads its files and tables.");
         var oc = await Task.Run(() => WoWData.Core.Versions.OtherClient.Open(copy), ct);
+        oc.Dbd = WoWData.Core.Db2.DbdFolder.Open(Settings.OtherClientsDbd);   // M5: WoWDBDefs names for the table views (optional)
         WoWData.Core.Casc.CascStorage? era = null;
         try
         {

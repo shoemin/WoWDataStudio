@@ -24,6 +24,9 @@ public sealed class VersionTable
     public string Note { get; }
     public int RowCount => _rows.Count;
     public int FieldCount { get; }
+    /// <summary>M5: where the column names come from (WoWDBDefs, our measured layout file, none) and, when WoWDBDefs
+    /// could not name the table, why.</summary>
+    public TableNaming Naming { get; private set; } = TableNaming.Raw;
 
     private readonly List<(long Id, Func<string[]> Values)> _rows;
     private Dictionary<long, int>? _byId;
@@ -52,16 +55,21 @@ public sealed class VersionTable
         var rows = t.Rows.Select(r => (key == null ? 0L : t.Number(r, key), (Func<string[]>)(() => cols.Select(c => t.Format(r, c, locale)).ToArray()))).ToList();
         return new VersionTable(t.Name, cols.Select(c => c.Name).ToList(), cols.Select(c => c.Verified && !c.Name.StartsWith("col_", StringComparison.Ordinal)).ToList(),
             cols.Select(c => c.IsString).ToList(), t.Layout.IsFallback, t.Layout.IsFallback ? "raw" : t.Layout.CoverageText,
-            t.Layout.IsFallback ? t.Layout.About : "", t.FieldCount, rows);
+            t.Layout.IsFallback ? t.Layout.About : "", t.FieldCount, rows)
+        { Naming = t.Layout.IsFallback ? TableNaming.Raw : new TableNaming(ColumnNameSource.Measured) };
     }
 
-    public static VersionTable FromDb2(Db2Table t)
+    /// <summary>A DB2 table whose columns were named (or not) by <paramref name="naming"/> (<see cref="ColumnNames.Apply"/>);
+    /// without it, by our measured layout file when one named it.</summary>
+    public static VersionTable FromDb2(Db2Table t, TableNaming? naming = null)
     {
+        naming ??= t.Layout != null ? new TableNaming(ColumnNameSource.Measured) : TableNaming.Raw;
         var cols = t.Columns;
         var names = cols.Select(c => c.Name.Length > 0 ? c.Name : "col_" + c.Index).ToList();
         var named = cols.Select(c => c.NameVerified).ToList();
         int namedCount = named.Count(n => n);
-        bool raw = namedCount <= 1;
+        bool dbd = naming.Source == ColumnNameSource.WoWDBDefs;
+        bool raw = !dbd && namedCount <= 1;
         // the ID: a column of the record (IdIndex) or the ID list; shown as the first column "ID" when it is not a column
         bool idIsColumn = !t.HasIdList && t.IdIndex >= 0 && t.IdIndex < cols.Count;
         if (!idIsColumn)
@@ -82,8 +90,9 @@ public sealed class VersionTable
         var notes = new List<string>();
         if (t.SkippedRecords > 0) notes.Add($"{t.SkippedRecords:N0} encrypted records left out");
         notes.AddRange(t.Notes);
-        string coverage = raw ? "raw" : namedCount == cols.Count ? "All columns named" : $"{namedCount} of {cols.Count} columns named";
-        return new VersionTable(t.Name, names, named, text, raw, coverage, string.Join("; ", notes), t.FieldCount, rows);
+        string coverage = raw ? "raw" : dbd ? (namedCount == cols.Count ? "All columns named (WoWDBDefs)" : $"All columns named (WoWDBDefs), {cols.Count - namedCount} not confirmed")
+            : namedCount == cols.Count ? "All columns named" : $"{namedCount} of {cols.Count} columns named";
+        return new VersionTable(t.Name, names, named, text, raw, coverage, string.Join("; ", notes), t.FieldCount, rows) { Naming = naming };
     }
 }
 
@@ -115,12 +124,19 @@ public static class VersionTableExport
         return res;
     }
 
-    /// <summary>The column with this name (case-insensitive), or -1.</summary>
+    /// <summary>The column with this name (case-insensitive), or -1. A WoWDBDefs name is also found without its
+    /// "_lang" ending (MapName finds MapName_lang).</summary>
     public static int Column(VersionTable t, string name)
     {
         for (int i = 0; i < t.Columns.Count; i++) if (string.Equals(t.Columns[i], name, StringComparison.OrdinalIgnoreCase)) return i;
+        for (int i = 0; i < t.Columns.Count; i++) if (string.Equals(LogicalName(t.Columns[i]), LogicalName(name), StringComparison.OrdinalIgnoreCase)) return i;
         return -1;
     }
+
+    /// <summary>A column name without WoWDBDefs' "_lang" ending (DB2 strings are one language): how names of
+    /// different sources are matched (<see cref="VersionCompare"/>).</summary>
+    public static string LogicalName(string column) =>
+        column.EndsWith("_lang", StringComparison.OrdinalIgnoreCase) && column.Length > 5 ? column[..^5] : column;
 
     /// <summary>Writes rows as CSV (the header is the column names) or, for a .json file, as an array of objects.</summary>
     public static void Write(VersionTable t, IReadOnlyList<int> rows, string file)
