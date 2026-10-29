@@ -22,8 +22,10 @@
             <DockPanel>
                 <StackPanel DockPanel.Dock="Top" Margin="12,10,12,6">
                     <TextBlock Text="{Binding Header}" Style="{StaticResource H2}" TextWrapping="Wrap" />
-                    <TextBlock Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,8"
-                               Text="The version's database files (DB2): their names from its executable, columns named where our layout file for this build knows them (else col_N). Pick a table to read its rows." />
+                    <TextBlock Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,4"
+                               Text="The version's database files (DB2): their names from its executable, their columns named as the line below says. Pick a table to read its rows." />
+                    <TextBlock x:Name="VersionNamesSource" Text="{Binding NamesSource}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8"
+                               ToolTip="WoWDBDefs is the community's list of table and column names (CC BY-SA 4.0). Data Studio reads the folder you chose in Settings at run time; it never downloads, bundles or copies it. Without it, the columns our own measured layout file knows are named, the rest are col_N." />
                     <Grid>
                         <TextBox x:Name="VersionTableFilterBox" Text="{Binding TableFilter, UpdateSourceTrigger=PropertyChanged}" Padding="24,4,4,4"
                                  ToolTip="Type part of a table's name (Map, CreatureDisplayInfo, Spell...)." />

@@ -39,6 +39,11 @@ public partial class SettingsWindow : Window
             Dialogs.Error("Check the server data settings", why);
             return;
         }
+        if (_vm.ApplyOtherVersions(new WoWData.Core.Workspace.AppSettings()) is { } dbdWhy)
+        {
+            Dialogs.Error("Check the WoWDBDefs folder", dbdWhy);
+            return;
+        }
         _vm.RefreshRequested = RefreshBox.IsChecked == true;
         DialogResult = true;
     }

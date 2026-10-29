@@ -156,6 +156,13 @@ public static class ScreenshotRunner
                 Log(Failures.Count == 0 ? "ALL STEPS OK" : "FAILURES:" + string.Join("", Failures.Select(f => Environment.NewLine + "  " + f)));
                 return Failures.Count == 0 ? 0 : 1;
             }
+            if (Environment.GetEnvironmentVariable("WDS_SCREENSHOT_ONLY") == "dbd")
+            {
+                // developers: only the pictures of WoWDBDefs column names (162-165), from WDS_SCREENSHOT_OTHER_CLIENTS and WDS_SCREENSHOT_DBD
+                await DbdScreenshots.RunAsync(win, vm, b, outDir);
+                Log(Failures.Count == 0 ? "ALL STEPS OK" : "FAILURES:" + string.Join("", Failures.Select(f => Environment.NewLine + "  " + f)));
+                return Failures.Count == 0 ? 0 : 1;
+            }
             if (Environment.GetEnvironmentVariable("WDS_SCREENSHOT_ONLY") == "particles")
             {
                 // developers: only the pictures of your game's particles and ribbons in 3D (155-156)
@@ -344,6 +351,9 @@ public static class ScreenshotRunner
 
             // 24. M1: another version opened read only in its own window (VersionOpenScreenshots.cs; skipped without the copies)
             await VersionOpenScreenshots.RunAsync(win, vm, b, outDir);
+
+            // 25. M5: column names from a WoWDBDefs folder (DbdScreenshots.cs; skipped without the copies and WDS_SCREENSHOT_DBD)
+            await DbdScreenshots.RunAsync(win, vm, vm.Browser ?? b, outDir);
 
             Log(Failures.Count == 0 ? "ALL STEPS OK" : "FAILURES:\n  " + string.Join("\n  ", Failures));
             return Failures.Count == 0 ? 0 : 1;

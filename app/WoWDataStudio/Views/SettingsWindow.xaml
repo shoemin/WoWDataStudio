@@ -149,6 +149,31 @@
                 <TextBlock Text="{Binding ServerDataCheck}" Foreground="{StaticResource TextMuted}" TextWrapping="Wrap" FontSize="12" />
             </StackPanel>
         </Border>
+
+        <Border x:Name="OtherVersionsCard" Style="{StaticResource Card}" Margin="0,8,0,4" s:Manual.Topic="other-versions">
+            <StackPanel>
+                <TextBlock Text="Other versions (experimental)" Style="{StaticResource H2}" FontSize="15" />
+                <TextBlock Style="{StaticResource Muted}" Margin="0,2,0,8" TextWrapping="Wrap"
+                           Text="Column names for the data tables of other game versions (the Data tables tab of another version, the Other versions tab). Without a folder, the columns our own measured layout files know are named and the rest are col_N." />
+                <TextBlock Text="WoWDBDefs folder (optional)" FontWeight="SemiBold" />
+                <DockPanel Margin="0,2,0,2">
+                    <Button DockPanel.Dock="Right" Content="Browse..." Command="{Binding BrowseDbdCommand}" Margin="8,0,0,0" />
+                    <TextBox x:Name="DbdFolderBox" Text="{Binding DbdFolder, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="A folder with WoWDBDefs definition files (.dbd), or a copy of the WoWDBDefs repository (its definitions folder is used)." />
+                </DockPanel>
+                <TextBlock Text="{Binding DbdCheck}" TextWrapping="Wrap" FontSize="12">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="{StaticResource TextMuted}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DbdOk}" Value="False"><Setter Property="Foreground" Value="{StaticResource Bad}" /></DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <TextBlock Text="WoWDBDefs (the community's table and column names) is CC BY-SA 4.0. Data Studio reads the folder on this computer when a table is shown; it never downloads, bundles or copies it." Foreground="{StaticResource TextMuted}" TextWrapping="Wrap" FontSize="12" Margin="0,4,0,0" />
+            </StackPanel>
+        </Border>
     </StackPanel>
         </ScrollViewer>
     </DockPanel>

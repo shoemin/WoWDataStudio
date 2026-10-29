@@ -5,8 +5,8 @@ namespace WoWData.Cli.Commands;
 
 /// <summary>
 /// "wds dbc tables / info / rows / get / export --version": the Data tables tab of another version opened read only
-/// (the app's read-only table viewer): its DB2 tables with the column names our layout file knows for the build (else
-/// col_N), rows found by words and column filters, and exported as CSV or JSON to a folder outside the client. Every
+/// (the app's read-only table viewer): its DB2 tables with column names from the WoWDBDefs folder you chose (setting
+/// other-clients.dbd), else the ones our layout file knows for the build, else col_N (M5), rows found by words and column filters, and exported as CSV or JSON to a folder outside the client. Every
 /// other dbc command changes files and refuses --version.
 /// </summary>
 internal static class DbcCommandsOther
@@ -53,14 +53,20 @@ internal static class DbcCommandsOther
     {
         var oc = Client(s);
         var words = (inv.Opt("filter") ?? "").ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        var layouts = WoWData.Core.Db2.Db2Layouts.ForBuild(s.Profile!.Build);
         var list = oc.TableNames().Where(n => words.All(w => n.ToLowerInvariant().Contains(w)))
-            .Select(n => (Name: n, Fields: oc.Catalog.Get(n)?.FieldCount ?? 0, Named: layouts?.Get(n) != null)).ToList();
+            .Select(n => (Name: n, Fields: oc.Catalog.Get(n)?.FieldCount ?? 0, Names: oc.ExpectedNaming(n, s.Profile!.Build))).ToList();
         if (inv.Flag("changed")) list.Clear();   // another version has no workspace: nothing is changed
-        var r = new CliResult().With(new { version = s.Profile!.VersionBuild, readOnly = true, tables = list.Select(x => new { name = x.Name, fields = x.Fields, columns = x.Named ? "named" : "raw" }) });
-        foreach (var l in Common.Table(new[] { "Table", "Fields", "Columns" }, list.Select(x => (IReadOnlyList<string>)new[] { x.Name, x.Fields.ToString(), x.Named ? "named by our layout file" : "raw (col_N)" }), 50))
+        var r = new CliResult().With(new
+        {
+            version = s.Profile!.VersionBuild, readOnly = true, dbd = oc.Dbd?.Folder,
+            tables = list.Select(x => new { name = x.Name, fields = x.Fields, columns = x.Names.Source == ColumnNameSource.None ? "raw" : "named", names = x.Names.Key, namesFallback = x.Names.Fallback }),
+        });
+        foreach (var l in Common.Table(new[] { "Table", "Fields", "Column names" }, list.Select(x => (IReadOnlyList<string>)new[] { x.Name, x.Fields.ToString(), x.Names.Text }), 50))
             r.Line(l);
         r.Line($"{list.Count} tables of {s.Profile.VersionBuild} (read only).");
+        r.Line(oc.Dbd != null
+            ? $"Column names: {list.Count(x => x.Names.Source == ColumnNameSource.WoWDBDefs)} tables from {oc.Dbd.Attribution} (checked when a table is read); {list.Count(x => x.Names.Source == ColumnNameSource.Measured)} from our measured layout file."
+            : $"Column names: {list.Count(x => x.Names.Source == ColumnNameSource.Measured)} tables from our measured layout file, the rest raw (col_N). A WoWDBDefs folder names the others: wds settings set other-clients.dbd <folder>.");
         return r;
     }
 
@@ -70,10 +76,13 @@ internal static class DbcCommandsOther
         var r = new CliResult().With(new
         {
             name = t.Name, version = s.Profile!.VersionBuild, readOnly = true, rows = t.RowCount, fields = t.FieldCount, coverage = t.Coverage, raw = t.IsRaw, note = t.Note,
+            names = t.Naming.Key, namesFallback = t.Naming.Fallback, dbd = t.Naming.Source == ColumnNameSource.WoWDBDefs ? Client(s).Dbd?.Attribution : null,
             columns = t.Columns.Select((c, i) => new { index = i, name = c, named = t.Named[i], text = t.IsText[i] }),
         });
         r.Line($"{t.Name} ({s.Profile.VersionBuild}, read only): {t.RowCount:N0} rows, {t.FieldCount} fields, {t.Coverage}." + (t.Note.Length > 0 ? " " + t.Note + "." : ""));
-        foreach (var l in Common.Table(new[] { "#", "Column", "Type" }, t.Columns.Select((c, i) => (IReadOnlyList<string>)new[] { i.ToString(), c + (t.Named[i] ? "" : " (not named)"), t.IsText[i] ? "text" : "number" }), 80))
+        r.Line(VersionCommands.NamesLine(t, Client(s)));
+        bool dbd = t.Naming.Source == ColumnNameSource.WoWDBDefs;
+        foreach (var l in Common.Table(new[] { "#", "Column", "Type" }, t.Columns.Select((c, i) => (IReadOnlyList<string>)new[] { i.ToString(), c + (t.Named[i] ? "" : c.StartsWith("col_", StringComparison.Ordinal) || !dbd ? " (not named)" : " (not confirmed)"), t.IsText[i] ? "text" : "number" }), 80))
             r.Line(l);
         return r;
     }
@@ -92,12 +101,13 @@ internal static class DbcCommandsOther
         var shown = rows.Take(Common.LimitOf(inv)).ToList();
         var r = new CliResult().With(new
         {
-            table = t.Name, version = s.Profile!.VersionBuild, readOnly = true, total = t.RowCount, matched = rows.Count, shown = shown.Count, columns = cols.Select(c => t.Columns[c]),
+            table = t.Name, version = s.Profile!.VersionBuild, readOnly = true, total = t.RowCount, matched = rows.Count, shown = shown.Count, names = t.Naming.Key, columns = cols.Select(c => t.Columns[c]),
             rows = shown.Select(i => { var v = t.RowAt(i); return cols.ToDictionary(c => t.Columns[c], c => (object)v[c]); }),
         });
         r.Line((rows.Count == t.RowCount ? $"{t.RowCount:N0} rows" : $"{rows.Count:N0} of {t.RowCount:N0} rows") + $" of {t.Name} ({s.Profile.VersionBuild}, read only)" +
                (shown.Count < rows.Count ? $" (showing {shown.Count}; --limit 0 for all)" : ""));
         if (t.IsRaw) r.Warnings.Add($"{t.Name} has no known layout for {s.Profile.VersionBuild} yet: raw columns.");
+        if (t.Naming.Fallback.Length > 0) r.Warnings.Add($"column names {t.Naming.Text}, not WoWDBDefs: {t.Naming.Fallback}");
         if (t.Note.Length > 0) r.Warnings.Add(t.Note);
         foreach (var l in Common.Table(cols.Select(c => t.Columns[c]).ToList(), shown.Select(i => { var v = t.RowAt(i); return (IReadOnlyList<string>)cols.Select(c => v[c]).ToList(); }), 40)) r.Line(l);
         return r;

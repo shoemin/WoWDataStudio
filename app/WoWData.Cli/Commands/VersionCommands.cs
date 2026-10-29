@@ -46,7 +46,9 @@ internal static class VersionCommands
             inv.Ctx.Progress($"Opening {c.Name} ({c.Label})...");
             var lf = c.Format == ClientFormat.Casc ? inv.Opt("listfile") ?? inv.Ctx.Settings.OtherClientsListfile : null;
             if (lf != null && !File.Exists(lf)) throw new CliError(ExitCode.NotFound, $"the listfile \"{lf}\" does not exist.");
-            return OtherClient.Open(c, Blizzard(inv), lf);
+            var oc = OtherClient.Open(c, Blizzard(inv), lf);
+            oc.Dbd = WoWData.Core.Db2.DbdFolder.Open(inv.Ctx.Settings.OtherClientsDbd);   // M5: WoWDBDefs names (optional)
+            return oc;
         }
         catch (Exception e) when (e is NotSupportedException or IOException or WoWData.Core.Casc.CascMissingException)
         {
@@ -59,6 +61,11 @@ internal static class VersionCommands
         try { return oc.Files.Read(path) ?? throw new CliError(ExitCode.NotFound, $"{path} is not in {oc.Copy.Name}" + (oc.Casc != null && !path.TrimStart('#').All(char.IsDigit) ? " (or its name is not known: give its FileDataID as #number, or a listfile)." : ".")); }
         catch (ClientFileException e) { throw new CliError(ExitCode.NotFound, e.Message); }
     }
+
+    /// <summary>M5: "Column names: WoWDBDefs (CC BY-SA 4.0), from &lt;folder&gt;." or "Column names: measured (our layout
+    /// file); not WoWDBDefs: ...".</summary>
+    internal static string NamesLine(VersionTable t, OtherClient oc) =>
+        t.Naming.Source == ColumnNameSource.WoWDBDefs && oc.Dbd != null ? $"Column names: {oc.Dbd.Attribution}." : $"Column names: {t.Naming.Long}.";
 
     private static object CopyJson(ClientCopy c) => new
     {
@@ -267,7 +274,7 @@ internal static class VersionCommands
         yield return new CommandSpec
         {
             Path = "versions tables",
-            Summary = "a client's data tables: rows, fields, and whether this version's columns are named or shown raw (a modern client: its DB2 tables from its executable)",
+            Summary = "a client's data tables: rows, fields, and where this version's column names come from (WoWDBDefs, our measured layout file, or raw col_N; a modern client: its DB2 tables from its executable)",
             Args = new[] { "<client>" },
             Options = new[] { Folder, BlizzardOnly, AllPatches, Listfile, new OptionSpec("read", null, "a modern (CASC) client: read every table to count its rows (slower)") },
             NeedsClient = false,
@@ -276,26 +283,34 @@ internal static class VersionCommands
             {
                 var c = Pick(inv, inv.Arg(0));
                 using var oc = Open(inv, c);
-                var list = new List<(string Name, string Rows, int Fields, string Columns)>();
+                var list = new List<(string Name, string Rows, int Fields, string Columns, TableNaming Names)>();
                 bool read = oc.Casc == null || inv.Flag("read");
                 foreach (var n in oc.TableNames())
                 {
                     if (!read)
                     {
                         var e = oc.Catalog.Get(n);
-                        list.Add((n, "", e?.FieldCount ?? 0, $"#{e?.FileDataId}" + (WoWData.Core.Db2.Db2Layouts.ForBuild(c.Build)?.Get(n) != null ? ", layout" : "")));
+                        list.Add((n, "", e?.FieldCount ?? 0, $"#{e?.FileDataId}", oc.ExpectedNaming(n)));
                         continue;
                     }
                     VersionTable? t;
                     try { t = oc.TableView(n); }
-                    catch (Exception ex) when (ex is DbcException or WoWData.Core.Db2.Db2FormatException) { list.Add((n, "", 0, "unreadable")); continue; }
-                    if (t == null) { if (oc.Casc != null) list.Add((n, "", 0, "not on this computer")); continue; }
-                    list.Add((n, t.RowCount.ToString("N0"), t.FieldCount, t.Coverage));
+                    catch (Exception ex) when (ex is DbcException or WoWData.Core.Db2.Db2FormatException) { list.Add((n, "", 0, "unreadable", TableNaming.Raw)); continue; }
+                    if (t == null) { if (oc.Casc != null) list.Add((n, "", 0, "not on this computer", oc.ExpectedNaming(n))); continue; }
+                    list.Add((n, t.RowCount.ToString("N0"), t.FieldCount, t.Coverage, t.Naming));
                 }
-                var r = new CliResult().With(new { client = c.Name, tables = list.Select(x => new { name = x.Name, rows = x.Rows, fields = x.Fields, columns = x.Columns }) });
+                var r = new CliResult().With(new
+                {
+                    client = c.Name, dbd = oc.Dbd?.Folder,
+                    tables = list.Select(x => new { name = x.Name, rows = x.Rows, fields = x.Fields, columns = x.Columns, names = x.Names.Key, namesFallback = x.Names.Fallback }),
+                });
                 r.Line(read ? $"{list.Count} tables in {c.Name} ({list.Count(x => x.Columns != "raw" && x.Columns != "unreadable" && x.Columns != "not on this computer")} with named columns)"
                             : $"{list.Count} tables in {c.Name} (DB2, from its executable; \"#\" is the file number; --read counts rows)");
-                foreach (var l in Common.Table(new[] { "Table", "Rows", "Fields", read ? "Columns" : "File" }, list.Select(x => (IReadOnlyList<string>)new[] { x.Name, x.Rows, x.Fields.ToString(), x.Columns }), 50))
+                int byDbd = list.Count(x => x.Names.Source == ColumnNameSource.WoWDBDefs), byOurs = list.Count(x => x.Names.Source == ColumnNameSource.Measured);
+                if (oc.Casc != null)
+                    r.Line(oc.Dbd != null ? $"Column names: {byDbd} tables from {oc.Dbd.Attribution}; {byOurs} from our measured layout file; the rest raw (col_N)."
+                                          : $"Column names: {byOurs} tables from our measured layout file, the rest raw (col_N). A WoWDBDefs folder names the others: wds settings set other-clients.dbd <folder>.");
+                foreach (var l in Common.Table(new[] { "Table", "Rows", "Fields", read ? "Columns" : "File", "Names" }, list.Select(x => (IReadOnlyList<string>)new[] { x.Name, x.Rows, x.Fields.ToString(), x.Columns, x.Names.Text }), 50))
                     r.Line(l);
                 return Task.FromResult(r);
             },
@@ -332,11 +347,13 @@ internal static class VersionCommands
                 var shown = all.Take(Common.LimitOf(inv)).ToList();
                 var res = new CliResult().With(new
                 {
-                    client = c.Name, table = t.Name, layout = t.IsRaw ? "raw" : "named", total = t.RowCount, matched = all.Count, note = t.Note,
+                    client = c.Name, table = t.Name, layout = t.IsRaw ? "raw" : "named", names = t.Naming.Key, namesFallback = t.Naming.Fallback, dbd = t.Naming.Source == ColumnNameSource.WoWDBDefs ? oc.Dbd?.Attribution : null,
+                    total = t.RowCount, matched = all.Count, note = t.Note,
                     columns = cols.Select(x => t.Columns[x]), rows = shown.Select(r => cols.ToDictionary(x => t.Columns[x], x => (object)r[x])),
                 });
                 res.Line($"{c.Name} {t.Name}: {(all.Count == t.RowCount ? $"{t.RowCount:N0} rows" : $"{all.Count:N0} of {t.RowCount:N0} rows")}" + (shown.Count < all.Count ? $" (showing {shown.Count}; --limit 0 for all)" : ""));
                 if (t.IsRaw) res.Warnings.Add($"{t.Name} has no known layout for {c.Version} yet: raw columns.");
+                res.Line(NamesLine(t, oc));
                 if (t.Note.Length > 0) res.Warnings.Add(t.Note);
                 foreach (var l in Common.Table(cols.Select(x => t.Columns[x]).ToList(), shown.Select(r => (IReadOnlyList<string>)cols.Select(x => r[x]).ToList()), 40)) res.Line(l);
                 return Task.FromResult(res);

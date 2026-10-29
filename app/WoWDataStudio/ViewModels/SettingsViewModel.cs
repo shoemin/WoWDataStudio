@@ -101,6 +101,46 @@ public sealed partial class SettingsViewModel : ObservableObject
         return s;
     }
 
+    // other versions (M5): the WoWDBDefs folder
+    [ObservableProperty] private string _dbdFolder = "";
+    [ObservableProperty] private string _dbdCheck = "";
+    [ObservableProperty] private bool _dbdOk = true;
+    private string _dbdOriginal = "";
+
+    partial void OnDbdFolderChanged(string value) => CheckDbd();
+
+    private void CheckDbd()
+    {
+        var why = WoWData.Core.Db2.DbdFolder.Check(DbdFolder, out var found);
+        DbdOk = why == null;
+        DbdCheck = why != null ? char.ToUpperInvariant(why[0]) + why[1..] : DbdFolder.Trim().Length == 0 ? "Empty: our own measured names, else col_N." : "Found " + found;
+    }
+
+    /// <summary>True when the WoWDBDefs folder was changed (the read-only Data tables are listed again on Save).</summary>
+    public bool DbdChanged => !string.Equals(DbdFolder.Trim(), _dbdOriginal, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The WoWDBDefs folder into <paramref name="s"/> (checked like "wds settings set other-clients.dbd"); the
+    /// reason when it is not usable.</summary>
+    public string? ApplyOtherVersions(AppSettings s)
+    {
+        try
+        {
+            SettingsCatalog.Set(s, "other-clients.dbd", DbdFolder);
+            return null;
+        }
+        catch (ArgumentException e)
+        {
+            return e.Message;
+        }
+    }
+
+    [RelayCommand]
+    private void BrowseDbd()
+    {
+        var d = Dialogs.PickFolder("Select a folder with WoWDBDefs definition files (.dbd), or a copy of the WoWDBDefs repository", Directory.Exists(DbdFolder) ? DbdFolder : null);
+        if (d != null) DbdFolder = d;
+    }
+
     [RelayCommand]
     private void BrowseNoggit()
     {
@@ -148,6 +188,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         _customIds = SettingsCatalog.Get(settings, "server.custom-ids");
         _spellIds = SettingsCatalog.Get(settings, "spell-ids");
         _hotReload = _hotReloadOriginal = SettingsCatalog.Get(settings, "hot-reload", clientDir) == "on";
+        _dbdFolder = _dbdOriginal = settings.OtherClientsDbd ?? "";
+        CheckDbd();
         ValidateClient();
         CheckMaps();
         CheckHotReload();

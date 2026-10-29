@@ -3410,6 +3410,7 @@ app's tests fail when the app, the command line and this table differ.
 | versions.folder | **Folder of other game versions** | `wds settings set` |
 | versions.blizzard-only | **Blizzard archives only** | `wds settings set` |
 | versions.listfile | **Choose listfile...** | `wds settings set` |
+| versions.dbd | **WoWDBDefs folder (optional)** | `wds settings set` |
 | versions.find | **Find clients** | `wds versions find` |
 | versions.info | **Archives** | `wds versions info` |
 | versions.files | **Files matching** | `wds versions files` |
@@ -3440,6 +3441,7 @@ app's tests fail when the app, the command line and this table differ.
 | versions.open-blender | **Open in Blender** | `wds models export` |
 | versions.open-tables | **Export rows...** | `wds dbc export` |
 | versions.open-table-rows | **Data tables of** | `wds dbc rows` |
+| versions.open-names | **Column names:** | `wds dbc tables` |
 | versions.open-no-server | **No server connected** | `wds index build` |
 | versions.open-popout | **Open in new window** | (app only: viewing: the 3D view of another version in a window of its own ("wds models render --version" draws a picture)) |
 | versions.open-compare-skins | **Tools > Compare two skins of this model (3D)** | (app only: viewing: two live 3D views side by side (render each skin with "wds models render --display --version")) |

@@ -162,7 +162,7 @@ internal static class SetupCommands
             NeedsClient = false,
             Options = new[] { new OptionSpec("stdin", null, "read the value from the first line of stdin (not visible in the shell history)") },
             Details = "Keys: " + string.Join(", ", SettingsCatalog.All.Select(a => a.Key)) + ". The password is stored encrypted for your Windows user and never printed.",
-            Examples = new[] { "wds settings set server.port 3310", "wds settings set ground-textures specular", "wds settings set server.password --stdin < password.txt", "wds settings set dbc-locale deDE", "wds settings set hot-reload on --yes" },
+            Examples = new[] { "wds settings set server.port 3310", "wds settings set ground-textures specular", "wds settings set server.password --stdin < password.txt", "wds settings set dbc-locale deDE", "wds settings set hot-reload on --yes", @"wds settings set other-clients.dbd ""G:\WoWDBDefs\definitions""" },
             Run = inv =>
             {
                 var info = SettingsCatalog.Info(inv.Arg(0)) ?? throw new CliError(ExitCode.NotFound, $"unknown setting \"{inv.Arg(0)}\". The settings: {string.Join(", ", SettingsCatalog.All.Select(a => a.Key))}.");
@@ -177,6 +177,8 @@ internal static class SetupCommands
                 var shown = SettingsCatalog.Get(inv.Ctx.Settings, info.Key, GameFolder(inv));
                 var r = new CliResult().With(new { key = info.Key, value = shown }).Line($"{info.Key} = {(shown.Length == 0 ? "(empty)" : shown)}");
                 if (info.Key.StartsWith("server.", StringComparison.Ordinal)) r.Line("Names are read again with \"wds serverdb reload\".");
+                if (info.Key == "other-clients.dbd" && shown.Length > 0 && WoWData.Core.Db2.DbdFolder.Check(shown, out var found) == null)
+                    r.Line($"Found {found} The tables of other versions (wds dbc tables --version, wds versions tables) name their columns from them: WoWDBDefs, {WoWData.Core.Db2.DbdFolder.Licence}, read on this computer, never copied.");
                 if (info.Key == "server.password" && !inv.Flag("stdin")) r.Warnings.Add("the password was typed on the command line (it may stay in the shell's history): --stdin avoids that.");
                 if (info.Key == "hot-reload") r.Line(shown == "on" ? "The game reads it when it starts: restart the game once, then \"wds changes reload\" (or \"Reload in running game\") works." : "Hot reload is off for this game folder (a running game keeps what it started with until it is restarted).");
                 return Task.FromResult(r);

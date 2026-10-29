@@ -217,7 +217,15 @@ public sealed partial class MainViewModel : ObservableObject
         Session.Settings.Server = vm.ToServerSettings();
         vm.ToMapSettings(Session.Settings);
         vm.ApplyServerData(Session.Settings);
+        bool dbdChanged = vm.DbdChanged;
+        vm.ApplyOtherVersions(Session.Settings);
         SaveSettings();
+        if (dbdChanged && Session.Other != null)
+        {
+            // M5: the read-only Data tables name their columns from the new folder (or our measured names again)
+            Session.Other.Dbd = WoWData.Core.Db2.DbdFolder.Open(Session.Settings.OtherClientsDbd);
+            if (Browser?.VersionTables != null) _ = Browser.VersionTables.ReloadAsync();
+        }
         if (vm.HotReloadChanged)
         {
             try

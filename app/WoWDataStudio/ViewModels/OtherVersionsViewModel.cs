@@ -179,7 +179,7 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
         foreach (var c in found.Where(c => c.Format == ClientFormat.Casc).OrderBy(c => c.Version, StringComparer.Ordinal).ThenBy(c => c.Build))
             CompareClients.Add(new CompareClientChoice { Copy = c, IsChecked = false });
         SetStatus(found.Count == 0 ? "No World of Warcraft client was found in that folder." :
-            $"{found.Count} clients found, {found.Count(c => c.Readable)} readable." + (found.Any(c => c.Format == ClientFormat.Casc) ? " Modern (CASC) clients: their files can be read, their data tables not yet." : ""));
+            $"{found.Count} clients found, {found.Count(c => c.Readable)} readable." + (found.Any(c => c.Format == ClientFormat.Casc) ? " Modern (CASC) clients: their files and data tables can be read." : ""));
     }
 
     private async Task OpenClientAsync(ClientRow row)
@@ -205,16 +205,23 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
         {
             var bo = BlizzardOnly;
             var lf = row.Copy.Format == ClientFormat.Casc && !string.IsNullOrWhiteSpace(Listfile) && File.Exists(Listfile) ? Listfile : null;
+            var dbd = row.Copy.Format == ClientFormat.Casc ? WoWData.Core.Db2.DbdFolder.Open(_session.Settings.OtherClientsDbd) : null;
             var (oc, tables, files) = await _main.RunBusyAsync($"Opening {row.Name}...", () => Task.Run(() =>
             {
                 var o = OtherClient.Open(row.Copy, bo, lf);
+                o.Dbd = dbd;   // M5: WoWDBDefs names (optional)
                 var list = new List<VersionTableRow>();
                 if (o.Casc != null)
                 {
-                    // a modern client: its DB2 tables from the executable, read when one is clicked (1,000+ tables)
-                    var layouts = WoWData.Core.Db2.Db2Layouts.ForBuild(o.Copy.Build);
+                    // a modern client: its DB2 tables from the executable, read when one is clicked (1,000+ tables);
+                    // the name source each is expected to get (WoWDBDefs, our layout file, raw)
                     foreach (var n in o.TableNames())
-                        list.Add(new VersionTableRow(n, 0, o.Catalog.Get(n)?.FieldCount ?? 0, layouts?.Get(n) != null ? "named (click)" : "click to read"));
+                        list.Add(new VersionTableRow(n, 0, o.Catalog.Get(n)?.FieldCount ?? 0, o.ExpectedNaming(n).Source switch
+                        {
+                            ColumnNameSource.WoWDBDefs => "WoWDBDefs (click)",
+                            ColumnNameSource.Measured => "measured (click)",
+                            _ => "click to read",
+                        }));
                 }
                 else
                     foreach (var n in o.TableNames())
@@ -237,10 +244,11 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
             if (oc.Casc is { } casc)
             {
                 ClientSummary = $"{c.Name}: World of Warcraft {c.Version} (build {c.Build}), {c.Release}; modern storage (CASC, {casc.Product}). " +
-                                $"{files:N0} files; {casc.Root.NameHashCount:N0} can be found by their full path, {oc.ListfileNames:N0} names from your listfile.";
+                                $"{files:N0} files; {casc.Root.NameHashCount:N0} can be found by their full path, {oc.ListfileNames:N0} names from your listfile. " +
+                                (oc.Dbd != null ? $"Column names: {oc.Dbd.Attribution}." : "Column names: our measured layout file where it knows the table (a WoWDBDefs folder in Settings names the others).");
                 SetStatus(oc.ListfileNames == 0
-                    ? $"{c.Name} is open (read only). Its files have no names to search: type a full path or a file number (#775971), or choose a listfile. Its data tables cannot be read yet."
-                    : $"{c.Name} is open (read only). Its data tables cannot be read yet.");
+                    ? $"{c.Name} is open (read only). Its files have no names to search: type a full path or a file number (#775971), or choose a listfile. Its data tables are read when you click one."
+                    : $"{c.Name} is open (read only). Its data tables are read when you click one.");
                 if (FilePattern.Contains('*') && !oc.Files.CanList) FilePattern = "#775971";
             }
             else
@@ -401,7 +409,8 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
             TableRows = dt.DefaultView;
             TableNote = (t.IsRaw
                 ? $"{name} has no known layout for {_open.Copy.Version} yet: every field is shown as a raw number (col_N)" + (_open.Casc == null ? ", texts as their offsets." : ".")
-                : $"{name}: {t.RowCount:N0} rows, {t.Coverage} for {_open.Copy.Version}. Read only.") + (t.Note.Length > 0 ? " " + t.Note + "." : "");
+                : $"{name}: {t.RowCount:N0} rows, {t.Coverage} for {_open.Copy.Version}. Read only.") + (t.Note.Length > 0 ? " " + t.Note + "." : "")
+                + (_open.Casc != null && (t.Naming.Source != ColumnNameSource.None || t.Naming.Fallback.Length > 0) ? $" Column names: {t.Naming.Long}." : "");
             ApplyRowFilter();
         }
         catch (Exception e) when (e is DbcException or WoWData.Core.Db2.Db2FormatException or ClientFileException)

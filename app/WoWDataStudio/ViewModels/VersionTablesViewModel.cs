@@ -9,15 +9,16 @@ using WoWDataStudio.Services;
 namespace WoWDataStudio.ViewModels;
 
 /// <summary>A table of the read-only Data tables tab.</summary>
-public sealed record VersionTableItem(string Name, int Fields, string Columns)
+public sealed record VersionTableItem(string Name, int Fields, string Columns, TableNaming? Naming = null)
 {
     public string Text => Name;
-    public string Tip => $"{Name}: {Fields} fields, {Columns}";
+    public string Tip => $"{Name}: {Fields} fields, {Columns}" + (Naming is { Fallback.Length: > 0 } n ? $" (not WoWDBDefs: {n.Fallback})" : "");
 }
 
 /// <summary>
 /// The Data tables tab while another version is open read only: its DB2 tables (names from the executable, columns
-/// named where our layout file for the build knows them, else col_N), a row search, and the rows exported as CSV or
+/// named from the WoWDBDefs folder you chose in Settings, else where our layout file for the build knows them, else
+/// col_N; M5: the source is shown per table), a row search, and the rows exported as CSV or
 /// JSON to a folder you choose (the same as "wds dbc tables / rows / get / export --version"). Nothing can be saved:
 /// "Save to my workspace" and "Copy to server..." are greyed out with the read-only reason.
 /// </summary>
@@ -45,6 +46,12 @@ public sealed partial class VersionTablesViewModel : ObservableObject
     /// <summary>Why "Save to my workspace" and "Copy to server..." are greyed out.</summary>
     public string? WriteRefusal => _session.WriteRefusal;
     public string Header => $"Data tables of {_session.Profile?.VersionBuild} (read only)";
+
+    /// <summary>M5: where the column names come from, under the header: the WoWDBDefs folder (with its licence) or our
+    /// measured layout file.</summary>
+    public string NamesSource => _session.Other?.Dbd is { } d
+        ? $"Column names: {d.Attribution} (read on this computer, never copied); else our measured layout file; else col_N."
+        : "Column names: our measured layout file for this build, else col_N. A WoWDBDefs folder (Settings, optional) names the other tables.";
     public bool HasTable => _table != null;
 
     /// <summary>The table shown now (tests, screenshots).</summary>
@@ -55,19 +62,36 @@ public sealed partial class VersionTablesViewModel : ObservableObject
     /// <summary>Lists the tables (once; later calls wait for the same load).</summary>
     public Task EnsureLoadedAsync() => _loading ??= LoadAsync();
 
+    /// <summary>M5: lists the tables again (the WoWDBDefs folder changed in Settings) and reads the shown table again.</summary>
+    public async Task ReloadAsync()
+    {
+        _loading = null;
+        OnPropertyChanged(nameof(NamesSource));
+        await EnsureLoadedAsync();
+        if (_table != null) await SelectTableAsync(_table.Name);
+    }
+
     private Task? _loading;
 
     private async Task LoadAsync()
     {
         var oc = _session.Other;
         if (oc == null) return;
-        _all = await Task.Run(() =>
+        var build = _session.Profile?.Build ?? oc.Copy.Build;
+        _all = await Task.Run(() => oc.TableNames().Select(n =>
         {
-            var layouts = WoWData.Core.Db2.Db2Layouts.ForBuild(_session.Profile?.Build ?? oc.Copy.Build);
-            return oc.TableNames().Select(n => new VersionTableItem(n, oc.Catalog.Get(n)?.FieldCount ?? 0, layouts?.Get(n) != null ? "columns named by our layout file" : "raw columns (col_N)")).ToList();
-        });
+            var naming = oc.ExpectedNaming(n, build);
+            return new VersionTableItem(n, oc.Catalog.Get(n)?.FieldCount ?? 0, naming.Source switch
+            {
+                ColumnNameSource.WoWDBDefs => "column names: WoWDBDefs",
+                ColumnNameSource.Measured => "column names: measured (our layout file)",
+                _ => "raw columns (col_N)",
+            }, naming);
+        }).ToList());
         ApplyTableFilter();
-        Status = $"{_all.Count:N0} tables of {_session.Profile?.VersionBuild}. Click one to read it (a table is read when you open it). Read only.";
+        int dbd = _all.Count(t => t.Naming?.Source == ColumnNameSource.WoWDBDefs), ours = _all.Count(t => t.Naming?.Source == ColumnNameSource.Measured);
+        Status = $"{_all.Count:N0} tables of {_session.Profile?.VersionBuild}" + (oc.Dbd != null ? $" ({dbd:N0} named by WoWDBDefs, {ours:N0} by our layout file)" : $" ({ours:N0} named by our layout file)") +
+                 ". Click one to read it (a table is read when you open it). Read only.";
     }
 
     partial void OnTableFilterChanged(string value) => ApplyTableFilter();
@@ -105,7 +129,7 @@ public sealed partial class VersionTablesViewModel : ObservableObject
             _table = t;
             OnPropertyChanged(nameof(HasTable));
             TableNote = (t.IsRaw ? $"{name} has no known layout for {_session.Profile?.VersionBuild} yet: every field is a raw number (col_N)." : $"{name}: {t.RowCount:N0} rows, {t.Coverage}.")
-                        + (t.Note.Length > 0 ? " " + t.Note + "." : "") + " Read only.";
+                        + (t.Note.Length > 0 ? " " + t.Note + "." : "") + " Read only." + NamingNote(t);
             ApplySearch();
         }
         catch (Exception e) when (e is WoWData.Core.Db2.Db2FormatException or ClientFileException or IOException or InvalidDataException)
@@ -113,6 +137,9 @@ public sealed partial class VersionTablesViewModel : ObservableObject
             TableNote = $"{name} could not be read: {e.Message}";
         }
     }
+
+    /// <summary>" Column names: WoWDBDefs." / " Column names: measured (our layout file); not WoWDBDefs: ...".</summary>
+    private static string NamingNote(VersionTable t) => t.Naming.Source == ColumnNameSource.None && t.Naming.Fallback.Length == 0 ? "" : $" Column names: {t.Naming.Long}.";
 
     partial void OnSearchChanged(string value) => ApplySearch();
 
