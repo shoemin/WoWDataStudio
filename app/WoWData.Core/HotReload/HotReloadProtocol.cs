@@ -146,38 +146,126 @@ public static class HotReloadProtocol
     /// <summary>Sends one request over the game's pipe. With <paramref name="wantReport"/> false it returns after the
     /// "accepted" line (the game still does the work). Throws <see cref="HotReloadException"/> when the game cannot be reached
     /// or does not answer within <paramref name="timeout"/>.</summary>
-    public static async Task<(HotReloadAccepted Accepted, HotReloadReport? Report)> SendAsync(string pipeName, string request, bool wantReport, TimeSpan timeout,
+    /// <remarks>
+    /// Unreleased: the exchange runs on a thread of its own with blocking calls, and the time limit is kept by a second thread
+    /// of its own, never by the thread pool. Before, every step (the connect, the write, each line read) was an await whose
+    /// continuation needed a free thread-pool thread, while the limit was a timer: when the pool was busy (the app building its
+    /// index, the test suite under load) a game that had answered at once was reported as "did not answer within 8 seconds",
+    /// because the steps waited in the pool's queue until the timer ran out. Also, when the limit was not above the connect's
+    /// own 5 seconds, a busy connection gave either "in use" or "did not answer" depending on which of two timers fired first;
+    /// a connection that cannot be had in time is now always "in use".
+    /// </remarks>
+    public static Task<(HotReloadAccepted Accepted, HotReloadReport? Report)> SendAsync(string pipeName, string request, bool wantReport, TimeSpan timeout,
         CancellationToken cancel = default)
     {
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancel);
-        cts.CancelAfter(timeout);
+        var done = new TaskCompletionSource<(HotReloadAccepted, HotReloadReport?)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var worker = new Thread(() =>
+        {
+            try { done.SetResult(Exchange(pipeName, request, wantReport, timeout, cancel)); }
+            catch (OperationCanceledException) when (cancel.IsCancellationRequested) { done.SetCanceled(cancel); }
+            catch (Exception e) { done.SetException(e); }
+        }) { IsBackground = true, Name = "Hot reload request" };
+        worker.Start();
+        return done.Task;
+    }
+
+    private const string InUse = "its hot-reload connection is in use: another WoW Data Studio window or a wds command is talking to this game right now (it takes one at a time), or the game just closed it";
+
+    /// <summary>One request with blocking calls on the calling thread (a thread of its own, see <see cref="SendAsync"/>); a
+    /// watchdog thread cancels the blocking call that is running when the time is up or <paramref name="cancel"/> is set.</summary>
+    private static (HotReloadAccepted, HotReloadReport?) Exchange(string pipeName, string request, bool wantReport, TimeSpan timeout, CancellationToken cancel)
+    {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        bool connected = false;
+        int stopped = 0;   // 1: the time is up or the caller cancelled
+        using var finished = new ManualResetEventSlim();
+        var self = OperatingSystem.IsWindows() ? OpenThread(ThreadTerminate, false, GetCurrentThreadId()) : IntPtr.Zero;
+        var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.None);
+        var watchdog = new Thread(() =>
+        {
+            var left = timeout - clock.Elapsed;
+            if (left < TimeSpan.Zero) left = TimeSpan.Zero;
+            if (WaitHandle.WaitAny(new[] { finished.WaitHandle, cancel.WaitHandle }, left) == 0) return;
+            Volatile.Write(ref stopped, 1);
+            // the worker checks `stopped` before each blocking call; this cancels the call it is in (again until it is out)
+            while (!finished.Wait(10))
+            {
+                if (self != IntPtr.Zero) CancelSynchronousIo(self);
+                else pipe.Dispose();
+            }
+        }) { IsBackground = true, Name = "Hot reload time limit" };
+        watchdog.Start();
+        void Check()
+        {
+            if (Volatile.Read(ref stopped) == 0) return;
+            cancel.ThrowIfCancellationRequested();
+            throw new OperationCanceledException();
+        }
         try
         {
-            await using var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
-            await pipe.ConnectAsync((int)Math.Min(timeout.TotalMilliseconds, 5000), cts.Token);
+            // the connect, in short steps: the game's one pipe instance may be taken by another client for a while
+            int connectMs = (int)Math.Min(timeout.TotalMilliseconds, 5000);
+            while (true)
+            {
+                Check();
+                int left = connectMs - (int)clock.ElapsedMilliseconds;
+                if (left <= 0) throw new TimeoutException();
+                try
+                {
+                    pipe.Connect(Math.Min(left, 100));
+                    break;
+                }
+                catch (TimeoutException) { }
+            }
+            connected = true;
+            Check();
             var bytes = Encoding.UTF8.GetBytes(request);
-            await pipe.WriteAsync(bytes, cts.Token);
-            await pipe.FlushAsync(cts.Token);
-            using var reader = new StreamReader(pipe, new UTF8Encoding(false));
-            var first = await reader.ReadLineAsync(cts.Token) ?? throw new HotReloadException("the game closed the connection without an answer");
+            pipe.Write(bytes, 0, bytes.Length);
+            pipe.Flush();
+            using var reader = new StreamReader(pipe, new UTF8Encoding(false), false, 4096, leaveOpen: true);
+            Check();
+            var first = reader.ReadLine() ?? throw new HotReloadException("the game closed the connection without an answer");
             var accepted = ParseAccepted(first);
             if (!accepted.Accepted || !wantReport) return (accepted, null);
-            var second = await reader.ReadLineAsync(cts.Token) ?? throw new HotReloadException("the game took the request but closed the connection before its report");
+            Check();
+            var second = reader.ReadLine() ?? throw new HotReloadException("the game took the request but closed the connection before its report");
             return (accepted, ParseReport(second));
         }
-        catch (OperationCanceledException) when (!cancel.IsCancellationRequested)
+        catch (Exception e) when (e is TimeoutException || (e is OperationCanceledException or IOException or ObjectDisposedException && Volatile.Read(ref stopped) == 1 && !cancel.IsCancellationRequested))
         {
+            // the game serves ONE connection at a time (wowcode.dll: one pipe instance): a second client waits for it. 0.13.1:
+            // say so plainly -- another WoW Data Studio window or a wds command talking to the same game is the usual reason
+            if (!connected) throw new HotReloadException(InUse);
             throw new HotReloadException($"the game did not answer within {timeout.TotalSeconds:0} seconds");
         }
-        catch (TimeoutException)
+        catch (OperationCanceledException) when (cancel.IsCancellationRequested)
         {
-            // the game serves ONE connection at a time (wowcode.dll: one pipe instance): a second client waits here. 0.13.1:
-            // say so plainly -- another WoW Data Studio window or a wds command talking to the same game is the usual reason
-            throw new HotReloadException("its hot-reload connection is in use: another WoW Data Studio window or a wds command is talking to this game right now (it takes one at a time), or the game just closed it");
+            throw new OperationCanceledException(cancel);
         }
         catch (IOException e)
         {
             throw new HotReloadException("the connection to the game broke: " + e.Message);
         }
+        finally
+        {
+            finished.Set();
+            watchdog.Join();
+            pipe.Dispose();
+            if (self != IntPtr.Zero) CloseHandle(self);
+        }
     }
+
+    private const uint ThreadTerminate = 0x0001;   // the right CancelSynchronousIo needs
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr OpenThread(uint access, bool inherit, uint threadId);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern uint GetCurrentThreadId();
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool CancelSynchronousIo(IntPtr thread);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool CloseHandle(IntPtr handle);
 }

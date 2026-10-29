@@ -405,6 +405,101 @@ public class HotReloadTests
     }
 }
 
+/// <summary>
+/// The hot-reload request while the thread pool is busy (the cause of the suite's occasional hot-reload failures): every
+/// pool thread is blocked, as by tests that wait for wds in-process or by the app's index build, and the request must still
+/// get the game's answer, a frozen game must still be reported after its time limit, and a taken connection must still be
+/// named. Blocking the pool slows every test running beside it, so the class runs alone (its collection is not parallel).
+/// </summary>
+[Collection(PerformanceCollection.Name)]
+public class HotReloadUnderLoadTests
+{
+    /// <summary>Blocks every thread-pool thread (and the threads the pool adds meanwhile) until disposed.</summary>
+    private sealed class BusyPool : IDisposable
+    {
+        private readonly ManualResetEventSlim _release = new();
+        private int _blocked;
+
+        public BusyPool()
+        {
+            ThreadPool.GetMinThreads(out var min, out _);
+            for (int i = 0; i < min + 200; i++)
+                ThreadPool.UnsafeQueueUserWorkItem(_ => { Interlocked.Increment(ref _blocked); _release.Wait(); }, null);
+            // wait (on this thread, not the pool) until the pool's threads are taken: from then on queued work waits
+            var sw = Stopwatch.StartNew();
+            while (Volatile.Read(ref _blocked) < min && sw.Elapsed < TimeSpan.FromSeconds(30)) Thread.Sleep(10);
+            Assert.True(Volatile.Read(ref _blocked) >= min, $"the pool's {min} threads were not all taken");
+        }
+
+        public void Dispose() => _release.Set();
+    }
+
+    private static string GameDir()
+    {
+        var d = TestEnv.TempDir("hr_load");
+        Directory.CreateDirectory(Path.Combine(d, "Data"));
+        return d;
+    }
+
+    /// <summary>Waits for the task on this thread (an await would need a pool thread to continue).</summary>
+    private static T Wait<T>(Task<T> t, TimeSpan max)
+    {
+        Assert.True(t.Wait(max), $"no result within {max.TotalSeconds:0} s");
+        return t.Result;
+    }
+
+    [Fact]
+    public void TheGamesAnswerArrivesWhileThePoolIsBusy()
+    {
+        var dir = GameDir();
+        using var game = new FakeGame(dir);
+        var pipe = game.PipeName(game.Pid);
+        using (new BusyPool())
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                var (acc, rep) = Wait(HotReloadProtocol.SendAsync(pipe, HotReloadProtocol.StatusRequest(), true, TimeSpan.FromSeconds(3)), TimeSpan.FromSeconds(60));
+                Assert.True(acc.Accepted);
+                Assert.Equal("status", rep!.Command);
+            }
+            var reload = Wait(HotReloadProtocol.SendAsync(pipe, HotReloadProtocol.ReloadRequest(new[] { @"Creature\Boar\Boar.m2" }), true, TimeSpan.FromSeconds(3)), TimeSpan.FromSeconds(60));
+            Assert.Equal(ReloadResult.Reloaded, reload.Report!.Files.Single().Result);
+
+            // a frozen game: "did not answer" after its 2 seconds, not when the pool is free again
+            game.NeverAnswer = true;
+            var sw = Stopwatch.StartNew();
+            var frozen = HotReloadProtocol.SendAsync(pipe, HotReloadProtocol.StatusRequest(), true, TimeSpan.FromSeconds(2));
+            var e = Assert.Throws<AggregateException>(() => frozen.Wait(TimeSpan.FromSeconds(60)));
+            Assert.Contains("did not answer within 2 seconds", Assert.IsType<HotReloadException>(e.InnerException).Message);
+            Assert.True(sw.Elapsed < TimeSpan.FromSeconds(15), sw.Elapsed.ToString());
+        }
+        Directory.Delete(dir, true);
+    }
+
+    [Fact]
+    public void ATakenConnectionIsNamedWhileThePoolIsBusy()
+    {
+        // the game's pipe has ONE instance; another client holds it. With a limit of 2 s (not above the connect's own 5 s)
+        // the answer is "in use" every time, never "did not answer"
+        var name = "wds-test-busy-" + Guid.NewGuid().ToString("N")[..8];
+        using var server = new System.IO.Pipes.NamedPipeServerStream(name, System.IO.Pipes.PipeDirection.InOut, 1);
+        using var other = new System.IO.Pipes.NamedPipeClientStream(".", name, System.IO.Pipes.PipeDirection.InOut);
+        var accept = new Thread(() => server.WaitForConnection());
+        accept.Start();
+        other.Connect(5000);
+        accept.Join();
+        using (new BusyPool())
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                var t = HotReloadProtocol.SendAsync(name, HotReloadProtocol.StatusRequest(), true, TimeSpan.FromSeconds(2));
+                var e = Assert.Throws<AggregateException>(() => t.Wait(TimeSpan.FromSeconds(60)));
+                Assert.Contains("another WoW Data Studio window", Assert.IsType<HotReloadException>(e.InnerException).Message);
+            }
+        }
+    }
+}
+
 /// <summary>A test that needs the native offline harness of HR1 (skipped without WDS_HR_HARNESS).</summary>
 public sealed class HarnessFactAttribute : FactAttribute
 {
