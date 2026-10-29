@@ -37,6 +37,12 @@ recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
   `MapName_lang` as `MapNamelang`): they show them now.
 * The Data tables tab of another version shows the columns of a table without rows instead of "Pick a table on the
   left"; the Other versions tab no longer says that a modern client's data tables cannot be read.
+* Hot reload could report a game that had answered at once as *did not answer within 8 seconds* while the computer was
+  busy (the app building its index; the test suite under load, where `HotReloadTests` and `GameLocatorTests` failed now
+  and then and passed when run alone): each step of the request waited for a free thread-pool thread while a timer ran
+  out. The request now runs on threads of its own (blocking calls, a watchdog for the time limit), and a connection that
+  another window or wds holds is always reported as *in use* (before, a time limit of 5 seconds or less gave *in use* or
+  *did not answer* depending on which of two timers fired first).
 
 ### Changed
 
@@ -110,6 +116,9 @@ recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
   again.
 * Leak test: `versions_window` is now `versions_open` (the 1.60 client opened in the main window, an entry, then your
   game again); `versions_maps` opens the 1.60 client's Maps tab in the main window and goes back to your game.
+* `HotReloadUnderLoadTests` (new; runs alone): a hot-reload request with every thread-pool thread blocked gets the
+  game's answer, a frozen game is reported after its time limit, and a taken connection is named *in use* (both fail on
+  the old request code).
 
 ## 0.15.0 (2026-10-28)
 

@@ -107,7 +107,8 @@ States the app explains: no game from the folder; hot reload off for the folder 
 * Game side, offline: `WoWDecomp\work\staged\HR1-hotreload\test\build_harness.bat` then
   `hr_harness.exe test orig|hooked|hotpatch` (51 checks each); `hr_harness.exe serve 60` is a fake game for other clients.
 * App: `app\WoWData.Tests\HotReloadTests.cs` (protocol against the native code's real replies, the switch, every state,
-  reloads, the release patch while a stand-in game holds it open, the command line). With `WDS_HR_HARNESS` set to
+  reloads, the release patch while a stand-in game holds it open, the command line; `HotReloadUnderLoadTests`: the same
+  requests with the thread pool blocked). With `WDS_HR_HARNESS` set to
   `hr_harness.exe`, the app also talks to the real C code.
 * In the game (after the wave with HR1): `WoWDataTool\tests\ingame\hotreload\run_hotreload.ps1` (texture + model change in
   `Client_visual`, reload, screenshots before and after without a restart).
