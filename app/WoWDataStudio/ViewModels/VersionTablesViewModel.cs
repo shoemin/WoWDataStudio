@@ -50,7 +50,7 @@ public sealed partial class VersionTablesViewModel : ObservableObject
     /// <summary>M5: where the column names come from, under the header: the WoWDBDefs folder (with its licence) or our
     /// measured layout file.</summary>
     public string NamesSource => _session.Other?.Dbd is { } d
-        ? $"Column names: {d.Attribution} (read on this computer, never copied); else our measured layout file; else col_N."
+        ? $"Column names: {d.Attribution}; else our measured layout file, else col_N."
         : "Column names: our measured layout file for this build, else col_N. A WoWDBDefs folder (Settings, optional) names the other tables.";
     public bool HasTable => _table != null;
 
@@ -128,7 +128,8 @@ public sealed partial class VersionTablesViewModel : ObservableObject
             }
             _table = t;
             OnPropertyChanged(nameof(HasTable));
-            TableNote = (t.IsRaw ? $"{name} has no known layout for {_session.Profile?.VersionBuild} yet: every field is a raw number (col_N)." : $"{name}: {t.RowCount:N0} rows, {t.Coverage}.")
+            TableNote = (t.IsRaw && t.Naming.Fallback.Length > 0 ? $"{name}: every field is a raw number (col_N): neither WoWDBDefs nor our layout file names it for {_session.Profile?.VersionBuild}."
+                         : t.IsRaw ? $"{name} has no known layout for {_session.Profile?.VersionBuild} yet: every field is a raw number (col_N)." : $"{name}: {t.RowCount:N0} rows, {t.Coverage}.")
                         + (t.Note.Length > 0 ? " " + t.Note + "." : "") + " Read only." + NamingNote(t);
             ApplySearch();
         }

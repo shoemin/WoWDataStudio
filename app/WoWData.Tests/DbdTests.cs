@@ -450,7 +450,7 @@ public class DbdTests : IDisposable
             await t.ReloadAsync();
             Assert.Contains("(4 named by WoWDBDefs, ", t.Status);
             await t.SelectTableAsync("Map");
-            Assert.Equal($"Column names: WoWDBDefs (CC BY-SA 4.0), from {Path.GetFullPath(defs)} (read on this computer, never copied); else our measured layout file; else col_N.", t.NamesSource);
+            Assert.Equal($"Column names: WoWDBDefs (CC BY-SA 4.0), from {Path.GetFullPath(defs)}; else our measured layout file, else col_N.", t.NamesSource);
             Assert.Equal("column names: WoWDBDefs", t.Tables.Single(x => x.Name == "Map").Columns);
             Assert.Equal(ColumnNameSource.WoWDBDefs, t.Table!.Naming.Source);
             Assert.Contains("D_MapName", t.Table.Columns);

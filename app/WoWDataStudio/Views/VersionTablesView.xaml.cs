@@ -11,6 +11,6 @@ public partial class VersionTablesView : UserControl
     /// <summary>A column's header is the table's column name (the DataTable key has dots replaced).</summary>
     private void OnAutoColumn(object? sender, DataGridAutoGeneratingColumnEventArgs e)
     {
-        if (DataContext is ViewModels.VersionTablesViewModel { Rows.Table: { } t } && t.Columns[e.PropertyName] is { } c) e.Column.Header = c.Caption;
+        if (DataContext is ViewModels.VersionTablesViewModel { Rows.Table: { } t } && t.Columns[e.PropertyName] is { } c) e.Column.Header = c.Caption.Replace("_", "__");   // "__": a header shows "_" (one is an access key)
     }
 }

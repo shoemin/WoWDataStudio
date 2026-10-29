@@ -23,7 +23,7 @@ public partial class OtherVersionsView : UserControl
     /// <summary>The generated columns show the table's own column names (their captions: a binding path cannot hold a dot).</summary>
     private void Grid_AutoGeneratingColumn(object? sender, DataGridAutoGeneratingColumnEventArgs e)
     {
-        if (sender is DataGrid { ItemsSource: DataView dv } && dv.Table!.Columns[e.PropertyName] is { } col) e.Column.Header = col.Caption;
+        if (sender is DataGrid { ItemsSource: DataView dv } && dv.Table!.Columns[e.PropertyName] is { } col) e.Column.Header = col.Caption.Replace("_", "__");   // "__": a header shows "_" (one is an access key)
     }
 
     /// <summary>Picks changed: Import picked updates needs a new preview.</summary>

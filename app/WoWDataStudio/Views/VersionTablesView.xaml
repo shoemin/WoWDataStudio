@@ -7,6 +7,7 @@
     <!-- The Data tables tab while another version is open read only (ViewModels\VersionTablesViewModel) -->
     <UserControl.Resources>
         <h:BoolToCollapsedConverter x:Key="BoolVis" />
+        <h:BoolToCollapsedConverter x:Key="BoolVisInv" Invert="True" />
         <h:NullToCollapsedConverter x:Key="NullVis" />
         <h:NullToCollapsedConverter x:Key="NullVisInv" Invert="True" />
     </UserControl.Resources>
@@ -72,10 +73,10 @@
                 </StackPanel>
                 <Grid>
                     <TextBlock Text="Pick a table on the left." Style="{StaticResource Muted}" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"
-                               Visibility="{Binding Rows, Converter={StaticResource NullVisInv}}" />
+                               Visibility="{Binding HasTable, Converter={StaticResource BoolVisInv}}" />
                     <DataGrid x:Name="VersionRowsGrid" ItemsSource="{Binding Rows}" IsReadOnly="True" AutoGenerateColumns="True" CanUserAddRows="False" CanUserDeleteRows="False"
                               EnableRowVirtualization="True" EnableColumnVirtualization="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
-                              Visibility="{Binding Rows, Converter={StaticResource NullVis}}" AutoGeneratingColumn="OnAutoColumn" />
+                              Visibility="{Binding HasTable, Converter={StaticResource BoolVis}}" AutoGeneratingColumn="OnAutoColumn" />
                 </Grid>
             </DockPanel>
         </Border>

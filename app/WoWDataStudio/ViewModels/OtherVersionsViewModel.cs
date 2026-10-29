@@ -218,8 +218,8 @@ public sealed partial class OtherVersionsViewModel : ObservableObject, IDisposab
                     foreach (var n in o.TableNames())
                         list.Add(new VersionTableRow(n, 0, o.Catalog.Get(n)?.FieldCount ?? 0, o.ExpectedNaming(n).Source switch
                         {
-                            ColumnNameSource.WoWDBDefs => "WoWDBDefs (click)",
-                            ColumnNameSource.Measured => "measured (click)",
+                            ColumnNameSource.WoWDBDefs => "WoWDBDefs",
+                            ColumnNameSource.Measured => "measured",
                             _ => "click to read",
                         }));
                 }
