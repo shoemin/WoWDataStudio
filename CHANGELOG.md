@@ -6,6 +6,38 @@ recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
 
 ## Unreleased
 
+### Added
+
+* **Column names from WoWDBDefs (optional, experimental; M5 of `docs\research\OPEN_OTHER_VERSIONS_DESIGN.md`).** If you
+  have a copy of WoWDBDefs (the community's table and column names, CC BY-SA 4.0), choose it in **Settings > Other
+  versions (experimental) > WoWDBDefs folder (optional)** (the `definitions` folder or the whole copy;
+  `wds settings set other-clients.dbd <folder>`). The data tables of modern clients then take their column names
+  from it: the **Tables of this version** list of the Other versions tab and the **Data tables** tab of another version
+  opened read only ([Other versions](docs/manual/other-versions.md#column-names-from-wowdbdefs-optional)). Data Studio
+  reads the folder on your computer when a table is shown; it never downloads, bundles or copies it, and without it
+  everything works as before.
+  * *The order*: WoWDBDefs when its definition fits the table (the client's version and build with the table's layout
+    hash, else that layout hash; the same number of columns; texts and decimals in the same places), else our own
+    measured layout file, else `col_N`. When WoWDBDefs does not name a table, the note says why (no file for it, no
+    definition for the build, another layout hash, another number of columns). Browse, the 3D view, the maps and the
+    update catalog keep using our measured names.
+  * *The source is shown per table*: in both lists (*WoWDBDefs*, *measured*, raw), above the rows, under the Data
+    tables tab's title (**Column names:** *WoWDBDefs (CC BY-SA 4.0), from <folder>*), and on the command line:
+    `wds dbc tables / info / rows --version` and `wds versions tables / rows / compare` (`--json`: `names`,
+    `namesFallback`, `dbd`). Compare and `--where` find a WoWDBDefs name without its `_lang` ending.
+  * Measured on the 1.60 client (1.60.1.70450): 1,160 of its 1,161 tables are named by WoWDBDefs; the Classic Era,
+    TBC Classic, MoP Classic and Retail copies likewise ([Known issues](docs/manual/known-issues.md#some-tables-are-not-named-by-wowdbdefs)
+    lists the exceptions).
+  * Our own `.dbd` parser (`Db2\Dbd.cs`, `DbdFolder.cs`, `Versions\ColumnNames.cs`), written from the format; see
+    `THIRD_PARTY.md`.
+
+### Fixed
+
+* The column headers of the tables of other versions lost their underscores (`col_10` showed as `col10`,
+  `MapName_lang` as `MapNamelang`): they show them now.
+* The Data tables tab of another version shows the columns of a table without rows instead of "Pick a table on the
+  left"; the Other versions tab no longer says that a modern client's data tables cannot be read.
+
 ### Changed
 
 * **Another version opens in the main window, with the same tabs as your game (experimental).** The separate read-only
@@ -65,6 +97,17 @@ recorded here. The phases before 0.6.1 are described in `ROADMAP.md`.
 * Screenshots 144-154 made again in the main window, and 157-161 new: the read-only Data tables tab, the Server data
   tab without a server, My changes and the map's edit buttons greyed out, Used in game of a 1.60 display
   (`WDS_SCREENSHOT_ONLY=versions-open`).
+* `DbdTests` (new, M5): our `.dbd` parser on text the tests write themselves (columns, foreign keys, unconfirmed names,
+  layout and build lines, ranges, annotations, sizes, arrays, the line of text it cannot read), the choice of a
+  definition by build and layout hash, the folder (a copy of the repository, a changed file read again), synthetic
+  WDC5 tables named or left unchanged with the reason, WoWDBDefs before our measured names before `col_N`, the table
+  views and compare, the setting and the Settings window's field, `wds`, the read-only Data tables tab, and the
+  disagreement report between our measured file and WoWDBDefs (tests only). `RealDbdTests` (opt-in:
+  `WOWDATA_CLIENT_COPIES` and `WOWDATA_DBD_DIR`): the 1,161 tables of 1.60.1.70450 matched by layout hash, every table
+  read, and the disagreement report printed. No WoWDBDefs file is in the repository.
+* Screenshots 162-165 (new: the WoWDBDefs folder in Settings, the 1.60 tables with their name source, the Data tables
+  tab named by WoWDBDefs and a table that falls back; `WDS_SCREENSHOT_ONLY=dbd` with `WDS_SCREENSHOT_DBD`) and 157 made
+  again.
 * Leak test: `versions_window` is now `versions_open` (the 1.60 client opened in the main window, an entry, then your
   game again); `versions_maps` opens the 1.60 client's Maps tab in the main window and goes back to your game.
 

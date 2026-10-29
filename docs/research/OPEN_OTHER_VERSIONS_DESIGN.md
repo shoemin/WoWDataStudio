@@ -1,7 +1,7 @@
 # Opening another client version the way 1.12 opens (read only): design
 
 Status: **design** (2026-10-27); **M1 (Browse, textures), M2 (models), M3 (animations, effects) and M4 (maps) implemented** (2026-10-27; see the
-CHANGELOG); M5-M7 not yet. First target: the modern Classic "1.60" beta
+CHANGELOG); **M5 (WoWDBDefs names) implemented** (2026-10-28, see section 4.4); M6-M7 not yet. First target: the modern Classic "1.60" beta
 (`_classic_beta_`, `WowB.exe` 1.60.1.70450, CASC) from `G:\WoW Clients and Patches\Clients\BattleNet snapshot 2026-10-20`.
 Later: 2.4.3 / 3.3.5a (MPQ), Classic Era 1.15.x and Retail (CASC).
 
@@ -397,6 +397,30 @@ has no built-in file (then the read-only window says "column names from WoWDBDef
 name with candidates (our name, then the `.dbd` name with `_lang` stripped), so both sources work. When both name the
 same table, a check (test-only, with `WOWDATA_DBD_DIR` set) reports columns where they disagree for a human to look at;
 it never writes names.
+
+### 4.4 As built (M5, 2026-10-28; the user's decisions)
+
+* **Order for the table views** (the Other versions tab, the Data tables tab of another version, `wds dbc ... --version`,
+  `wds versions tables / rows / compare`): WoWDBDefs first when the folder is set and its definition fits (the build
+  listed with the table's layout hash, else a definition with that layout hash; the same number of record columns;
+  strings and floats where the executable has them), else our measured layout file **with the reason shown**, else
+  `col_N`. The features (Browse chains, models, maps, the update catalog) keep binding to our measured file only; a
+  build without a built-in file therefore gets WoWDBDefs names in the table views, not in the features.
+* Setting `other-clients.dbd` (the definitions folder or a copy of the repository), **Settings > Other versions
+  (experimental) > WoWDBDefs folder (optional)**; the name source is shown per table and the attribution
+  ("WoWDBDefs (CC BY-SA 4.0), from <folder>") wherever its names are shown. Arrays are named Name1..NameN; names
+  are kept as written (`_lang` included), and compare and `--where` match them without `_lang`.
+* Code: `Db2\Dbd.cs` (`DbdFile`, our own parser), `Db2\DbdFolder.cs`, `Versions\ColumnNames.cs`; tests `DbdTests`
+  (text written by the tests), `RealDbdTests` (opt-in: `WOWDATA_CLIENT_COPIES` + `WOWDATA_DBD_DIR`).
+* MEASURED (copies of 2026-10-20, the WoWDBDefs copy next to them): every one of the 1,346 files parses; all 1,161
+  tables of 1.60.1.70450 have a definition with the executable's layout hash; reading every table names 1,160 by
+  WoWDBDefs (about 7 s for all), ExteriorComponentGroup falls back (no rows; one record column more than the
+  definition). Era 1.15.9, TBC Classic 2.5.6 and MoP Classic 5.5.4: every listed table named; Retail 12.1.5 and the
+  1.60 build 70245: all but one; WoD 6.2.3.20779: 159 of 517 (the build is not listed, WDB2 has no layout hash). The
+  disagreement report against our measured file: no missing definition, no layout-hash or column-count difference,
+  26 columns named differently (spelling, or a different reading of a column) for a human to look at.
+* Not done (open): the old WDBC tables of MPQ clients (1.x-3.x) keep their own DBC layouts; WoWDBDefs could name their
+  raw tables too (locstring widths per version needed).
 
 ---
 

@@ -92,6 +92,18 @@ line under each field says what it found.
 
 **Browse...** next to each field picks the file or folder.
 
+## Other versions (experimental)
+
+The last card of the window is for the tables of [other game versions](other-versions.md).
+
+![The WoWDBDefs folder in the Settings window](../screenshots/162_settings_wowdbdefs.png)
+
+| Setting | What it is | When empty |
+|---|---|---|
+| **WoWDBDefs folder (optional)** | a folder with WoWDBDefs definition files (`.dbd`: the community's table and column names, CC BY-SA 4.0), or a copy of the WoWDBDefs repository (its `definitions` folder is used). The tables of modern clients take their column names from it ([Other versions](other-versions.md#column-names-from-wowdbdefs-optional)). The line under the field says how many definition files it found, or in red why the folder cannot be used; **Save** refuses such a folder. The app reads it on your computer and never downloads, bundles or copies it | our own measured names, else `col_N` |
+
+On the command line: `wds settings set other-clients.dbd <folder>`.
+
 ## Settings that are not in the window
 
 | What | Where it is set |

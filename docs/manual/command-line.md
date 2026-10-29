@@ -220,7 +220,13 @@ wds settings set ground-textures specular
 wds settings set server.password --stdin < password.txt
 wds settings set dbc-locale deDE
 wds settings set hot-reload on --yes
+wds settings set other-clients.dbd "G:\WoWDBDefs\definitions"
 ```
+
+`other-clients.dbd` is the WoWDBDefs folder (optional; the **WoWDBDefs folder (optional)** field of the Settings
+window): a folder of WoWDBDefs definition files (`.dbd`) or a copy of the WoWDBDefs repository, whose column names the
+tables of modern clients show ([Other versions](other-versions.md#column-names-from-wowdbdefs-optional)). It is read on
+your computer, never copied; `wds settings set` says how many definition files it found.
 
 #### wds settings unset
 
@@ -1036,8 +1042,11 @@ wds server-maps undo --yes
 Every data table of the game: group, what the server does with it, how much is named, your edit.
 With `--version <client>`, `wds dbc tables`, `info`, `rows`, `get` and `export` read the data tables of another
 version, as the app's **Data tables** tab shows them while that version is open: its DB2 tables (names from its
-executable), columns named where the app's layout file for that build knows them (else `col_N`), encrypted rows left
-out (never guessed). `--where column=value` finds text that contains the value, numbers that equal it. Every command
+executable), columns named from the WoWDBDefs folder you chose (`other-clients.dbd`), else where the app's layout
+file for that build knows them, else `col_N`; encrypted rows left out (never guessed). `wds dbc tables --version`
+says where each table's names come from (*WoWDBDefs*, *measured (our layout file)*, *raw (col_N)*; `--json`:
+`names`), `wds dbc info --version` prints the line *Column names: ...* with the reason when WoWDBDefs could not name
+the table (`--json`: `names`, `namesFallback`, `dbd`). `--where column=value` finds text that contains the value, numbers that equal it. Every command
 that changes a table refuses `--version` (exit code 4).
 
 ```
@@ -2925,7 +2934,7 @@ wds versions extract _classic_beta_ #775971 --out beta\
 
 #### wds versions tables
 
-A client's data tables: rows, fields, and whether this version's columns are named or shown raw (a modern client: its DB2 tables from its executable).
+A client's data tables: rows, fields, and where this version's column names come from (WoWDBDefs, our measured layout file, or raw col_N; a modern client: its DB2 tables from its executable).
 
 ```
 wds versions tables <client> [options]
@@ -2946,6 +2955,8 @@ wds versions tables _classic_beta_
 #### wds versions rows
 
 Rows of a client's data table, old (DBC) or modern (DB2): columns named where this version's layout is known, else col_N.
+For a modern client the line *Column names: ...* says where the names come from (the WoWDBDefs folder you chose, or our
+measured layout file with the reason WoWDBDefs did not name the table); `--json` gives `names` and `namesFallback`.
 
 ```
 wds versions rows <client> <table> [options]
@@ -3109,6 +3120,9 @@ wds dbc export Map --out map160.csv --version _classic_beta_
 * `wds find used` shows what the client says and that no server is connected; `wds models export` writes the app's
   **Export for Blender...** package (`--open`: **Open in Blender**); `wds dbc tables`, `info`, `rows`, `get` and
   `export` read the version's data tables (rows exported as CSV or JSON); `wds index build` builds its index again.
+  The column names come from the WoWDBDefs folder you chose (`wds settings set other-clients.dbd <folder>`), else our
+  measured layout file, else `col_N`; `wds dbc tables` and `wds dbc info` say which, with the reason when WoWDBDefs
+  could not name a table.
 * `wds maps list`, `zones`, `tiles`, `minimap`, `tile` and `render` read the maps of another version as they read
   your game's (its Map table, each map's WDT, AreaTable and the area of every ground square, the minimaps, the tile
   files read by FileDataID): the same output, with the FileDataID of each tile's root file in `wds maps tiles`, the

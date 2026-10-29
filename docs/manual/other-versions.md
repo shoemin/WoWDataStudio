@@ -115,10 +115,42 @@ known only by its number is copied as `<number>.<type>`, with the type taken fro
 ![The 1.60 Classic beta: a minimap tile of Elwynn Forest found by its number](../screenshots/141_other_versions_modern.png)
 
 *Their data tables* (DB2 files) are listed in **Tables of this version** by name, from the client's own program file:
-more than a thousand of them. A table is read when you click it. Most of their columns are raw (`col_N`); for 1.60.1
-(build 70450) the tables that maps need have names (Map, AreaTable, the liquid tables, Light, WMOAreaTable, the ground
-effects, ZoneMusic). Records that are encrypted in the client are left out, and the note above the rows says how many.
-In **Compare across versions** the modern clients are listed too, not ticked at first.
+more than a thousand of them. A table is read when you click it. The **Columns** list says where each table's column
+names come from: *WoWDBDefs* (from a WoWDBDefs folder you chose, see below), *measured* (our own layout file: for
+1.60.1, build 70450, the tables of maps, displays, models, textures, items, spells and spell effects) or *click to read*
+(raw, `col_N`). Records that are encrypted in the client are left out, and the note above the rows says how many and
+where the names came from. In **Compare across versions** the modern clients are listed too, not ticked at first; a
+column is matched by its name, with WoWDBDefs' `_lang` ending left out (`MapName_lang` is `MapName`).
+
+![The 1.60 client's tables named by WoWDBDefs, the Map table read](../screenshots/163_versions_tables_wowdbdefs.png)
+
+### Column names from WoWDBDefs (optional)
+
+WoWDBDefs (github.com/wowdev/WoWDBDefs) is the community's list of the table and column names of every client
+build (definition files, `.dbd`, licensed CC BY-SA 4.0). If you have a copy of it on your computer, choose it in
+**Settings > Other versions (experimental) > WoWDBDefs folder (optional)** (the `definitions` folder, or the whole copy
+of the repository); the field says how many definition files it found. Data Studio reads that folder on your computer
+when it shows a table; it never downloads WoWDBDefs, never comes with it and never copies it anywhere.
+
+![Settings: the WoWDBDefs folder](../screenshots/162_settings_wowdbdefs.png)
+
+With the folder set, the tables of a modern client (the **Tables of this version** list here, and the **Data tables**
+tab of another version opened read only) take their column names from it, in this order:
+
+1. *WoWDBDefs*, when its file for the table has a definition for that client's version and build (for example
+   1.60.1.70450) with the same *layout hash* as the table (a number every modern table carries; it changes when the
+   columns change), or, when the build is not listed, a definition with that layout hash. The definition must have as
+   many columns as the table, and its texts and decimals must be where the table has them; otherwise it is not used.
+2. *measured*: our own layout file for the build, as without the folder. The note says why WoWDBDefs did not name the
+   table (no file for it, no definition for the build, another layout hash, another number of columns).
+3. *raw*: the columns are called `col_0`, `col_1`...
+
+Array columns are numbered from 1 (`Flags1`, `Flags2`, `Flags3`), as everywhere in the app. A column WoWDBDefs marks
+as not confirmed (`?`) has its name but counts as *not confirmed* (*All columns named (WoWDBDefs), 7 not confirmed*).
+Without the folder everything works as before. The features (Browse, the 3D view, the maps, the update catalog) always
+use our own measured names and are not changed by it. For the 1.60 client, 1,160 of its 1,161 tables are named by
+WoWDBDefs; the one that is not (ExteriorComponentGroup: its definition has one column less than the file) says so.
+The old tables of MPQ clients (1.x to 3.x) keep their own layouts.
 
 **Listfile for modern clients** (optional): a listfile is a text file that names the files (lines `FileDataID;path`).
 The app does not come with one and never downloads one; if you have one, click **Choose listfile...** and pick it.
@@ -216,6 +248,16 @@ they are called `col_0`, `col_1`... Encrypted rows are left out, and the note ab
 **Save to my workspace** and **Copy to server...** are greyed out with the reason.
 
 ![The Data tables tab of the 1.60 client: the Map table read only](../screenshots/157_versions_open_tables.png)
+
+The line under the tab's title says where the column names come from (**Column names:** our measured layout file, or
+*WoWDBDefs (CC BY-SA 4.0), from* the folder you chose in Settings, see
+[Column names from WoWDBDefs](#column-names-from-wowdbdefs-optional)); each table in the list says it too, and the note
+above the rows says it for the table you opened, with the reason when WoWDBDefs could not name it. When you change the
+folder in Settings, the list is read again.
+
+![The Data tables tab with the WoWDBDefs folder set: the Map table named by WoWDBDefs](../screenshots/164_versions_open_tables_wowdbdefs.png)
+
+![A table whose WoWDBDefs definition does not fit: raw columns, and why](../screenshots/165_versions_open_tables_fallback.png)
 
 ### What is listed
 
@@ -564,7 +606,8 @@ What an import writes:
   a world server for it (spawns, loot, quests, names) and the placements in "Used in game" are planned, not there yet;
   2.4.3 and 3.3.5a (MPQ clients) open in this tab only. Writing into another version comes only after the standalone C
   client exists.
-* Most columns of the modern clients' data tables have no names yet.
+* Without a WoWDBDefs folder, most columns of the modern clients' data tables have no names (our own layout file names
+  the tables the features need); with it, nearly all of them have.
 * Maps convert from 1.60 to 1.12 only: 1.12 to 1.60, and maps of 2.x and 3.x, are planned. The models and buildings
   1.12 does not have are left out (their conversion is planned), see [Known issues](known-issues.md#other-versions).
 * 3D views of TBC and WotLK models, and bringing models of other versions into your 1.12 game, are planned, not there
@@ -581,6 +624,9 @@ What an import writes:
 read only, and the commands that read or export take `--version <client>`, as the main window works on it:
 `wds find search boar --version _classic_beta_`, `wds find used cdisplay:503 --version _classic_beta_`,
 `wds models render cdisplay:503 boar.png --version _classic_beta_`, `wds models export cdisplay:503 --version _classic_beta_`,
-`wds dbc rows Map --version _classic_beta_`, `wds dbc export Map --out map.csv --version _classic_beta_`. The commands
+`wds dbc rows Map --version _classic_beta_`, `wds dbc export Map --out map.csv --version _classic_beta_`.
+`wds settings set other-clients.dbd <folder>` sets the WoWDBDefs folder; `wds dbc tables --version _classic_beta_`,
+`wds dbc info Map --version _classic_beta_`, `wds versions tables _classic_beta_` and `wds versions rows _classic_beta_ Map`
+say where each table's column names come from. The commands
 that write refuse `--version` with the reason the app shows on its greyed-out buttons; see
 [Another version, read only](command-line.md#another-version-read-only).

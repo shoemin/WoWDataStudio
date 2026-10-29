@@ -46,8 +46,18 @@ the compare heat map and the median-cut palette (our own; Pillow's is not used) 
   pallet/common data, sections, copy tables, relationship maps) and checked against the real files; no code from
   DBCD, DBCDumpHost, WoWDBDefs or any other DB2 library was copied or consulted as code. The table-name to
   FileDataID catalog comes from a static byte scan of the client executable (never run), ported from our own probe
-  script. No definition files are used or shipped: the column names in `Db2\Layouts\db2_layouts_70450.txt` were
-  measured by us (value matching against the 1.12/2.4.3/3.3.5a tables on shared IDs, link checks, the 1.60 terrain).
+  script. No definition files are shipped: the column names in `Db2\Layouts\db2_layouts_70450.txt` were
+  measured by us (value matching against the 1.12/2.4.3/3.3.5a tables on shared IDs, link checks, the 1.60 terrain)
+  and never generated or corrected from WoWDBDefs.
+* **WoWDBDefs, optional, read at run time only** (M5 of `docs\research\OPEN_OTHER_VERSIONS_DESIGN.md`): if the user
+  chooses a folder with WoWDBDefs definition files (setting `other-clients.dbd`, **Settings > WoWDBDefs folder
+  (optional)**), the tables of other versions take their column names from it. The definition files
+  (github.com/wowdev/WoWDBDefs, `definitions\*.dbd`) are licensed **CC BY-SA 4.0**; they are read on the user's
+  computer and are never downloaded, bundled, converted or copied by Data Studio, its installer, its tests (which write
+  their own tiny definition text at run time) or this repository. Wherever names come from it, the app and `wds` say
+  so: *WoWDBDefs (CC BY-SA 4.0), from &lt;folder&gt;*. The `.dbd` parser (`app\WoWData.Core\Db2\Dbd.cs`,
+  `DbdFolder.cs`) is our own code, written from the format (COLUMNS, LAYOUT / BUILD / COMMENT blocks, annotations,
+  sizes, arrays); no code of WoWDBDefs (BSD-3-Clause) or DBCD was copied or consulted as code.
 
 NuGet packages, **bundled** in the self-contained publish (`app\publish\bin`):
 

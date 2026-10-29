@@ -103,6 +103,12 @@ reason, and "Used in game" of the boar's display; at the end your 1.12 game is o
 same folder (with the `_classic_beta_` copy); its index is built in the run's temporary app folder (about 10 seconds);
 `WDS_SCREENSHOT_ONLY=versions-open` makes only them. Use `--client` with a copy of the 1.12 client (`Client3`), never
 the folder you play with.
+`Services\DbdScreenshots.cs` (162-165, M5: the Settings window's WoWDBDefs folder, the 1.60 client's tables
+in the Other versions tab with their name source, and its Data tables tab opened read only with the Map table named by
+WoWDBDefs and ExteriorComponentGroup, whose definition does not fit, with the reason; 157 is made again by
+`WDS_SCREENSHOT_ONLY=versions-open`) needs the same folder of client copies and a WoWDBDefs folder (the definitions
+folder or a copy of the repository, only read, never copied) in `WDS_SCREENSHOT_DBD`; without either it is skipped.
+`WDS_SCREENSHOT_ONLY=dbd` makes only them.
 `Services\ParticleScreenshots.cs` (155-156: your game's particles and ribbons in the 3D viewer: the Fire Elemental's
 fire and smoke, and the Holy Precast High Hand spell effect with the model statistics' notes on what is drawn
 approximately) runs after the manual's pictures; `WDS_SCREENSHOT_ONLY=particles` makes only them.

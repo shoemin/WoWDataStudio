@@ -670,19 +670,37 @@ not given for these versions (they changed since 1.12).
 
 *Status:* open (each version's layout file, `app\WoWData.Core\Dbc\Layouts\dbc_layouts_<build>.txt`, gets more tables).
 
-### Most columns of the modern clients' tables are raw
+### Without a WoWDBDefs folder, most columns of the modern clients' tables are raw
 
-*What happens:* the DB2 tables of modern clients are read with the field types their program file gives, but most
-columns have no names (`col_N`). Names exist only for the tables maps need, and only for 1.60.1 build 70450
-(`app\WoWData.Core\Db2\Layouts\db2_layouts_70450.txt`, each column proven by measurement). Records that are encrypted
-in the client are left out (for example 8 of 81 rows of 1.60's Map table).
+*What happens:* the DB2 tables of modern clients are read with the field types their program file gives, but without
+a WoWDBDefs folder most columns have no names (`col_N`). Our own names exist only for the tables the features need,
+and only for 1.60.1 build 70450 (`app\WoWData.Core\Db2\Layouts\db2_layouts_70450.txt`, each column proven by
+measurement). Records that are encrypted in the client are left out (for example 8 of 81 rows of 1.60's Map table).
 
-*Who is affected:* anyone reading other tables, or other modern builds.
+*Who is affected:* anyone reading other tables, or other modern builds, without a WoWDBDefs folder.
 
-*Workaround:* compare the raw values with the same table of an older version (**Compare across versions** with raw
-columns: `wds versions compare <table> <id> --raw`).
+*Workaround:* choose a WoWDBDefs folder you have (**Settings > WoWDBDefs folder (optional)**,
+`wds settings set other-clients.dbd <folder>`): with it 1,160 of the 1,161 tables of 1.60.1.70450 are named. Or compare
+the raw values with the same table of an older version (`wds versions compare <table> <id> --raw`).
 
-*Status:* open (more tables get names as the conversion work needs them).
+*Status:* by design (the app does not ship or download WoWDBDefs; our own layout file gets more tables as the
+features need them).
+
+### Some tables are not named by WoWDBDefs
+
+*What happens:* with a WoWDBDefs folder set, a table keeps our measured names (or `col_N`) when the folder has no
+definition for that build with the table's layout hash, or when the definition has another number of columns than the
+file; the note above the rows (and `wds dbc info --version`) says which. Measured on the copies of 2026-10-20: the 1.60
+client's ExteriorComponentGroup (no rows; the definition has one column less than the file), one table of each newer
+Retail and 1.60 build likewise, and 358 of the 517 tables of Warlords of Draenor 6.2.3.20779, a build WoWDBDefs does not
+list (their files carry no layout hash, so only the build can choose a definition). The old tables of MPQ clients (1.x
+to 3.x) do not use WoWDBDefs at all; they keep their own layouts (see above).
+
+*Who is affected:* anyone reading those tables.
+
+*Workaround:* none needed for the others; for these, the raw values, or a newer WoWDBDefs copy that lists the build.
+
+*Status:* open (a definition of a nearby build is not used on purpose: a guess could name the wrong column).
 
 ### Most files of the newer modern clients have no names
 
