@@ -31,7 +31,7 @@ public class MainWindowVersionTests : IDisposable
     }
 
     /// <summary>Runs async view-model code on an STA thread with a WPF dispatcher (continuations come back to it, as in the app).</summary>
-    private static void OnDispatcher(Func<Task> work)
+    internal static void OnDispatcher(Func<Task> work)
     {
         CompareTests.RunSta(() =>
         {
